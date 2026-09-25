@@ -3,6 +3,7 @@ from pathlib import Path
 from boussla.contracts import DocumentText, Mode, PageText
 from boussla.documents.known_layout import KnownLayoutInvoiceExtractor
 from boussla.documents.native_text import NativePdfExtractor
+from boussla.documents.spans import validate_extraction_proposal
 
 from test_native_text import document
 
@@ -25,6 +26,7 @@ def test_known_invoice_fields_have_exact_source_spans():
     fields = fields_by_name(proposal)
 
     assert proposal.mode is Mode.TEMPLATE
+    assert validate_extraction_proposal(text, proposal) is proposal
     assert fields["invoice_number"].raw_value == "FAC-DEMO-001"
     assert fields["issuer_mf_raw"].raw_value == "DEMO-MF-BRI"
     assert fields["buyer_mf_raw"].raw_value == "DEMO-MF-BAT"
