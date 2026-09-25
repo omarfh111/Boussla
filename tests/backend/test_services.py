@@ -281,3 +281,14 @@ def test_engine_discovery_prefers_lane_b(monkeypatch):
     import boussla
     monkeypatch.setattr(boussla, "checks", mod, raising=False)
     assert type(interim_checks.get_checks_engine()).__name__ == "ChecksEngineV4"
+
+
+def test_upload_revision_hash_covers_every_fact_of_that_version(svc, actors):
+    """The recorded fact_hash of a version must match the facts as of that version
+    (regression: the integrity fact was written after commit_version)."""
+    svc.upload_document(actors[0], CASE, PDF, "a.pdf", "application/pdf", ver(svc), "u")
+    v = ver(svc)
+    recorded = svc.store.revisions(CASE)[-1]
+    with svc.store.write(CASE) as tx:
+        actual = tx._current_fact_hash(v)
+    assert recorded.version == v and recorded.fact_hash == actual

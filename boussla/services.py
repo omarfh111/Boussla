@@ -332,9 +332,9 @@ class BousslaAppService:
             tx.put("document", doc_id, document)
             if extraction is not None:
                 tx.put("extraction", extraction.proposal_id, extraction)
+            tx.put("integrity", doc_id, integrity)
             v = tx.commit_version(f"Pièce déposée : {safe_name}")
             tx.event("UPLOAD", actor.actor_id, f"Pièce déposée ({doc_id}) — original conservé, empreinte SHA-256", (doc_id,))
-            tx.put("integrity", doc_id, integrity)
             view = DocumentView(document=document, extraction=extraction, integrity=integrity, case_version=v,
                                 mode=Mode.LIVE)
             tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="upload_document", case_id=case_id,
