@@ -32,6 +32,8 @@ def _finding(
     severity: str | None = None,
     basis: str | None = None,
     difference: int | None = None,
+    quantity_difference: str | None = None,
+    unit: str | None = None,
     missing: tuple[str, ...] = (),
 ) -> Finding:
     return Finding(
@@ -44,6 +46,8 @@ def _finding(
         severity=severity,
         financial_basis=basis,
         observed_difference_millimes=difference,
+        quantity_difference=quantity_difference,
+        unit=unit,
         evidence_refs=refs,
         missing_evidence_types=missing,
         reason_code=reason,
@@ -126,5 +130,34 @@ def compare_invoice_observations(inputs: TransactionInputs) -> Finding:
                            EvidenceRef(document_id=seller.document_id, field_name=field))
             return _finding(inputs, FindingStatus.UNRESOLVED, "INVOICE_AMOUNT_CONFLICT", amount_refs,
                             severity=str(severity), basis=basis, difference=gap)
+    if len(buyer.lines) != 1 or len(seller.lines) != 1:
+        return _finding(inputs, FindingStatus.INSUFFICIENT, "LINE_COMPARISON_UNSUPPORTED", refs,
+                        missing=("ONE_MATCHED_INVOICE_LINE",))
+    buyer_line, seller_line = buyer.lines[0], seller.lines[0]
+    if (not buyer_line.normalized_item_code or not seller_line.normalized_item_code
+            or buyer_line.normalized_item_code != seller_line.normalized_item_code
+            or buyer_line.unit != seller_line.unit):
+        line_refs = (EvidenceRef(document_id=buyer.document_id, field_name="lines.item_or_unit"),
+                     EvidenceRef(document_id=seller.document_id, field_name="lines.item_or_unit"))
+        return _finding(inputs, FindingStatus.UNRESOLVED, "INVOICE_LINE_IDENTITY_CONFLICT", line_refs,
+                        severity="1", basis="LINE_ITEM_OR_UNIT")
+    if buyer_line.quantity != seller_line.quantity:
+        gap = abs(Decimal(buyer_line.quantity) - Decimal(seller_line.quantity))
+        severity = min(gap / max(abs(Decimal(seller_line.quantity)), Decimal(1))
+                       / Decimal("0.20"), Decimal(1))
+        line_refs = (EvidenceRef(document_id=buyer.document_id, field_name="lines.quantity"),
+                     EvidenceRef(document_id=seller.document_id, field_name="lines.quantity"))
+        return _finding(inputs, FindingStatus.UNRESOLVED, "INVOICE_LINE_QUANTITY_CONFLICT", line_refs,
+                        severity=str(severity), basis="LINE_QUANTITY",
+                        quantity_difference=str(gap), unit=buyer_line.unit)
+    for field in ("unit_price_millimes", "line_net_millimes"):
+        left, right = getattr(buyer_line, field), getattr(seller_line, field)
+        if left != right:
+            gap = abs(left - right)
+            severity = min(Decimal(gap) / max(abs(right), 1) / Decimal("0.20"), Decimal(1))
+            line_refs = (EvidenceRef(document_id=buyer.document_id, field_name=f"lines.{field}"),
+                         EvidenceRef(document_id=seller.document_id, field_name=f"lines.{field}"))
+            return _finding(inputs, FindingStatus.UNRESOLVED, "INVOICE_LINE_AMOUNT_CONFLICT", line_refs,
+                            severity=str(severity), basis=field.upper(), difference=gap)
     return _finding(inputs, FindingStatus.EXPLAINED, "INDEPENDENT_INVOICE_VIEWS_MATCH", refs,
                     severity="0")

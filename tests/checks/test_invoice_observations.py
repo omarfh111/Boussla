@@ -97,3 +97,24 @@ def test_different_invoice_number_is_ambiguous_linkage():
     finding = compare_invoice_observations(_replace(inputs, observation=seller))
     assert finding.status is FindingStatus.INSUFFICIENT
     assert finding.reason_code == "INVOICE_LINKAGE_AMBIGUOUS"
+
+
+def test_matching_totals_do_not_hide_line_quantity_conflict():
+    inputs = _inputs()
+    seller = inputs.invoice_observations[1]
+    changed_line = seller.lines[0].model_copy(update={"quantity": "1500"})
+    seller = seller.model_copy(update={"lines": (changed_line,)})
+    finding = compare_invoice_observations(_replace(inputs, observation=seller))
+    assert finding.status is FindingStatus.UNRESOLVED
+    assert finding.reason_code == "INVOICE_LINE_QUANTITY_CONFLICT"
+    assert finding.quantity_difference == "500"
+    assert finding.unit == "piece"
+
+
+def test_unsupported_multiple_lines_do_not_claim_a_match():
+    inputs = _inputs()
+    seller = inputs.invoice_observations[1]
+    seller = seller.model_copy(update={"lines": (*seller.lines, seller.lines[0])})
+    finding = compare_invoice_observations(_replace(inputs, observation=seller))
+    assert finding.status is FindingStatus.INSUFFICIENT
+    assert finding.reason_code == "LINE_COMPARISON_UNSUPPORTED"
