@@ -9,7 +9,7 @@ python -m pip install -r requirements.txt
 python -m pytest
 ```
 
-Copy `.env.example` to `.env` (git-ignored) and fill in only what you use. With no `OPENAI_API_KEY`, the planner falls back to deterministic questions (mode `TEMPLATE`). With no `LANGSMITH_API_KEY`, only the local `runtime/events.jsonl` trace is written. Runtime state (`runtime/`) is ignored; delete it to reset the demo.
+Copy `.env.example` to `.env` (git-ignored) and fill in only what you use. With `TYPESAFE_API_KEY` set (and `JEV_ENABLED` not `false`), uploads are routed by Jev (`DocumentView.routing`, a candidate class only, with `MANUAL` fallback, and never an input to checks or scores); Diagnostics shows the `router` node as `LIVE`, `MANUAL` or `NOT_RUN`. Tests always run hermetically, whatever `.env` contains (`tests/conftest.py`). With no `OPENAI_API_KEY`, the planner falls back to deterministic questions (mode `TEMPLATE`). With no `LANGSMITH_API_KEY`, only the local `runtime/events.jsonl` trace is written. Runtime state (`runtime/`) is ignored; delete it to reset the demo.
 
 ## D — UI
 

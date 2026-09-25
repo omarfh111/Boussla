@@ -181,3 +181,39 @@ def test_state_survives_app_restart():
     assert any(request_id in m.value for m in at2.markdown)  # company inbox still shows the request
     respond_with_allocation(at2, request_id)
     assert version(at2) == v + 2  # attachment upload + response
+
+
+def test_repeated_reruns_are_read_only():
+    at = start()
+    store = svc(at).store
+    v, events = version(at), len(store.events(CASE))
+    for role in ("Entreprise", "Agent", "Entreprise", "Agent"):
+        switch(at, role)
+        at.run()
+    assert version(at) == v and len(store.events(CASE)) == events
+
+
+def test_double_clicks_do_not_duplicate_actions():
+    at = start()
+    switch(at, "Agent")
+    at.button(key="prepare_request").click().run()
+    publish = at.button(key="publish_request")
+    publish.click().run()
+    v = version(at)
+    publish.click().run()  # second click on the same (now published) draft
+    assert not at.exception, at.exception
+    assert version(at) == v
+    officer = svc(at).registry.actors["DEMO-OFFICER"]
+    assert len(svc(at).get_case(officer, CASE).requests) == 1
+
+    request_id = svc(at).get_case(officer, CASE).requests[0].request.request_id
+    respond_with_allocation(at, request_id)
+    switch(at, "Agent")
+    accept = button(at, "Accepter dans ce dossier")
+    accept.click().run()
+    v = version(at)
+    accept.click().run()  # double click on accept
+    assert not at.exception, at.exception
+    assert version(at) == v
+    assert [r.reason for r in svc(at).store.revisions(CASE)].count(
+        next(r.reason for r in svc(at).store.revisions(CASE) if r.reason.startswith("Pièce acceptée"))) == 1
