@@ -1,0 +1,34 @@
+[
+  {
+    "reference_id": "REF-P1",
+    "company_id": "DEMO-BAT",
+    "project_id": "P1",
+    "item_code": "BRICK-A",
+    "unit": "piece",
+    "baseline_kind": "APPROVED_PROCUREMENT_ALLOCATION",
+    "quantity": "1000",
+    "valid_from": "2026-09-01",
+    "valid_to": "2026-11-30",
+    "source_refs": [
+      "DOC-REF-001"
+    ],
+    "acceptance_status": "ACCEPTED_SYNTHETIC_FIXTURE",
+    "accepted_by": "DEMO-OFFICER"
+  },
+  {
+    "reference_id": "REF-P2",
+    "company_id": "DEMO-BAT",
+    "project_id": "P2",
+    "item_code": "BRICK-A",
+    "unit": "piece",
+    "baseline_kind": "APPROVED_PROCUREMENT_ALLOCATION",
+    "quantity": "1000",
+    "valid_from": "2026-09-01",
+    "valid_to": "2026-11-30",
+    "source_refs": [
+      "DOC-REF-001"
+    ],
+    "acceptance_status": "ACCEPTED_SYNTHETIC_FIXTURE",
+    "accepted_by": "DEMO-OFFICER"
+  }
+]

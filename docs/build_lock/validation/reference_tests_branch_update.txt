@@ -1,0 +1,35 @@
+test_allocations_balanced (test_core.ReferenceChecks.test_allocations_balanced) ... ok
+test_common_source (test_core.ReferenceChecks.test_common_source) ... ok
+test_company_not_diluted (test_core.ReferenceChecks.test_company_not_diluted) ... ok
+test_company_null (test_core.ReferenceChecks.test_company_null) ... ok
+test_cross_transaction (test_core.ReferenceChecks.test_cross_transaction) ... ok
+test_distinct_origin_not_authenticity (test_core.ReferenceChecks.test_distinct_origin_not_authenticity) ... ok
+test_duplicate_finding_not_double (test_core.ReferenceChecks.test_duplicate_finding_not_double) ... ok
+test_duplicate_payment_observation (test_core.ReferenceChecks.test_duplicate_payment_observation) ... ok
+test_extension_request (test_core.ReferenceChecks.test_extension_request) ... ok
+test_initiated_payment_not_cash (test_core.ReferenceChecks.test_initiated_payment_not_cash) ... ok
+test_late_valid_response (test_core.ReferenceChecks.test_late_valid_response) ... ok
+test_missing_origin (test_core.ReferenceChecks.test_missing_origin) ... ok
+test_money_exact (test_core.ReferenceChecks.test_money_exact) ... ok
+test_naive_time_rejected (test_core.ReferenceChecks.test_naive_time_rejected) ... ok
+test_no_double_allocation (test_core.ReferenceChecks.test_no_double_allocation) ... ok
+test_no_evaluable_null (test_core.ReferenceChecks.test_no_evaluable_null) ... ok
+test_no_evidence_no_score (test_core.ReferenceChecks.test_no_evidence_no_score) ... ok
+test_no_float (test_core.ReferenceChecks.test_no_float) ... ok
+test_no_silent_round (test_core.ReferenceChecks.test_no_silent_round) ... ok
+test_nonfinite (test_core.ReferenceChecks.test_nonfinite) ... ok
+test_outage_not_overdue (test_core.ReferenceChecks.test_outage_not_overdue) ... ok
+test_partial_coverage (test_core.ReferenceChecks.test_partial_coverage) ... ok
+test_quantity_comparable (test_core.ReferenceChecks.test_quantity_comparable) ... ok
+test_scenarios_pure (test_core.ReferenceChecks.test_scenarios_pure) ... ok
+test_scope_mismatch (test_core.ReferenceChecks.test_scope_mismatch) ... ok
+test_score_quantity (test_core.ReferenceChecks.test_score_quantity) ... ok
+test_score_resolved (test_core.ReferenceChecks.test_score_resolved) ... ok
+test_unknown_mapping (test_core.ReferenceChecks.test_unknown_mapping) ... ok
+test_unknown_terms_not_adverse_residual (test_core.ReferenceChecks.test_unknown_terms_not_adverse_residual) ... ok
+test_user_estimate_no_points (test_core.ReferenceChecks.test_user_estimate_no_points) ... ok
+
+----------------------------------------------------------------------
+Ran 30 tests in 0.001s
+
+OK

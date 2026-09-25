@@ -1,0 +1,30 @@
+# Secrets — .env.example is the only committed env file
+.env
+.env.*
+!.env.example
+
+# Mutable runtime state: databases, checkpoints, uploads, Qdrant storage, model caches
+runtime/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.db
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

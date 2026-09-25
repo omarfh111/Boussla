@@ -1,0 +1,25 @@
+{
+  "schema_version": "4.0",
+  "case_id": "CASE-BRICKS-001",
+  "company_id": "DEMO-BAT",
+  "case_version": 1,
+  "snapshot_cutoff": "2026-09-25T00:00:00+01:00",
+  "data_kind": "SYNTHETIC_DEVELOPMENT_FIXTURE",
+  "initial_document_ids": [
+    "DOC-BUY-001",
+    "DOC-SELL-001",
+    "DOC-PAY-001",
+    "DOC-REF-001",
+    "DOC-DEL-001"
+  ],
+  "candidate_document_ids": [
+    "DOC-ALLOC-001"
+  ],
+  "excluded_stress_document_ids": [
+    "DOC-CONFLICT-001",
+    "DOC-INJECT-001"
+  ],
+  "company_actor_id": "DEMO-COMPANY-BAT",
+  "officer_actor_id": "DEMO-OFFICER",
+  "note": "No authentication or actual verification service is implemented by this seed."
+}

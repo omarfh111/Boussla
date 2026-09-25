@@ -1,0 +1,101 @@
+{
+  "status": "PASSED_FOR_FIXTURES_ONLY",
+  "json_files_parsed": 15,
+  "csv_row_counts": {
+    "source_coverage.csv": 5,
+    "entreprises.csv": 3,
+    "projects.csv": 2
+  },
+  "pdfs": [
+    {
+      "file": "01_buyer_invoice.pdf",
+      "pages": 1,
+      "extracted_characters": 905,
+      "sha256_matches": true
+    },
+    {
+      "file": "02_seller_invoice_view.pdf",
+      "pages": 1,
+      "extracted_characters": 1029,
+      "sha256_matches": true
+    },
+    {
+      "file": "03_payment_record.pdf",
+      "pages": 1,
+      "extracted_characters": 804,
+      "sha256_matches": true
+    },
+    {
+      "file": "04_procurement_allocations.pdf",
+      "pages": 1,
+      "extracted_characters": 1001,
+      "sha256_matches": true
+    },
+    {
+      "file": "05_delivery_record.pdf",
+      "pages": 1,
+      "extracted_characters": 630,
+      "sha256_matches": true
+    },
+    {
+      "file": "06_second_project_allocation.pdf",
+      "pages": 1,
+      "extracted_characters": 992,
+      "sha256_matches": true
+    },
+    {
+      "file": "07_conflicting_invoice_view.pdf",
+      "pages": 1,
+      "extracted_characters": 1136,
+      "sha256_matches": true
+    },
+    {
+      "file": "08_untrusted_instruction.pdf",
+      "pages": 1,
+      "extracted_characters": 778,
+      "sha256_matches": true
+    }
+  ],
+  "arithmetic_before": {
+    "review_index": 40,
+    "evidence_coverage": "100.00",
+    "coverage_complete": true,
+    "evaluable_families": [
+      "COUNTERPARTY",
+      "QUANTITY",
+      "SETTLEMENT"
+    ],
+    "unknown_families": [],
+    "contributions": {
+      "COUNTERPARTY": "0",
+      "QUANTITY": "40",
+      "SETTLEMENT": "0"
+    },
+    "method": "CONTEXT_RULES_V4_1",
+    "not_fraud_probability": true
+  },
+  "arithmetic_after": {
+    "review_index": 0,
+    "evidence_coverage": "100.00",
+    "coverage_complete": true,
+    "evaluable_families": [
+      "COUNTERPARTY",
+      "QUANTITY",
+      "SETTLEMENT"
+    ],
+    "unknown_families": [],
+    "contributions": {
+      "COUNTERPARTY": "0",
+      "QUANTITY": "0",
+      "SETTLEMENT": "0"
+    },
+    "method": "CONTEXT_RULES_V4_1",
+    "not_fraud_probability": true
+  },
+  "limitations": [
+    "No live extraction or provider API call.",
+    "No application, authentication, LangGraph, Qdrant or LangSmith integration was tested.",
+    "The manually specified evidence acceptance is a test premise, not document authentication.",
+    "Reference scoring is an illustrative heuristic, not real-world fraud validation."
+  ]
+}

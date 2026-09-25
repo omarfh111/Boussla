@@ -1,0 +1,18 @@
+[
+  {
+    "allocation_id": "ALLOC-P1-V1",
+    "transaction_id": "TX-001",
+    "line_id": "LINE-BUY-001",
+    "target_project_id": "P1",
+    "target_type": "PROJECT",
+    "quantity": "2000",
+    "unit": "piece",
+    "effective_on": "2026-09-06",
+    "source_refs": [
+      "CLAIM-001"
+    ],
+    "status": "ACCEPTED",
+    "fact_kind": "COMPANY_REPORTED_ALLOCATION",
+    "independent_verification": false
+  }
+]

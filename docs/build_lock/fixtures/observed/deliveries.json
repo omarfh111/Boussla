@@ -1,0 +1,14 @@
+[
+  {
+    "delivery_id": "DEL-001",
+    "transaction_id": "TX-001",
+    "item_code": "BRICK-A",
+    "quantity": "2000",
+    "unit": "piece",
+    "received_at": "2026-09-06",
+    "source_refs": [
+      "DOC-DEL-001"
+    ],
+    "status": "ACCEPTED_SYNTHETIC_FIXTURE"
+  }
+]

@@ -1,0 +1,19 @@
+[
+  {
+    "claim_id": "CLAIM-001",
+    "company_id": "DEMO-BAT",
+    "transaction_id": "TX-001",
+    "project_id": "P1",
+    "purpose_category": "CONSTRUCTION_PROJECT",
+    "purpose_text": "Achat affecté au lot de maçonnerie du chantier P1.",
+    "beneficiary_type": "CLIENT_PROJECT",
+    "planned_start": "2026-09-01",
+    "planned_end": "2026-11-30",
+    "stage": "IN_PROGRESS",
+    "author_actor_id": "DEMO-COMPANY-BAT",
+    "submitted_at": "2026-09-08T10:00:00+01:00",
+    "supersedes_claim_id": null,
+    "evidence_refs": [],
+    "verification_status": "COMPANY_DECLARED"
+  }
+]

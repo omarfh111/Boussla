@@ -1,0 +1,16 @@
+[
+  {
+    "payment_id": "PAY-001",
+    "source_record_id": "DOC-PAY-001",
+    "payer_company_id": "DEMO-BAT",
+    "payee_company_id": "DEMO-BRI",
+    "payer_mapping_ref": "MAP-PAYER-001",
+    "payee_mapping_ref": "MAP-PAYEE-001",
+    "currency": "TND",
+    "amount_millimes": 4760000,
+    "status": "SETTLED",
+    "occurred_at": "2026-09-07T12:00:00+01:00",
+    "available_at": "2026-09-08T10:00:00+01:00",
+    "origin_group_id": "DEMO-PAYMENT-FEED"
+  }
+]

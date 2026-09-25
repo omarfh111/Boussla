@@ -1,0 +1,310 @@
+{
+  "kind": "BUILD_PACK_NOT_FINISHED_APPLICATION",
+  "date": "2026-09-25",
+  "collaboration_revision": "V4-GIT-1",
+  "source_zip_sha256": "83c4469fd9966bc88b89c569608b635b1cb7eb88c3b9ba8cfeea47c060dafc12",
+  "product_scope_changed": false,
+  "manifest_excludes_itself": true,
+  "files": [
+    {
+      "path": "00_LAUNCH_NOW.md",
+      "bytes": 4045,
+      "sha256": "b1894ddc47c666c7e136bcdac5d689b875a0b977b27c8cf22370539c4b37018c"
+    },
+    {
+      "path": "00_START_HERE.md",
+      "bytes": 5167,
+      "sha256": "f409e89eb1684c2eac99e8059f6d234ecb23d6931a81aeb0e6df64f32d32652a"
+    },
+    {
+      "path": "01_FINAL_LOCK.md",
+      "bytes": 12102,
+      "sha256": "e5dd6a65b69f25d5b4d8b99571e15d4c9fca451c401bf9ee67a028cdb4b22155"
+    },
+    {
+      "path": "AGENTS.md",
+      "bytes": 4615,
+      "sha256": "3c395334dfb42c4b0440f878b64b6e7d0bdecad5d078b1691536ebf04f8a9199"
+    },
+    {
+      "path": "BRANCH_ASSIGNMENTS.json",
+      "bytes": 1084,
+      "sha256": "0ff7655f7e1bb1412f6665fab1ac84bb81eef2e994e31e845facee41be825c68"
+    },
+    {
+      "path": "BRANCH_PACK_VALIDATION.md",
+      "bytes": 2574,
+      "sha256": "62a64fc62310f3d517ca28e8f4d5d19dd0d63cbfee3c7e5343f31c850681e56d"
+    },
+    {
+      "path": "GIT_WORKFLOW.md",
+      "bytes": 7517,
+      "sha256": "b6c558a17b936fbf4726ae96c6d86a31444b699155c552bcade7978a1848ab7f"
+    },
+    {
+      "path": "PACK_VALIDATION.md",
+      "bytes": 4971,
+      "sha256": "f3a4690acc369c52c0d9e129681b09225d3a8eee81eec8e70d72c277062b7f9d"
+    },
+    {
+      "path": "config/.env.example",
+      "bytes": 1043,
+      "sha256": "8fd5491f81f5bc007916ad144a8488000a4165abb0a849040e1fa849ef4f9ebf"
+    },
+    {
+      "path": "config/prompt_templates.md",
+      "bytes": 2442,
+      "sha256": "db44cbd8c885f2c11cfa1d5dce9463af046448c9c26fba7db602ff90ac7c1e5c"
+    },
+    {
+      "path": "config/requirements.in",
+      "bytes": 510,
+      "sha256": "2dbeb7af2d5a8d49c7f2c0d6a8e6c9bf8cd51ae5ae2c009c92951d4d9db0f525"
+    },
+    {
+      "path": "config/scoring.json",
+      "bytes": 625,
+      "sha256": "5b41dcfbaea5846342745f7ebd55e30c425858db44b734fa3e627523a25b1dae"
+    },
+    {
+      "path": "contracts/CONTRACTS.md",
+      "bytes": 11766,
+      "sha256": "69c8f9651b0ebbcedd9a4e85b62fe1569c5201fcd90435da89301273500a62b5"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 9734,
+      "sha256": "eba3025a2bf5513fcad23dcd7cfcaec3802473df4572b9969e539293d80a0caf"
+    },
+    {
+      "path": "docs/DATA_AND_FIXTURES.md",
+      "bytes": 7734,
+      "sha256": "4bf30fd8dd26d4d634717f5de5d6a75d1bdaba601a34879e3fe9b82f33210132"
+    },
+    {
+      "path": "docs/DEMO_AND_PITCH.md",
+      "bytes": 5124,
+      "sha256": "fdef0dc3883b6995246ef4da74a56045b15abf42bf0c9585ca163418cbd66c66"
+    },
+    {
+      "path": "docs/DOCUMENT_INTEGRITY.md",
+      "bytes": 5093,
+      "sha256": "8ad849bc7aa219a09b0f262a18ea9c77b8e14b16f452dd6bfe304ff677d7f8fa"
+    },
+    {
+      "path": "docs/SCORING_AND_SCENARIOS.md",
+      "bytes": 7305,
+      "sha256": "17f8ae7060e2771952a13ccbfd988b2e95724deef411c4ba863797cd65bb7cd5"
+    },
+    {
+      "path": "docs/SOURCES.md",
+      "bytes": 9787,
+      "sha256": "94c09928abea5e164f65bc04467d2461c7cf96905c4b6187074e98f3a1ce824b"
+    },
+    {
+      "path": "docs/TESTS_AND_8H_PLAN.md",
+      "bytes": 6633,
+      "sha256": "d9a407d9d7505bcb8b3d43fa6c07a426203bdb7f214c8238cdb8840ec33eade6"
+    },
+    {
+      "path": "fixtures/README.md",
+      "bytes": 2011,
+      "sha256": "143f9eb956f14a17e67f2982982f1dc72f0a4fd2f46aab689806384b766a6616"
+    },
+    {
+      "path": "fixtures/documents/01_buyer_invoice.pdf",
+      "bytes": 45239,
+      "sha256": "67581d2bce727bd661e3cf7f3a226203881652586509e5b8a7d404bbf2fac95b"
+    },
+    {
+      "path": "fixtures/documents/02_seller_invoice_view.pdf",
+      "bytes": 45322,
+      "sha256": "0b3b4c4728afbc879243168988b14306d5ccf1ea2ddd574546de0468f4f3f814"
+    },
+    {
+      "path": "fixtures/documents/03_payment_record.pdf",
+      "bytes": 44869,
+      "sha256": "d5ca47d02f7ac9fd954759a01d3ca0da18e083392f4b5792bdf70b25b37daa65"
+    },
+    {
+      "path": "fixtures/documents/04_procurement_allocations.pdf",
+      "bytes": 45212,
+      "sha256": "c9d079e957dacf1662c784257464c17d963afdab23f9bf1719852a9ec4dc3749"
+    },
+    {
+      "path": "fixtures/documents/05_delivery_record.pdf",
+      "bytes": 44849,
+      "sha256": "d3d8e48690a659dcbc49fb3167aa4ead8a46b1ad4d891c9ddbf549223d87a1bc"
+    },
+    {
+      "path": "fixtures/documents/06_second_project_allocation.pdf",
+      "bytes": 45260,
+      "sha256": "1ad66cec5cbad3f1c3d3b3afbe68a5ed1f48cbb4ab3e221653aabf0fbeeed3f0"
+    },
+    {
+      "path": "fixtures/documents/07_conflicting_invoice_view.pdf",
+      "bytes": 45320,
+      "sha256": "768ce7e96f9e3ba9cdf9b6654e44cb5f6f1afc470437fd9bd11381877e423409"
+    },
+    {
+      "path": "fixtures/documents/08_untrusted_instruction.pdf",
+      "bytes": 44763,
+      "sha256": "bc550e505a97a5255050802664a493105d5eaf0955375d05d1b565482cd31ea3"
+    },
+    {
+      "path": "fixtures/evaluation_only/candidate_reallocation.json",
+      "bytes": 574,
+      "sha256": "93b96915a4fde915dbac4cb20bcb8aacd9ccd4690010378c49c9c89d520cb0bc"
+    },
+    {
+      "path": "fixtures/evaluation_only/expected_outcomes.json",
+      "bytes": 2903,
+      "sha256": "6154968291ab3138470bc8b3e748777c4fde73d0e2773249a9ce469d8907e1d8"
+    },
+    {
+      "path": "fixtures/observed/allocations.json",
+      "bytes": 409,
+      "sha256": "db984065521f560b6b915c20b5767add1b0fcf11274ea4e99c180dbe7bbdc368"
+    },
+    {
+      "path": "fixtures/observed/case_seed.json",
+      "bytes": 649,
+      "sha256": "e5ffcd264f77f279a3bd1b216dcb9040e509dbbc23102dee3848cf57c5d13a0a"
+    },
+    {
+      "path": "fixtures/observed/context_claims.json",
+      "bytes": 585,
+      "sha256": "250fa2d865a4fa3046a0947a6219d2b11454b722ba52d100521a262b8380ea58"
+    },
+    {
+      "path": "fixtures/observed/deliveries.json",
+      "bytes": 271,
+      "sha256": "00ed6056bffc31b4053fc0dfce12c96b7f8611315f7afd832228e51ec4fcf1f4"
+    },
+    {
+      "path": "fixtures/observed/documents.json",
+      "bytes": 8072,
+      "sha256": "bc80cc2754edf365f7057309c76e46aa73ab4272b6bda27404a8d4fa42aef716"
+    },
+    {
+      "path": "fixtures/observed/entreprises.csv",
+      "bytes": 331,
+      "sha256": "81248f232d95250e12c7cd45d9152319a8c1301f8248f9bdd98b89cd4afd5a07"
+    },
+    {
+      "path": "fixtures/observed/identity_mappings.json",
+      "bytes": 385,
+      "sha256": "f253b89ff2f258f785c0306876171ca6e3a752894ad8bc9cbc4846f834197c03"
+    },
+    {
+      "path": "fixtures/observed/invoice_observations.json",
+      "bytes": 2021,
+      "sha256": "852d7be695a3a8a0e2099fbc1e585b76fc838aa5cffb8faa7b0c28b7f65714f6"
+    },
+    {
+      "path": "fixtures/observed/payment_allocations.json",
+      "bytes": 190,
+      "sha256": "3c0167e23bc8ae51dacd136ce53a4543e11ab922977c56736fd530f73330b191"
+    },
+    {
+      "path": "fixtures/observed/payments.json",
+      "bytes": 456,
+      "sha256": "da3cb577ed83bf4e58eeffa7b9931b7101c119335f67a32de30de516da583c01"
+    },
+    {
+      "path": "fixtures/observed/projects.csv",
+      "bytes": 282,
+      "sha256": "7ae55b9bbfb2f0ef4540ece06b43305c81818debfc0fda3c360363856bb64cf4"
+    },
+    {
+      "path": "fixtures/observed/quantity_references.json",
+      "bytes": 845,
+      "sha256": "8109434b8f0f1503580391430d1ae43ae5c11c580581ea599812d149b69032e3"
+    },
+    {
+      "path": "fixtures/observed/source_coverage.csv",
+      "bytes": 800,
+      "sha256": "2e4a0e9853fbbbfe62724a1778e4e294b01e93cee94bd4509b379e9da215f7a0"
+    },
+    {
+      "path": "fixtures/observed/transactions.json",
+      "bytes": 428,
+      "sha256": "9ae9dd1257c7ac5a086c5bca369b9f2f5c8c9c172de9a69920f4d26a5bf8d7cf"
+    },
+    {
+      "path": "handoffs/CHANGE_REQUESTS.md",
+      "bytes": 215,
+      "sha256": "1b1ba24706a512a2eaff17a90b4ea085ba9df5aefe91cce5345ebbd9ead1fa17"
+    },
+    {
+      "path": "handoffs/CLAUDE_MAX_BACKEND_GRAPH.md",
+      "bytes": 16612,
+      "sha256": "a241f47b552e4e9575ab0244438199315c940bbfd4ea7c2b7fc05870a6878f4d"
+    },
+    {
+      "path": "handoffs/CODEX_PLUS_A_DOCUMENTS_RAG.md",
+      "bytes": 16604,
+      "sha256": "7697204b38bc1e7f70fb82eee2c1013bea3b53b05e4578a7b83dc618b73c200a"
+    },
+    {
+      "path": "handoffs/CODEX_PLUS_B_UI_RELEASE.md",
+      "bytes": 16134,
+      "sha256": "f084b932c3d96f81519d2deab27573d5a434ce471d181e9a4386f0ed1fa89f1f"
+    },
+    {
+      "path": "handoffs/CODEX_PRO_DATA_CHECKS.md",
+      "bytes": 16303,
+      "sha256": "f37e5d58c475d8a2dec197dd4345e6647e9d6557991acdfdcfdc4a0c79884a4e"
+    },
+    {
+      "path": "handoffs/GEMINI_PRO_REVIEW_TESTS.md",
+      "bytes": 16558,
+      "sha256": "477784e178c1eb4f05bdf487ef401a87f516d330abb057aea04a40097c5d503f"
+    },
+    {
+      "path": "reference/core.py",
+      "bytes": 9130,
+      "sha256": "4b593ace588d7c64c7d60b5c80e8cb504f8ef0635137107c801a8f54cc5fd72e"
+    },
+    {
+      "path": "reference/fixture_validation.json",
+      "bytes": 2490,
+      "sha256": "b0ef1a1236f344b649cfa14c90d945cc059e51ba66d3b887eea749865d2a6b06"
+    },
+    {
+      "path": "reference/jev_request_example.json",
+      "bytes": 1160,
+      "sha256": "8dad5bee1eb78c2f1d9fa4fbbc0f9c0ac457621e51f8aae59c78005587856cd1"
+    },
+    {
+      "path": "reference/test_core.py",
+      "bytes": 6260,
+      "sha256": "1c502c8d24c82c7c887c877563df7792e7a27ba578196a4301c2e29e7326cd00"
+    },
+    {
+      "path": "reference/test_results.txt",
+      "bytes": 2601,
+      "sha256": "1b5bbda3080e7aada13859d5480d5b8ff5ff8d0e4086be49b60c15971bdb8d56"
+    },
+    {
+      "path": "scripts/generate_fixtures.py",
+      "bytes": 23119,
+      "sha256": "7208fe47138ff2b790887f04c5770a0358dbd312d82ac6e05ec32086a963647d"
+    },
+    {
+      "path": "scripts/validate_fixture_pack.py",
+      "bytes": 4117,
+      "sha256": "e59110b8f6fa399e2f80273b01a18cc638d5162f3a518443e3ba0707e41831d2"
+    },
+    {
+      "path": "validation/branch_update_checks.json",
+      "bytes": 1481,
+      "sha256": "c154999642540615abe352df2d6778858a13b8f1e10d02f71ee6c6170dc78613"
+    },
+    {
+      "path": "validation/reference_tests_branch_update.txt",
+      "bytes": 2601,
+      "sha256": "1b5bbda3080e7aada13859d5480d5b8ff5ff8d0e4086be49b60c15971bdb8d56"
+    }
+  ]
+}
