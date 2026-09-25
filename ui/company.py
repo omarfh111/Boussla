@@ -79,13 +79,20 @@ def render_context(service, actor, case: CompanyCaseView) -> None:
         }[category])
         description = st.text_input("Précision sur l'usage")
         beneficiary = st.text_input("Bénéficiaire prévu")
+        current_project = next((p for p in case.projects if p.project_id == selected_project), None)
+        planned_start = st.date_input("Début prévu", value=current_project.planned_start if current_project else None)
+        planned_end = st.date_input("Fin prévue", value=current_project.planned_end if current_project else None)
+        stage = st.text_input("Phase du projet", value="")
         submitted = st.form_submit_button("Enregistrer le contexte déclaré")
     if submitted:
         if not description.strip() or not beneficiary.strip():
             st.warning("Précisez l'usage et le bénéficiaire.")
+        elif planned_start and planned_end and planned_end < planned_start:
+            st.warning("La fin prévue doit être postérieure au début prévu.")
         else:
             payload = {"project_id": selected_project, "purpose_category": purpose.value,
-                       "purpose_text": description.strip(), "beneficiary_type": beneficiary.strip()}
+                       "purpose_text": description.strip(), "beneficiary_type": beneficiary.strip(),
+                       "planned_start": planned_start, "planned_end": planned_end, "stage": stage.strip() or None}
             service_action(lambda: service.submit_context(actor, case.case_id, payload, case.case_version, str(uuid4())))
 
     if case.inbox:

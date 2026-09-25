@@ -1,12 +1,28 @@
 """Officer views using only officer-scoped service results."""
 
 from datetime import datetime, timezone
+from hashlib import sha256
+from pathlib import Path
 from uuid import uuid4
 
 import streamlit as st
 
 from boussla.contracts import OfficerCaseView, ProposalStatus
 from ui.common import amount, service_action
+
+
+FIXTURE_DOCUMENTS = Path(__file__).resolve().parents[1] / "docs" / "build_lock" / "fixtures" / "documents"
+
+
+def bundled_mock_document(local_path: str, expected_sha256: str) -> bytes | None:
+    """Expose only bundled fixture PDFs, never arbitrary service paths or URLs."""
+    candidate = (Path(__file__).resolve().parents[1] / "docs" / "build_lock" / local_path).resolve()
+    if candidate.suffix.lower() != ".pdf" or not candidate.is_relative_to(FIXTURE_DOCUMENTS.resolve()):
+        return None
+    if not candidate.is_file():
+        return None
+    content = candidate.read_bytes()
+    return content if sha256(content).hexdigest() == expected_sha256 else None
 
 
 def render_queue(service, actor) -> None:
@@ -43,6 +59,21 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
     for tx in case.transactions:
         st.write(f"**{tx.invoice_number or tx.transaction_id}** · facturé {amount(tx.invoiced_gross_millimes)} · réglé observé {amount(tx.settled_millimes)} · déclaré {amount(tx.declared_millimes)}")
         st.caption(f"Origine : {tx.corroboration_status} · opération {tx.transaction_id}")
+    st.dataframe([{
+        "Vue": observation.perspective.value,
+        "Facture": observation.invoice_number,
+        "Émetteur indiqué": observation.issuer_company_id or "Inconnu",
+        "Acheteur indiqué": observation.buyer_company_id or "Inconnu",
+        "Date": observation.issued_on.isoformat(),
+        "Montant TTC": amount(observation.gross_millimes),
+        "Source": observation.document_id,
+        "Origine": observation.origin_group_id,
+    } for observation in case.invoice_observations], hide_index=True, width="stretch")
+    st.caption("Les vues acheteur et vendeur concernent une même opération ; elles ne sont pas additionnées.")
+    st.markdown("#### Références de quantité")
+    for reference in case.quantity_references:
+        st.write(f"{reference.reference_id} · {reference.project_id} · {reference.quantity} {reference.unit} · {reference.baseline_kind.value} · {reference.acceptance_status}")
+        st.caption("Sources : " + (", ".join(reference.source_refs) if reference.source_refs else "non indiquées"))
     st.markdown("#### Constats à examiner")
     for finding in case.findings:
         st.write(f"{finding.family.value} · {finding.status.value} · {finding.reason_code or 'Motif non précisé'}")
@@ -54,8 +85,19 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
     st.markdown("#### Pièces et provenance")
     for item in case.documents:
         doc = item.document
-        st.write(f"{doc.original_filename} · {doc.acquisition_channel.value} · origine {doc.origin_group_id}")
+        st.write(f"{doc.original_filename} · {doc.acquisition_channel.value} · origine {doc.origin_group_id} · SHA-256 {doc.sha256[:12]}…")
+        if case.mode.value == "MOCK":
+            content = bundled_mock_document(doc.local_path, doc.sha256)
+            if content is not None:
+                st.download_button("Télécharger la pièce synthétique", data=content, file_name=doc.original_filename,
+                                   mime="application/pdf", key=f"download_{doc.document_id}")
     st.caption("Le contenu concordant et l'origine des fichiers sont deux questions distinctes. Une pièce non signée ou d'origine inconnue n'est pas classée fausse.")
+    if case.candidate_passages:
+        st.markdown("#### Passages de référence candidats")
+        for passage in case.candidate_passages:
+            st.write(f"{passage.document_title} · {passage.rule_id} · {passage.mode.value}")
+            st.caption(passage.text)
+        st.caption("Un passage retrouvé est un candidat ; son applicabilité requiert une revue humaine.")
 
     st.markdown("#### Hypothèses et sensibilité")
     for hypothesis in case.hypotheses:
@@ -115,3 +157,11 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
     st.markdown("#### Historique du dossier")
     for item in history.revisions:
         st.write(f"Version {item.version} · {item.created_at.isoformat()} · {item.reason}")
+
+
+def render_diagnostics(case: OfficerCaseView) -> None:
+    st.subheader("Diagnostics")
+    st.write(f"Vue du dossier : {case.mode.value}")
+    for node, mode in case.mode_by_node.items():
+        st.write(f"{node} : {mode.value}")
+    st.info("Mesures de tests intégrés : NOT_RUN dans cette interface. Les chiffres du service MOCK sont des données de démonstration.")

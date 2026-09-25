@@ -4,7 +4,7 @@ import streamlit as st
 
 from boussla.mock_service import MockBousslaService, demo_actors
 from ui.company import render_context, render_operations
-from ui.officer import render_dossier, render_queue
+from ui.officer import render_diagnostics, render_dossier, render_queue
 
 
 CASE_ID = "CASE-BRICKS-001"
@@ -28,8 +28,10 @@ if role == "Entreprise":
     with context:
         render_context(service, actor, case)
 else:
-    queue, dossier = st.tabs(["File de revue", "Dossier"])
+    queue, dossier, diagnostics = st.tabs(["File de revue", "Dossier", "Diagnostics"])
     with queue:
         render_queue(service, actor)
     with dossier:
         render_dossier(service, actor, case)
+    with diagnostics:
+        render_diagnostics(case)

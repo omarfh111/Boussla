@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from boussla.mock_service import demo_actors
+from ui.officer import bundled_mock_document
 
 
 APP = Path(__file__).resolve().parents[2] / "app.py"
@@ -23,7 +24,7 @@ def test_officer_view_shows_queue_and_supported_finding():
     app = AppTest.from_file(APP).run()
     app.selectbox[0].set_value("Agent").run()
     assert not app.exception
-    assert [tab.label for tab in app.tabs] == ["File de revue", "Dossier"]
+    assert [tab.label for tab in app.tabs] == ["File de revue", "Dossier", "Diagnostics"]
     assert any(item.label == "Priorité de revue" for item in app.metric)
     assert any("QUANTITY" in item.value for item in app.markdown)
 
@@ -69,3 +70,12 @@ def test_officer_accepts_document_backed_proposal_and_sees_revision():
     assert not app.exception
     assert service.version == version_before + 1
     assert any("Priorité de revue : 40 → 0" in item.value for item in app.markdown)
+
+
+def test_bundled_document_requires_safe_path_and_matching_hash():
+    from boussla.mock_service import MockBousslaService
+
+    document = MockBousslaService().documents[0]
+    assert bundled_mock_document(document.local_path, document.sha256)
+    assert bundled_mock_document(document.local_path, "0" * 64) is None
+    assert bundled_mock_document("../../../../outside.pdf", document.sha256) is None
