@@ -26,10 +26,10 @@ if role == "Entreprise":
     with operations:
         render_operations(service, actor, case)
     with context:
-        render_context(case)
+        render_context(service, actor, case)
 else:
     queue, dossier = st.tabs(["File de revue", "Dossier"])
     with queue:
         render_queue(service, actor)
     with dossier:
-        render_dossier(case)
+        render_dossier(service, actor, case)

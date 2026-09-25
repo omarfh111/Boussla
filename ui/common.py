@@ -12,14 +12,16 @@ def amount(millimes: int | None) -> str:
     return f"{Decimal(millimes) / Decimal(1000):,.3f} TND".replace(",", " ")
 
 
-def service_action(action):
+def service_action(action, on_success=None):
     """Run a scoped service action and refresh after a stale case version."""
     try:
-        action()
+        result = action()
     except BousslaError as exc:
         if exc.code is ErrorCode.STALE_REVISION:
             st.warning("Le dossier a changé. Rechargez-le et vérifiez la nouvelle version avant de réessayer.")
         else:
             st.error(f"{exc.code.value} : {exc.message}")
         return None
+    if on_success is not None:
+        on_success(result)
     st.rerun()
