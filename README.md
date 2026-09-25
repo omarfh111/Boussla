@@ -8,7 +8,7 @@ Boussla est une application d'aide à l'instruction et à la clarification conte
 
 ## 1. Vue d'ensemble et garanties de conception
 
-- **Données synthétiques & service MOCK** : L'application s'exécute sur des jeux de données de démonstration avec un service en mémoire étiqueté `MOCK`. Les constats et indices sont des valeurs illustratives, sans portée juridique ni administrative.
+- **Données synthétiques & service réel** : L'application s'exécute sur le service réel (`boussla.services.build_service()`) : base locale SQLite (`runtime/cases.sqlite`), contrôles déterministes de la voie B (`ChecksEngineV4`) et orchestration LangGraph. Les données sont synthétiques ; les constats et indices n'ont aucune portée juridique ni administrative. Le service en mémoire `MOCK` reste disponible pour le développement (`BOUSSLA_SERVICE=mock`).
 - **Simulation de rôles locale** : Sélecteur de rôle démonstratif (« Entreprise » / « Agent ») sans authentification de production.
 - **Intégrité comptable et fiscale** :
   - Les flux facturés, réglés observés et déclarés sont présentés dans des colonnes séparées ; ils ne sont jamais fusionnés en un total de chiffre d'affaires inventé.
@@ -48,17 +48,24 @@ streamlit run app.py
 
 L'application s'ouvre sur `http://localhost:8501`.
 
+- **Configuration optionnelle** : copier `.env.example` vers `.env` (jamais commité). Sans `OPENAI_API_KEY`, le planificateur de questions utilise le repli déterministe (mode `TEMPLATE`) ; sans `LANGSMITH_API_KEY`, seule la trace locale `runtime/events.jsonl` est écrite. Aucune panne de fournisseur ne bloque le dossier.
+- **Réinitialiser la démo** : arrêter l'application et supprimer le dossier `runtime/` ; le dossier synthétique `CASE-BRICKS-001` est recréé en version 1 au démarrage suivant.
+- **Service MOCK (développement UI uniquement)** : `BOUSSLA_SERVICE=mock streamlit run app.py` (PowerShell : `$env:BOUSSLA_SERVICE="mock"; streamlit run app.py`). Le bandeau indique alors explicitement « service MOCK ».
+
 ---
 
 ## 4. Validation des tests
 
-La suite de tests automatisée valide les contrats d'échange, le service mock et l'ensemble des parcours UI Streamlit :
+La suite de tests automatisée valide les contrats, le service réel, les contrôles déterministes, le graphe LangGraph et les parcours UI Streamlit (hors ligne, sans clé API) :
 
 ```bash
 python -m pytest -p no:cacheprovider
 ```
 
-**Résultat validé :** 34 tests passés avec succès.
+Le décompte exact des tests est indiqué dans le message de chaque commit d'intégration de la branche `integration/release`.
+
+- `tests/integration/test_release_e2e.py` : moteur de la voie B actif, pièce d'une autre entreprise rejetée, fournisseur de modèle indisponible (repli `TEMPLATE`), traçage indisponible sans blocage, reprise après redémarrage sans double application.
+- `tests/ui/test_app_real.py` : parcours complet cliqué sur le service réel (contexte, dépôt de facture, dossier agent, demande, réponse avec pièce et répartition, acceptation 40 → 0, version précédente conservée), déclaration seule non acceptable, clic sur une page périmée sans effet, persistance après redémarrage.
 
 - `tests/backend/test_contracts.py` : Typage strict V4, sérialisation Pydantic, gestion des erreurs canoniques (`ErrorCode`).
 - `tests/backend/test_mock_service.py` : Isolation des vues par rôle, immutabilité des versions, boucle de clarification, acceptation de pièces justificatives, recalcul du score, export de brouillons.
@@ -92,10 +99,10 @@ Le scénario de référence s'appuie sur le dossier de briques `CASE-BRICKS-001`
 ### Étape 4 : Rôle Agent — « Dossier »
 1. Dans l'onglet **Dossier**, consulter les métriques de synthèse et le rapprochement des observations (vues acheteur et vendeur d'une même opération).
 2. **Références de quantité et constats** : observer l'écart de 1 000 unités entre l'achat (2 000 unités) et la référence documentée du lot P1 (1 000 unités).
-3. **Pièces et provenance** : télécharger la pièce synthétique après vérification sécurisée du chemin et du hachage SHA-256.
-4. **Passages de référence candidats** : consulter les extraits réglementaires applicables.
+3. **Pièces et provenance** : consulter l'origine et l'empreinte SHA-256 de chaque pièce (le téléchargement des pièces synthétiques n'est proposé qu'en mode MOCK).
+4. **Passages de référence candidats** : affichés uniquement lorsque la recherche documentaire (voie C) est active ; sinon le nœud `retrieval` est marqué `NOT_RUN` dans Diagnostics.
 5. **Matrice des hypothèses et sensibilité** : examiner les hypothèses ouvertes et la simulation de sensibilité (+10 % marge fictive) clairement marquée comme non-mutante.
-6. **Brouillons exportables** : prévisualiser et télécharger les synthèses Markdown au format interne (Agent) ou destinataire (Entreprise).
+6. **Brouillons exportables** : choisir l'audience puis cliquer sur **« Générer le brouillon »** (action journalisée, liée à la version courante) pour prévisualiser et télécharger la synthèse Markdown interne (Agent) ou destinataire (Entreprise).
 
 ### Étape 5 : Boucle de clarification contradictoire et révision
 1. Cliquer sur **« Préparer une demande neutre »** : un brouillon neutre et sans accusation est généré par le service.
@@ -104,14 +111,15 @@ Le scénario de référence s'appuie sur le dossier de briques `CASE-BRICKS-001`
 4. *Test de déclaration seule* : Rédiger une réponse, cocher la proposition de répartition (1 000 pour chaque lot) sans joindre de fichier, et envoyer. Côté Agent, la proposition est marquée en attente avec l'avertissement qu'une déclaration seule ne suffit pas (bouton d'acceptation inactif).
 5. *Test avec pièce justificative* : Avec une pièce jointe validant le second lot, le bouton **« Accepter dans ce dossier »** s'active côté Agent.
 6. Cliquer sur **« Accepter dans ce dossier »** :
-   - Le dossier passe atomiquement de la **version 1 à la version 2**.
+   - Le dossier passe atomiquement à une **nouvelle version** (N → N+1) ; la version précédente reste consultable (répartition P1 = 2 000 conservée dans l'historique).
    - Le constat de quantité est résolu.
    - L'indice de priorité passe de **40 à 0**.
    - Le comparatif **Avant / après la décision** s'affiche immédiatement.
    - L'historique complet des révisions est consigné.
+   - Un double clic ou une page restée ouverte sur une ancienne version ne produit aucune seconde application.
 
 ### Étape 6 : Rôle Agent — « Diagnostics »
-1. Ouvrir l'onglet **Diagnostics** pour visualiser le statut d'intégration des nœuds du graphe (`Mode.MOCK`, etc.).
+1. Ouvrir l'onglet **Diagnostics** pour visualiser le mode réel de chaque nœud (`LIVE`, `TEMPLATE`, `NOT_RUN`).
 2. Noter la transparence sur l'état des intégrations : les benchmarks non exécutés sont étiquetés en toute honnêteté `NOT_RUN`.
 
 ---
@@ -119,7 +127,7 @@ Le scénario de référence s'appuie sur le dossier de briques `CASE-BRICKS-001`
 ## 6. Structure du projet
 
 ```
-Boussla-ui/
+Boussla/
 ├── app.py                      # Point d'entrée Streamlit (simulation de rôles)
 ├── ui/
 │   ├── __init__.py
@@ -128,14 +136,21 @@ Boussla-ui/
 │   └── officer.py              # Écrans Agent (File de revue, Dossier, Diagnostics, Exports)
 ├── boussla/
 │   ├── __init__.py
-│   ├── contracts.py            # Types de données partagés V4, contrats et protocoles
-│   └── mock_service.py         # Implémentation du service en mémoire étiqueté MOCK
+│   ├── contracts.py            # Types de données partagés V4, contrats et protocoles (voie A)
+│   ├── services.py             # Service réel : seul point d'entrée des écritures (voie A)
+│   ├── store.py                # Base SQLite append-only, versions et reçus d'actions (voie A)
+│   ├── workflow.py             # Graphes LangGraph analyse/décision avec reprise (voie A)
+│   ├── checks/ scenarios/      # Contrôles déterministes et scénarios (voie B)
+│   └── mock_service.py         # Service en mémoire étiqueté MOCK (développement)
 ├── tests/
 │   ├── backend/
 │   │   ├── test_contracts.py   # Tests unitaires des contrats
 │   │   └── test_mock_service.py# Tests du service mock et de la logique de révision
+│   ├── checks/                 # Tests des contrôles (voie B)
+│   ├── integration/            # Tests de publication de bout en bout
 │   └── ui/
-│       └── test_app.py         # Tests end-to-end automatisés de l'interface Streamlit
+│       ├── test_app.py         # Parcours UI sur le service MOCK
+│       └── test_app_real.py    # Parcours UI cliqués sur le service réel
 ├── docs/
 │   └── build_lock/             # Spécifications V4-GIT-1, contrats et fixtures de référence
 ├── requirements.txt            # Verrou de dépendances
