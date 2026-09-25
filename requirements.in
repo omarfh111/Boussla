@@ -1,0 +1,14 @@
+# Direct runtime dependencies (lane A owns). Resolved lock: requirements.txt
+# Resolved 2026-09-25 on Python 3.12.0 / Windows. Model-provider SDK added only after a key test passes.
+streamlit
+plotly
+pydantic
+pypdf
+langgraph
+langgraph-checkpoint-sqlite
+langsmith
+qdrant-client
+fastembed
+httpx
+python-dotenv
+pytest
