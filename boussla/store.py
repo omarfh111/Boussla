@@ -82,9 +82,25 @@ CREATE TABLE IF NOT EXISTS events (
     summary TEXT NOT NULL,
     fact_ids TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS artifacts (
+    case_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    artifact_id TEXT NOT NULL,
+    case_version INTEGER NOT NULL,
+    body TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (case_id, kind, artifact_id)
+);
 CREATE INDEX IF NOT EXISTS facts_by_kind ON facts(case_id, kind, valid_from);
 CREATE INDEX IF NOT EXISTS events_by_case ON events(case_id, seq);
 """
+
+
+class ReceiptNote(BaseModel):
+    """Minimal stored outcome for actions whose caller re-reads the case view."""
+
+    note: str
+    fact_ids: tuple[str, ...] = ()
 
 
 def utcnow() -> datetime:
@@ -201,6 +217,20 @@ class CaseStore:
                                 "WHERE case_id=? ORDER BY seq", (case_id,)).fetchall()
         return [CaseEvent(event_id=f"EV-{r[0]:05d}", case_id=case_id, kind=r[1], actor_id=r[2], at=r[3],
                           case_version=r[4], summary=r[5], fact_ids=tuple(json.loads(r[6]))) for r in rows]
+
+    # ------------------------------------------------------------ artifacts
+    def put_artifact(self, case_id: str, kind: str, artifact_id: str, case_version: int, model: BaseModel) -> None:
+        """Version-bound working artifact (e.g. an unpublished draft). Not a case fact:
+        it never changes the case version and is only valid for ``case_version``."""
+        with self._connect() as conn:
+            conn.execute("INSERT INTO artifacts VALUES (?, ?, ?, ?, ?, ?)",
+                         (case_id, kind, artifact_id, case_version, _body(model), utcnow().isoformat()))
+
+    def artifact(self, case_id: str, kind: str, artifact_id: str, model: type[M]) -> tuple[int, M] | None:
+        with self._connect() as conn:
+            row = conn.execute("SELECT case_version, body FROM artifacts WHERE case_id=? AND kind=? AND artifact_id=?",
+                               (case_id, kind, artifact_id)).fetchone()
+        return (row[0], model.model_validate_json(row[1])) if row else None
 
     # ------------------------------------------------------------ originals
     def save_original(self, content: bytes, suffix: str) -> tuple[str, str]:

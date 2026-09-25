@@ -15,7 +15,7 @@ DEMO_BANNER_FR = "Simulation de rôles locale — pas une authentification de pr
 
 # action -> roles allowed to perform it
 POLICY: dict[str, frozenset[Role]] = {
-    "create_case": frozenset({Role.COMPANY, Role.DEMO_OPERATOR}),
+    "create_case": frozenset({Role.COMPANY}),
     "upload_document": frozenset({Role.COMPANY, Role.OFFICER}),
     "confirm_transcription": frozenset({Role.COMPANY}),
     "submit_context": frozenset({Role.COMPANY}),
