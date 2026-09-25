@@ -11,7 +11,7 @@ import httpx
 from boussla.contracts import (
     BousslaError, CandidateField, DocumentText, EvidenceRef, ExtractionProposal, Mode,
 )
-from boussla.documents.known_layout import FIELDS, KnownLayoutInvoiceExtractor, _millimes
+from boussla.documents.known_layout import HEADER_FIELDS as FIELDS, KnownLayoutInvoiceExtractor, _millimes
 from boussla.documents.spans import validate_extraction_proposal
 
 

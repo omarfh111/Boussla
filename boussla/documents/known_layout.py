@@ -8,10 +8,15 @@ import re
 from boussla.contracts import CandidateField, DocumentText, EvidenceRef, ExtractionProposal, Mode
 
 
-FIELDS = (
+HEADER_FIELDS = (
     "invoice_number", "issuer_mf_raw", "buyer_mf_raw", "issued_on",
     "currency", "net_millimes", "tax_millimes", "gross_millimes",
 )
+LINE_FIELDS = (
+    "line_description", "line_unit", "line_quantity",
+    "line_unit_price_millimes", "line_net_millimes",
+)
+FIELDS = HEADER_FIELDS + LINE_FIELDS
 PATTERNS = {
     "invoice_number": re.compile(r"(?m)^Référence\s*\n([^\s/]+)"),
     "issuer_mf_raw": re.compile(r"(?m)^Émetteur\s*\n[^\n]*?MF\s*:\s*(\S+)"),
@@ -23,6 +28,14 @@ AMOUNTS = re.compile(
     r"(?s)Montants\s*\nHT\s*:\s*(?P<net>[\d ]+,\d{3})\s*DT\s*\|\s*"
     r"Taxe de scénario\s*:\s*(?P<tax>[\d ]+,\d{3})\s*DT\s*\|\s*"
     r"TTC\s*:\s*(?P<gross>[\d ]+,\d{3})\s*DT"
+)
+LINE = re.compile(
+    r"(?s)Lignes de la pièce.*?Montant HT[ \t]*\n"
+    r"(?P<description>[^\n]+?) / unité :[ \t]*\n"
+    r"(?P<unit>[^\n]+)[ \t]*\n"
+    r"(?P<quantity>[\d ]+)[ \t]*\n"
+    r"(?P<unit_price>[\d ]+,\d{3}) DT[ \t]*\n"
+    r"(?P<line_net>[\d ]+,\d{3}) DT"
 )
 
 
@@ -52,11 +65,21 @@ class KnownLayoutInvoiceExtractor:
                     for field, group in (("net_millimes", "net"), ("tax_millimes", "tax"), ("gross_millimes", "gross")):
                         if field not in matches:
                             matches[field] = (amount_match.group(group), page.page)
+                if line_match := LINE.search(page.text):
+                    for field, group in (
+                        ("line_description", "description"), ("line_unit", "unit"),
+                        ("line_quantity", "quantity"), ("line_unit_price_millimes", "unit_price"),
+                        ("line_net_millimes", "line_net"),
+                    ):
+                        if field not in matches:
+                            matches[field] = (line_match.group(group), page.page)
 
         candidates = []
         for field in FIELDS:
             raw, page = matches.get(field, (None, None))
             normalized = _millimes(raw) if raw is not None and field.endswith("_millimes") else raw
+            if raw is not None and field == "line_quantity":
+                normalized = str(int(raw.replace(" ", "")))
             refs = (EvidenceRef(document_id=text.document_id, page=page, exact_text=raw, field_name=field),) if raw else ()
             candidates.append(CandidateField(
                 field_name=field, raw_value=raw, normalized_value=normalized,
