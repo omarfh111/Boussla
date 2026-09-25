@@ -51,8 +51,9 @@ class LexicalReferenceRetriever:
 
     def search(
         self, query: str, *, as_of: date, jurisdiction: str,
-        audience: Audience, limit: int = 5,
+        audience: Audience | str, limit: int = 5,
     ) -> list[RetrievedPassage]:
+        audience = Audience(audience)
         terms = _tokens(query)
         if not terms or limit < 1:
             return []

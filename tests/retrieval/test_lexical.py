@@ -52,3 +52,9 @@ def test_wrong_jurisdiction_future_and_unreviewed_are_filtered_for_company():
 
     assert company == []
     assert [item.rule_id for item in officer] == ["UNREVIEWED"]
+
+
+def test_company_audience_string_cannot_bypass_review_filter():
+    retriever = LexicalReferenceRetriever((record(review_status="UNREVIEWED"),))
+
+    assert retriever.search("briques", as_of=date(2026, 1, 1), jurisdiction="TN", audience="COMPANY") == []
