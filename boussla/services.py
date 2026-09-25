@@ -20,6 +20,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from boussla.config import Settings, get_settings, use_os_trust_store
 from boussla.contracts import (
     Actor, Allocation, AllocationChange, AllocationStatus, AllocationTarget, AnalysisStatus, AnalysisView,
@@ -40,6 +42,21 @@ from boussla.seed import load_enterprises, seed_demo_case
 from boussla.store import CaseStore, ReceiptNote, stable_hash, utcnow
 
 ALL_FAMILIES = frozenset(FindingFamily)
+
+
+def _validated(model, **fields):
+    """Build a contract object from user input; invalid values become a typed
+    INSUFFICIENT_INFORMATION error (never an unhandled ValidationError)."""
+    try:
+        obj = model(**fields)
+    except ValidationError as exc:
+        bad = sorted({str(e["loc"][0]) for e in exc.errors() if e.get("loc")})
+        raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION, "Valeur invalide : " + ", ".join(bad), fields=bad) from None
+    start, end = getattr(obj, "planned_start", None), getattr(obj, "planned_end", None)
+    if start and end and end < start:
+        raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION, "La fin prévue précède le début prévu",
+                           fields=["planned_start", "planned_end"])
+    return obj
 FOLLOW_UP_DAYS = 7
 
 
@@ -287,7 +304,7 @@ class BousslaAppService:
             label = str(project_payload.get("label", "")).strip()[:120]
             if not label:
                 raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION, "Libellé de projet requis")
-            project = Project(project_id=f"PRJ-{case_id[5:]}", company_id=company_id, label=label,
+            project = _validated(Project, project_id=f"PRJ-{case_id[5:]}", company_id=company_id, label=label,
                               project_type=str(project_payload.get("project_type", "OTHER_OR_UNKNOWN")),
                               planned_start=project_payload.get("planned_start") or None,
                               planned_end=project_payload.get("planned_end") or None, status="DECLARED")
@@ -448,8 +465,8 @@ class BousslaAppService:
                     raise BousslaError(ErrorCode.CROSS_COMPANY, "Projet hors du périmètre de l'entreprise")
                 if payload.get("transaction_id") and payload["transaction_id"] not in txs:
                     raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE, "Transaction inconnue")
-                claim = ContextClaim(
-                    claim_id=f"CLAIM-{ihash[:8].upper()}", company_id=meta["company_id"],
+                claim = _validated(
+                    ContextClaim, claim_id=f"CLAIM-{ihash[:8].upper()}", company_id=meta["company_id"],
                     transaction_id=payload.get("transaction_id"), project_id=payload.get("project_id"),
                     purpose_category=category, purpose_text=(payload.get("purpose_text") or "")[:2000],
                     beneficiary_type=payload.get("beneficiary_type") or "UNKNOWN",

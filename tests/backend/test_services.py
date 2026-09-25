@@ -292,3 +292,20 @@ def test_upload_revision_hash_covers_every_fact_of_that_version(svc, actors):
     with svc.store.write(CASE) as tx:
         actual = tx._current_fact_hash(v)
     assert recorded.version == v and recorded.fact_hash == actual
+
+
+@pytest.mark.parametrize("payload", [
+    {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "d", "planned_start": "not-a-date"},
+    {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "d", "planned_start": "2026-12-01", "planned_end": "2026-01-01"},
+    {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "d", "reported_stock_qty": "beaucoup"},
+])
+def test_invalid_context_is_a_typed_error_and_writes_nothing(svc, actors, payload):
+    v = ver(svc)
+    assert code(lambda: svc.submit_context(actors[0], CASE, payload, v, "bad")) is ErrorCode.INSUFFICIENT_INFORMATION
+    assert ver(svc) == v
+
+
+def test_invalid_project_dates_on_create_case(svc, actors):
+    for payload in ({"label": "x", "planned_start": "32/13/2026"},
+                    {"label": "x", "planned_start": "2026-12-01", "planned_end": "2026-01-01"}):
+        assert code(lambda: svc.create_case(actors[0], "DEMO-BAT", payload, str(payload))) is ErrorCode.INSUFFICIENT_INFORMATION
