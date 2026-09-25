@@ -120,3 +120,34 @@ def test_restart_resume_decision_applies_once(env):
     assert r2.decide(off, CASE, resp.proposal_ids[0], accept=True).new_version == v + 1
     assert ver(svc2) == v + 1
     assert code(lambda: svc2.accept_evidence(off, CASE, resp.proposal_ids[0], v, "fresh-key")) is ErrorCode.STALE_REVISION
+
+
+def test_extraction_provider_outage_falls_back_on_upload(env):
+    import httpx
+    from boussla.adapters.model_extraction import OpenAIInvoiceExtractor
+    from boussla.documents.integrity import PdfIntegrityInspector
+    from boussla.documents.native_text import NativePdfExtractor
+    from boussla.services import BousslaAppService
+
+    base = build_service()
+    down = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
+    svc = BousslaAppService(base.store, base.registry, settings=base.settings, text_extractor=NativePdfExtractor(),
+                            field_extractor=OpenAIInvoiceExtractor(api_key="sk-test-not-a-real-key", client=down),
+                            integrity_inspector=PdfIntegrityInspector())
+    co = actors(svc)[0]
+    invoice = (FIXTURE_ROOT / "documents" / "01_buyer_invoice.pdf").read_bytes()
+    dv = svc.upload_document(co, CASE, invoice, "facture.pdf", "application/pdf", ver(svc), "u")
+    assert dv.extraction is not None and dv.extraction.mode is not Mode.LIVE  # labelled baseline, not "model"
+    assert dv.integrity.limitations and "HASH_IS_NOT_AUTHENTICITY" in dv.integrity.limitations
+    fields = {c.field_name: c.raw_value for c in dv.extraction.candidates if c.raw_value is not None}
+    assert fields.get("invoice_number") == "FAC-DEMO-001"
+    confirmed = svc.confirm_transcription(co, CASE, dv.extraction.proposal_id, fields, ver(svc), "c")
+    assert not confirmed.pending_transcriptions
+    assert svc.get_case(actors(svc)[1], CASE).score.review_index == 40  # outage never becomes a finding
+
+
+def test_release_wires_lane_c_adapters(env):
+    svc = build_service()
+    assert type(svc.text_extractor).__name__ == "NativePdfExtractor"
+    assert type(svc.integrity_inspector).__name__ == "PdfIntegrityInspector"
+    assert type(svc.field_extractor).__name__ == "KnownLayoutInvoiceExtractor"  # manual mode: no key
