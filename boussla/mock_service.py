@@ -410,7 +410,7 @@ class MockBousslaService:
         draft = ClarificationDraft(
             draft_id=f"DRAFT-{uuid.uuid4().hex[:6].upper()}", case_id=case_id, company_id=self.company_id,
             case_version=self.version, questions=(QUESTIONS["Q-PROJECT-ALLOCATION"], QUESTIONS["Q-SUPPORTING-DOC"]),
-            fact_ids=("TX-001", "ALLOC-P1-V1", "REF-P1"), allowed_document_types=(DocumentClass.ALLOCATION,),
+            fact_ids=("TX-001", "ALLOC-P1-V1", "REF-P1"), allowed_document_types=(DocumentClass.ALLOCATION_RESPONSE,),
             target_response_at=_now() + timedelta(days=7),
             text_fr="Demande de précision neutre (démo locale, aucun envoi externe) : merci de préciser l'affectation "
                     "des quantités de la facture FAC-DEMO-001. Date cible indicative de démonstration, pas un délai légal.",

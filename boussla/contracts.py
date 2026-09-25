@@ -209,11 +209,14 @@ class AnalysisStatus(str, Enum):
 
 
 class DocumentClass(str, Enum):
+    """Jev routing categories (config/prompt_templates.md). Always keep OTHER_OR_UNKNOWN."""
+
     INVOICE = "INVOICE"
+    PAYMENT_RECORD = "PAYMENT_RECORD"
+    ALLOCATION_REFERENCE = "ALLOCATION_REFERENCE"
+    ALLOCATION_RESPONSE = "ALLOCATION_RESPONSE"
+    DELIVERY_RECORD = "DELIVERY_RECORD"
     CREDIT_NOTE = "CREDIT_NOTE"
-    PAYMENT = "PAYMENT"
-    ALLOCATION = "ALLOCATION"
-    DELIVERY = "DELIVERY"
     OTHER_OR_UNKNOWN = "OTHER_OR_UNKNOWN"
 
 
