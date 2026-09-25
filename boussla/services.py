@@ -31,7 +31,7 @@ from boussla.contracts import (
     ResponseView, RevisionResult, Role, Scenario, ScoreSnapshot, Transaction, TransactionInputs,
     TransactionSummary, ActionReceipt, ExtractionProposal,
 )
-from boussla.interim_checks import get_checks_engine
+from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
     ALLOWED_RESPONSE_DOCUMENTS, MAX_QUESTIONS_PER_ROUND, QUESTIONS, REQUEST_TEXT_FR, deterministic_plan,
 )
@@ -63,6 +63,8 @@ class BousslaAppService:
         self.store = store
         self.registry = registry or ActorRegistry.demo()
         self.checks = checks or get_checks_engine()
+        # Hypothesis tests: lane B's if provided, else the labelled interim playbook tests.
+        self._hypothesis_engine = self.checks if hasattr(self.checks, "test_hypotheses") else InterimChecks()
         self.settings = settings or get_settings()
         self.enterprises = load_enterprises()
         self.text_extractor = text_extractor
@@ -134,8 +136,7 @@ class BousslaAppService:
             findings += tx_findings
             tx_scores.append(self.checks.score_transaction(tx_findings, set(ALL_FAMILIES)))
             scenarios += self.checks.run_scenarios(inputs, {})
-            if hasattr(self.checks, "test_hypotheses"):
-                hypotheses += self.checks.test_hypotheses(inputs, tx_findings, pending_second_package=pending)
+            hypotheses += self._hypothesis_engine.test_hypotheses(inputs, tx_findings, pending_second_package=pending)
         index = self.checks.aggregate_company(tx_scores)
         evaluable = [s for s in tx_scores if s.evidence_coverage is not None]
         coverage = min((Decimal(s.evidence_coverage) for s in evaluable), default=None)

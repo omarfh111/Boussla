@@ -114,5 +114,7 @@ def test_wrong_unit_not_comparable():
     assert q.status is St.INSUFFICIENT
 
 
-def test_engine_selection_defaults_to_interim():
+def test_engine_selection_defaults_to_interim(monkeypatch):
+    from boussla import interim_checks
+    monkeypatch.setattr(interim_checks.importlib.util, "find_spec", lambda name: None)
     assert isinstance(get_checks_engine(), InterimChecks)
