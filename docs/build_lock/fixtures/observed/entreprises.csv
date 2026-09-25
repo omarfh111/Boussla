@@ -1,0 +1,4 @@
+company_id,display_name,synthetic_mf,sector,created_on,data_kind
+DEMO-BAT,Bâtisseur Démo,DEMO-MF-BAT,Construction - fictional,2024-01-01,SYNTHETIC
+DEMO-BRI,Briques Démo,DEMO-MF-BRI,Material supplier - fictional,2024-01-01,SYNTHETIC
+DEMO-OTHER,Autre Entreprise Démo,DEMO-MF-OTHER,Wrong-entity test only,2024-01-01,SYNTHETIC

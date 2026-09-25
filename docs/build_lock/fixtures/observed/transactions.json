@@ -1,0 +1,17 @@
+[
+  {
+    "transaction_id": "TX-001",
+    "buyer_company_id": "DEMO-BAT",
+    "seller_company_id": "DEMO-BRI",
+    "economic_period": "2026-09",
+    "project_id": "P1",
+    "invoice_observation_ids": [
+      "OBS-BUY-001",
+      "OBS-SELL-001"
+    ],
+    "canonical_revision": 1,
+    "synthetic": true,
+    "source_coverage": "AVAILABLE_FOR_THIS_TRANSACTION_ONLY",
+    "correlation_status": "MATCHED_IN_SYNTHETIC_FIXTURE"
+  }
+]

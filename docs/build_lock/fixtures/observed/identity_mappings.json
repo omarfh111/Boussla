@@ -1,0 +1,16 @@
+[
+  {
+    "mapping_id": "MAP-PAYER-001",
+    "company_id": "DEMO-BAT",
+    "source_record_id": "DOC-PAY-001",
+    "status": "ACCEPTED_SYNTHETIC_FIXTURE",
+    "verified_by": "DEMO-OFFICER"
+  },
+  {
+    "mapping_id": "MAP-PAYEE-001",
+    "company_id": "DEMO-BRI",
+    "source_record_id": "DOC-PAY-001",
+    "status": "ACCEPTED_SYNTHETIC_FIXTURE",
+    "verified_by": "DEMO-OFFICER"
+  }
+]

@@ -1,0 +1,17 @@
+# Candidate runtime packages, NOT a tested dependency lock.
+# A resolves and pins exact compatible versions once on the team's environment.
+streamlit
+plotly
+pydantic
+pypdf
+langgraph
+langgraph-checkpoint-sqlite
+langsmith
+qdrant-client
+fastembed
+httpx
+python-dotenv
+pytest
+# Add exactly one general model provider SDK that passes your key/usage test.
+# Optional after core: pyHanko, c2pa-python, reportlab for fixture generation.
+# DuckDB/LightGBM/scikit-learn only if keeping an existing tested analytics path.

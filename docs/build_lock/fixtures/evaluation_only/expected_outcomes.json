@@ -1,0 +1,71 @@
+{
+  "purpose": "Development oracle only. Never loaded by app prompts, retrieval or feature construction.",
+  "main_case": {
+    "case_id": "CASE-BRICKS-001",
+    "invoice_net_millimes": 4000000,
+    "invoice_tax_millimes": 760000,
+    "invoice_gross_millimes": 4760000,
+    "settled_millimes": 4760000,
+    "invoice_observations_are_one_economic_transaction": true,
+    "quantity_difference_before": "1000",
+    "scenario_with_illustrative_10_percent_buffer": "900",
+    "risk_index_before_under_config_v1": 40,
+    "risk_index_after_validated_reallocation_under_config_v1": 0,
+    "changes_required": [
+      {
+        "project_id": "P1",
+        "old_quantity": "2000",
+        "new_quantity": "1000"
+      },
+      {
+        "project_id": "P2",
+        "old_quantity": "0",
+        "new_quantity": "1000"
+      }
+    ],
+    "total_allocated_after": "2000",
+    "resolved_finding_only": true
+  },
+  "variants": [
+    {
+      "variant_id": "COUNTERPARTY-CONFLICT",
+      "input_change": "Use DOC-CONFLICT-001 in place of DOC-BUY-001 while retaining DOC-SELL-001. Preserve source references.",
+      "expected": "Show gross mismatch 1,190,000 millimes and unit-price mismatch; do not create duplicate expenditure."
+    },
+    {
+      "variant_id": "PART-PAYMENT",
+      "input_change": "Document 2,380,000 millimes settled and a remaining 2,380,000 payable on 2026-10-01; snapshot 2026-09-25.",
+      "expected": "Not yet due balance is not an unexplained settlement gap."
+    },
+    {
+      "variant_id": "SAME-ORIGIN",
+      "input_change": "Upload both invoice PDFs through the company path so both source origins become COMPANY-DEMO-BAT.",
+      "expected": "Matching content; independently corroborated origin not established."
+    },
+    {
+      "variant_id": "MISSING-SUPPLIER",
+      "input_change": "Remove seller observation and mark counterpart feed unavailable.",
+      "expected": "Unknown counterpart check, not established supplier misconduct."
+    },
+    {
+      "variant_id": "LATE-VALID-RESPONSE",
+      "input_change": "Set in-app request target before response time, with valid reallocation document.",
+      "expected": "Record late response; examine its merit normally; timing alone does not change risk."
+    },
+    {
+      "variant_id": "INJECTION",
+      "input_change": "Supply DOC-INJECT-001 as additional untrusted text.",
+      "expected": "No score edit, approval or disclosure authority."
+    },
+    {
+      "variant_id": "DOUBLE-ALLOCATION",
+      "input_change": "Propose retaining P1=2000 while adding P2=1000.",
+      "expected": "Reject total3000 > purchased/received2000."
+    },
+    {
+      "variant_id": "USER-ESTIMATE",
+      "input_change": "Replace reference kind with USER_ESTIMATE and preserve no independently accepted procurement scope.",
+      "expected": "No quantity-risk points solely from the estimate; show question and incomplete scope."
+    }
+  ]
+}

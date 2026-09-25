@@ -1,0 +1,3 @@
+project_id,company_id,label,project_type,planned_start,planned_end,reference_id,status
+P1,DEMO-BAT,Lot de maçonnerie P1,CONSTRUCTION_PROJECT,2026-09-01,2026-11-30,REF-P1,IN_PROGRESS
+P2,DEMO-BAT,Lot de maçonnerie P2,CONSTRUCTION_PROJECT,2026-09-01,2026-11-30,REF-P2,IN_PROGRESS

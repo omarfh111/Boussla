@@ -1,0 +1,9 @@
+[
+  {
+    "payment_id": "PAY-001",
+    "transaction_id": "TX-001",
+    "allocated_millimes": 4760000,
+    "accepted_by": "DEMO-OFFICER",
+    "accepted_at": "2026-09-08T10:00:00+01:00"
+  }
+]

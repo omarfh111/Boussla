@@ -1,0 +1,68 @@
+[
+  {
+    "observation_id": "OBS-BUY-001",
+    "document_id": "DOC-BUY-001",
+    "transaction_id": "TX-001",
+    "perspective": "BUYER_RECEIVED",
+    "issuer_company_id": "DEMO-BRI",
+    "issuer_mf_raw": "DEMO-MF-BRI",
+    "buyer_company_id": "DEMO-BAT",
+    "buyer_mf_raw": "DEMO-MF-BAT",
+    "invoice_number": "FAC-DEMO-001",
+    "invoice_version": "1",
+    "issued_on": "2026-09-05",
+    "available_at": "2026-09-08T10:00:00+01:00",
+    "currency": "TND",
+    "net_millimes": 4000000,
+    "tax_millimes": 760000,
+    "gross_millimes": 4760000,
+    "origin_group_id": "COMPANY-DEMO-BAT",
+    "transcription_status": "FIXTURE_FIELDS_KNOWN",
+    "lines": [
+      {
+        "line_id": "LINE-BUY-001",
+        "item_description": "Brique - référence BRICK-A",
+        "normalized_item_code": "BRICK-A",
+        "quantity": "2000",
+        "unit": "piece",
+        "unit_price_millimes": 2000,
+        "line_net_millimes": 4000000,
+        "tax_rate": "0.19",
+        "project_id": null
+      }
+    ]
+  },
+  {
+    "observation_id": "OBS-SELL-001",
+    "document_id": "DOC-SELL-001",
+    "transaction_id": "TX-001",
+    "perspective": "SELLER_ISSUED",
+    "issuer_company_id": "DEMO-BRI",
+    "issuer_mf_raw": "DEMO-MF-BRI",
+    "buyer_company_id": "DEMO-BAT",
+    "buyer_mf_raw": "DEMO-MF-BAT",
+    "invoice_number": "FAC-DEMO-001",
+    "invoice_version": "1",
+    "issued_on": "2026-09-05",
+    "available_at": "2026-09-08T10:00:00+01:00",
+    "currency": "TND",
+    "net_millimes": 4000000,
+    "tax_millimes": 760000,
+    "gross_millimes": 4760000,
+    "origin_group_id": "DEMO-COUNTERPARTY-FEED-BRI",
+    "transcription_status": "FIXTURE_FIELDS_KNOWN",
+    "lines": [
+      {
+        "line_id": "LINE-SELL-001",
+        "item_description": "Brique - référence BRICK-A",
+        "normalized_item_code": "BRICK-A",
+        "quantity": "2000",
+        "unit": "piece",
+        "unit_price_millimes": 2000,
+        "line_net_millimes": 4000000,
+        "tax_rate": "0.19",
+        "project_id": null
+      }
+    ]
+  }
+]

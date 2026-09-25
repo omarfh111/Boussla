@@ -1,0 +1,24 @@
+{
+  "proposal_id": "PROP-ALLOC-001",
+  "case_id": "CASE-BRICKS-001",
+  "expected_version": 1,
+  "source_document_id": "DOC-ALLOC-001",
+  "status": "AWAITING_HUMAN_REVIEW",
+  "atomic_replacements": [
+    {
+      "allocation_id": "ALLOC-P1-V1",
+      "old_quantity": "2000",
+      "new_quantity": "1000",
+      "target_project_id": "P1"
+    },
+    {
+      "create_allocation_id": "ALLOC-P2-V2",
+      "new_quantity": "1000",
+      "target_project_id": "P2"
+    }
+  ],
+  "budget_quantity": "2000",
+  "unit": "piece",
+  "transaction_id": "TX-001",
+  "line_id": "LINE-BUY-001"
+}

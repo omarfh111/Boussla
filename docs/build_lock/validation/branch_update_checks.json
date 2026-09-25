@@ -1,0 +1,47 @@
+{
+  "revision": "V4-GIT-1",
+  "source_zip_sha256": "83c4469fd9966bc88b89c569608b635b1cb7eb88c3b9ba8cfeea47c060dafc12",
+  "handoff_checks": [
+    {
+      "file": "handoffs/CLAUDE_MAX_BACKEND_GRAPH.md",
+      "branch": "feat/backend-workflow",
+      "original_task_body_preserved": true,
+      "atomic_commit_push_policy_present": true
+    },
+    {
+      "file": "handoffs/CODEX_PRO_DATA_CHECKS.md",
+      "branch": "feat/checks-scenarios",
+      "original_task_body_preserved": true,
+      "atomic_commit_push_policy_present": true
+    },
+    {
+      "file": "handoffs/CODEX_PLUS_A_DOCUMENTS_RAG.md",
+      "branch": "feat/documents-rag",
+      "original_task_body_preserved": true,
+      "atomic_commit_push_policy_present": true
+    },
+    {
+      "file": "handoffs/CODEX_PLUS_B_UI_RELEASE.md",
+      "branch": "feat/company-admin-ui",
+      "original_task_body_preserved": true,
+      "atomic_commit_push_policy_present": true
+    },
+    {
+      "file": "handoffs/GEMINI_PRO_REVIEW_TESTS.md",
+      "branch": "test/independent-review",
+      "original_task_body_preserved": true,
+      "atomic_commit_push_policy_present": true
+    }
+  ],
+  "original_business_contracts_and_fixtures_preserved": true,
+  "original_task_bodies_preserved": true,
+  "reference_tests": {
+    "executed": true,
+    "passed": 30,
+    "returncode": 0
+  },
+  "local_markdown_links": "PASS",
+  "markdown_fences": "PASS",
+  "team_git_operations_executed": false,
+  "external_integrations_executed": false
+}

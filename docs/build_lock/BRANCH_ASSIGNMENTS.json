@@ -1,0 +1,40 @@
+{
+  "update": "V4-GIT-1",
+  "source_zip_sha256": "83c4469fd9966bc88b89c569608b635b1cb7eb88c3b9ba8cfeea47c060dafc12",
+  "lanes": [
+    {
+      "lane": "A",
+      "model": "Claude Code / Max",
+      "file": "CLAUDE_MAX_BACKEND_GRAPH.md",
+      "branch": "feat/backend-workflow"
+    },
+    {
+      "lane": "B",
+      "model": "Codex / Pro",
+      "file": "CODEX_PRO_DATA_CHECKS.md",
+      "branch": "feat/checks-scenarios"
+    },
+    {
+      "lane": "C",
+      "model": "Codex / Plus \u2014 document lane",
+      "file": "CODEX_PLUS_A_DOCUMENTS_RAG.md",
+      "branch": "feat/documents-rag"
+    },
+    {
+      "lane": "D",
+      "model": "Codex / Plus \u2014 UI lane",
+      "file": "CODEX_PLUS_B_UI_RELEASE.md",
+      "branch": "feat/company-admin-ui"
+    },
+    {
+      "lane": "REVIEW",
+      "model": "Gemini / Pro \u2014 independent reviewer",
+      "file": "GEMINI_PRO_REVIEW_TESTS.md",
+      "branch": "test/independent-review"
+    }
+  ],
+  "scope_change": false,
+  "git_remote_accessed": false,
+  "git_commits_created_in_team_repository": false,
+  "git_pushes_executed": false
+}

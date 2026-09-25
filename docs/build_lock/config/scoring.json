@@ -1,0 +1,22 @@
+{
+  "version": "CONTEXT_RULES_V4_1",
+  "kind": "REVIEW_PRIORITY_NOT_FRAUD_PROBABILITY",
+  "weights": {
+    "COUNTERPARTY": 35,
+    "SETTLEMENT": 25,
+    "QUANTITY": 40
+  },
+  "amount_full_severity_ratio": "0.20",
+  "quantity_full_severity_ratio": "0.50",
+  "enterprise_aggregation": "MAX_TRANSACTION",
+  "unknown_policy": "NULL_IF_NONE_EVALUABLE_ELSE_PARTIAL_INDEX",
+  "lateness_risk_weight": 0,
+  "ai_origin_risk_weight": 0,
+  "self_reported_purpose_risk_weight": 0,
+  "hypothetical_quantity_margins": [
+    "0.00",
+    "0.10"
+  ],
+  "margins_are_authorized_tolerances": false,
+  "all_settings_are_demo_assumptions": true
+}
