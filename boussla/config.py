@@ -49,6 +49,8 @@ class Settings:
     llm_provider: str = "manual"
     openai_chat_model: str | None = None
     general_model_timeout_seconds: int = 30
+    jev_enabled: bool = False
+    jev_model: str = "jev-1.13.0"
     langsmith_tracing: bool = False
     langsmith_project: str = "boussla-synthetic-demo"
     max_upload_bytes: int = 10 * 1024 * 1024
@@ -66,6 +68,8 @@ class Settings:
             "llm_provider": self.llm_provider,
             "openai_chat_model": self.openai_chat_model or "",
             "openai_key": "set" if self.secret("OPENAI_API_KEY") else "missing",
+            "jev_enabled": str(self.jev_enabled),
+            "typesafe_key": "set" if self.secret("TYPESAFE_API_KEY") else "missing",
             "langsmith_tracing": str(self.langsmith_tracing),
             "langsmith_key": "set" if self.secret("LANGSMITH_API_KEY") else "missing",
         }
@@ -102,6 +106,9 @@ def get_settings() -> Settings:
         llm_provider=os.environ.get("LLM_PROVIDER") or ("openai" if has_openai else "manual"),
         openai_chat_model=os.environ.get("OPENAI_CHAT_MODEL") or None,
         general_model_timeout_seconds=_int("GENERAL_MODEL_TIMEOUT_SECONDS", 30),
+        # Jev routing runs when a TypeSafe key is set, unless JEV_ENABLED=false.
+        jev_enabled=_flag("JEV_ENABLED", True) and bool(secrets["TYPESAFE_API_KEY"]),
+        jev_model=os.environ.get("JEV_MODEL") or "jev-1.13.0",
         langsmith_tracing=_flag("LANGSMITH_TRACING", False) and bool(secrets["LANGSMITH_API_KEY"]),
         langsmith_project=os.environ.get("LANGSMITH_PROJECT", "boussla-synthetic-demo"),
         max_upload_bytes=_int("MAX_UPLOAD_BYTES", 10 * 1024 * 1024),

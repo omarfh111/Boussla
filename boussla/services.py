@@ -29,7 +29,7 @@ from boussla.contracts import (
     LocalDraftArtifact, Mode, OfficerCaseView, Payment, PaymentAllocation, PaymentStatus, Perspective, Project,
     ProposalStatus, PurposeCategory, QuantityReference, QueueItem, QueuePage, RequestStatus, RequestView,
     ResponseView, RevisionResult, Role, Scenario, ScoreSnapshot, Transaction, TransactionInputs,
-    TransactionSummary, ActionReceipt, ExtractionProposal,
+    TransactionSummary, ActionReceipt, ExtractionProposal, DocumentClass, DocumentText, RouterResult,
 )
 from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
@@ -59,7 +59,7 @@ class BousslaAppService:
 
     def __init__(self, store: CaseStore, registry: ActorRegistry | None = None, checks=None,
                  settings: Settings | None = None, field_extractor=None, text_extractor=None,
-                 integrity_inspector=None) -> None:
+                 integrity_inspector=None, document_router=None) -> None:
         self.store = store
         self.registry = registry or ActorRegistry.demo()
         self.checks = checks or get_checks_engine()
@@ -70,6 +70,7 @@ class BousslaAppService:
         self.text_extractor = text_extractor
         self.field_extractor = field_extractor
         self.integrity_inspector = integrity_inspector
+        self.document_router = document_router
 
     # ================================================================ helpers
     def _open(self, actor: Actor, case_id: str, action: str) -> tuple[Actor, dict]:
@@ -100,6 +101,7 @@ class BousslaAppService:
             "proposal": s.facts(case_id, "proposal", EvidenceProposal, v),
             "extraction": s.facts(case_id, "extraction", ExtractionProposal, v),
             "integrity": s.facts(case_id, "integrity", IntegrityReport, v),
+            "routing": s.facts(case_id, "routing", RouterResult, v),
         }
 
     def _clarification_status(self, requests: list[RequestView]) -> ClarificationStatus:
@@ -191,11 +193,19 @@ class BousslaAppService:
     def _doc_views(self, facts: dict[str, list], version: int) -> tuple[DocumentView, ...]:
         extractions = {e.document_id: e for e in facts["extraction"]}
         integrity = {i.document_id: i for i in facts["integrity"]}
+        routing = {r.document_id: r for r in facts["routing"]}
         return tuple(DocumentView(document=d, extraction=extractions.get(d.document_id),
                                   integrity=integrity.get(d.document_id) or IntegrityReport(
                                       document_id=d.document_id, sha256=d.sha256,
                                       limitations=("INTEGRITY_ADAPTER_NOT_RUN",)),
+                                  routing=routing.get(d.document_id),
                                   case_version=version, mode=Mode.LIVE) for d in facts["document"])
+
+    @staticmethod
+    def _router_mode(facts: dict[str, list]) -> Mode:
+        """LIVE if any stored routing came from Jev, MANUAL if only fallbacks, else NOT_RUN."""
+        modes = {r.mode for r in facts["routing"]}
+        return Mode.LIVE if Mode.LIVE in modes else Mode.MANUAL if modes else Mode.NOT_RUN
 
     def _company_name(self, company_id: str) -> str:
         e = self.enterprises.get(company_id)
@@ -230,7 +240,8 @@ class BousslaAppService:
             quantity_references=tuple(facts["quantity_reference"]), allocations=tuple(facts["allocation"]),
             findings=ev.findings, hypotheses=ev.hypotheses, scenarios=ev.scenarios, score=ev.score,
             requests=tuple(facts["request"]), responses=tuple(facts["response"]), proposals=tuple(facts["proposal"]),
-            mode=Mode.LIVE, mode_by_node={"checks": Mode.LIVE, "retrieval": Mode.NOT_RUN},
+            mode=Mode.LIVE, mode_by_node={"checks": Mode.LIVE, "retrieval": Mode.NOT_RUN,
+                                          "router": self._router_mode(facts)},
             banner_fr=DEMO_BANNER_FR)
 
     def list_queue(self, actor: Actor, cutoff, limit: int, cursor: str | None = None) -> QueuePage:
@@ -316,8 +327,10 @@ class BousslaAppService:
             uploader_actor_id=actor.actor_id, acquisition_channel=channel,
             origin_group_id=f"COMPANY-{meta['company_id']}" if actor.role is Role.COMPANY else "OFFICER-UPLOAD",
             confidentiality_scope="CASE_PARTIES", extraction_status="NOT_RUN", processing_limitations=tuple(limitations))
-        # Extraction/integrity (possibly a model call) happen BEFORE the write transaction.
-        extraction = self._extract(document, upload_bytes)
+        # Extraction/routing/integrity (possibly model calls) happen BEFORE the write transaction.
+        text = self._text(document, upload_bytes)
+        extraction = self._extract(text)
+        routing = self._route(document, text)
         integrity = self._inspect(document, upload_bytes)
         if extraction is not None:
             document = document.model_copy(update={"extraction_status": extraction.status})
@@ -333,10 +346,12 @@ class BousslaAppService:
             if extraction is not None:
                 tx.put("extraction", extraction.proposal_id, extraction)
             tx.put("integrity", doc_id, integrity)
+            if routing is not None:
+                tx.put("routing", doc_id, routing)
             v = tx.commit_version(f"Pièce déposée : {safe_name}")
             tx.event("UPLOAD", actor.actor_id, f"Pièce déposée ({doc_id}) — original conservé, empreinte SHA-256", (doc_id,))
-            view = DocumentView(document=document, extraction=extraction, integrity=integrity, case_version=v,
-                                mode=Mode.LIVE)
+            view = DocumentView(document=document, extraction=extraction, integrity=integrity, routing=routing,
+                                case_version=v, mode=Mode.LIVE)
             tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="upload_document", case_id=case_id,
                                           actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
                                           result_hash=stable_hash(view.model_dump(mode="json"))), view)
@@ -352,15 +367,42 @@ class BousslaAppService:
         except Exception:  # noqa: BLE001 - inspection failure is a limitation, never a finding
             return fallback
 
-    def _extract(self, document: Document, content: bytes) -> ExtractionProposal | None:
-        if self.text_extractor is None or self.field_extractor is None:
+    def _text(self, document: Document, content: bytes) -> DocumentText | None:
+        if self.text_extractor is None:
             return None
         try:
-            return self.field_extractor.extract_fields(self.text_extractor.extract_text(document, content))
+            return self.text_extractor.extract_text(document, content)
+        except Exception:  # noqa: BLE001 - unreadable text leaves the manual path
+            return None
+
+    def _extract(self, text: DocumentText | None) -> ExtractionProposal | None:
+        if text is None or self.field_extractor is None:
+            return None
+        try:
+            return self.field_extractor.extract_fields(text)
         except BousslaError:
             raise
         except Exception:  # noqa: BLE001 - provider failure is never a finding; manual entry remains
             return None
+
+    def _route(self, document: Document, text: DocumentText | None) -> RouterResult | None:
+        """Candidate document class only (Jev or MANUAL fallback). Stored as its own fact;
+        never passed to checks, scores or acceptance."""
+        if self.document_router is None:
+            return None
+        manual = RouterResult(document_id=document.document_id, candidate_class=DocumentClass.OTHER_OR_UNKNOWN,
+                              mode=Mode.MANUAL)
+        body = "\n".join(p.text for p in text.pages) if text is not None and text.status in ("OK", "PARTIAL") else ""
+        if not body.strip():
+            return manual
+        try:
+            result = self.document_router.classify(document.document_id, body,
+                                                   tuple(c.value for c in DocumentClass))
+        except Exception:  # noqa: BLE001 - router outage -> explicit MANUAL
+            return manual
+        if not isinstance(result, RouterResult) or result.document_id != document.document_id:
+            return manual
+        return result
 
     def confirm_transcription(self, actor: Actor, case_id: str, proposal_id: str, field_confirmations: dict[str, str],
                               expected_version: int, request_id: str) -> CompanyCaseView:
@@ -432,7 +474,7 @@ class BousslaAppService:
         facts = self._facts(case_id, meta["version"])
         ev = self._evaluate(case_id, meta["company_id"], meta["version"], facts)
         officer = actor.role is Role.OFFICER
-        modes = {"checks": Mode.LIVE, "retrieval": Mode.NOT_RUN, "router": Mode.NOT_RUN,
+        modes = {"checks": Mode.LIVE, "retrieval": Mode.NOT_RUN, "router": self._router_mode(facts),
                  "extractor": Mode.LIVE if facts["extraction"] else Mode.NOT_RUN}
         answered = self._answered_question_ids(facts)
         rounds = len({c.claim_id for c in facts["context_claim"] if c.purpose_text.startswith("[Q-")})
@@ -779,6 +821,13 @@ def _discover_document_adapters(settings: Settings) -> dict:
             found["field_extractor"] = KnownLayoutInvoiceExtractor()
     except ImportError:
         pass
+    if settings.jev_enabled:
+        try:
+            from boussla.adapters.jev import JevDocumentRouter
+            found["document_router"] = JevDocumentRouter(api_key=settings.secret("TYPESAFE_API_KEY"),
+                                                         model=settings.jev_model)
+        except ImportError:
+            pass
     return found
 
 
