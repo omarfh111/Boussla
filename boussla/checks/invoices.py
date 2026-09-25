@@ -102,6 +102,7 @@ def compare_invoice_observations(inputs: TransactionInputs) -> Finding:
 
     if (buyer.buyer_company_id != transaction.buyer_company_id
             or seller.buyer_company_id != transaction.buyer_company_id
+            or buyer.issuer_company_id != seller.issuer_company_id
             or (transaction.seller_company_id is not None
                 and (buyer.issuer_company_id != transaction.seller_company_id
                      or seller.issuer_company_id != transaction.seller_company_id))):
@@ -141,7 +142,7 @@ def compare_invoice_observations(inputs: TransactionInputs) -> Finding:
                      EvidenceRef(document_id=seller.document_id, field_name="lines.item_or_unit"))
         return _finding(inputs, FindingStatus.UNRESOLVED, "INVOICE_LINE_IDENTITY_CONFLICT", line_refs,
                         severity="1", basis="LINE_ITEM_OR_UNIT")
-    if buyer_line.quantity != seller_line.quantity:
+    if Decimal(buyer_line.quantity) != Decimal(seller_line.quantity):
         gap = abs(Decimal(buyer_line.quantity) - Decimal(seller_line.quantity))
         severity = min(gap / max(abs(Decimal(seller_line.quantity)), Decimal(1))
                        / Decimal("0.20"), Decimal(1))

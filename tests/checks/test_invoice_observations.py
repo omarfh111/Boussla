@@ -118,3 +118,21 @@ def test_unsupported_multiple_lines_do_not_claim_a_match():
     finding = compare_invoice_observations(_replace(inputs, observation=seller))
     assert finding.status is FindingStatus.INSUFFICIENT
     assert finding.reason_code == "LINE_COMPARISON_UNSUPPORTED"
+
+
+def test_quantity_formatting_alone_is_not_a_conflict():
+    inputs = _inputs()
+    seller = inputs.invoice_observations[1]
+    seller = seller.model_copy(update={"lines": (seller.lines[0].model_copy(update={"quantity": "2000.0"}),)})
+    finding = compare_invoice_observations(_replace(inputs, observation=seller))
+    assert finding.status is FindingStatus.EXPLAINED
+
+
+def test_conflicting_internal_issuer_mapping_abstains():
+    inputs = _inputs()
+    transaction = inputs.transaction.model_copy(update={"seller_company_id": None})
+    seller = inputs.invoice_observations[1].model_copy(update={"issuer_company_id": "OTHER-SUPPLIER"})
+    inputs = _replace(inputs.model_copy(update={"transaction": transaction}), observation=seller)
+    finding = compare_invoice_observations(inputs)
+    assert finding.status is FindingStatus.INSUFFICIENT
+    assert finding.reason_code == "WRONG_COMPANY_OR_ISSUER"
