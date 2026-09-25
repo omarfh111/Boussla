@@ -12,3 +12,5 @@ fastembed
 httpx
 python-dotenv
 pytest
+openai
+truststore
