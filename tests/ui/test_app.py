@@ -1,14 +1,28 @@
-"""Smoke the real Streamlit entrypoint in both local role simulations."""
+"""Smoke the Streamlit entrypoint in both local role simulations on the MOCK service.
+
+Real-service UI tests live in ``test_app_real.py``.
+"""
 
 from streamlit.testing.v1 import AppTest
 from pathlib import Path
 from uuid import uuid4
+
+import pytest
+import streamlit as st
 
 from boussla.mock_service import demo_actors
 from ui.officer import bundled_mock_document
 
 
 APP = Path(__file__).resolve().parents[2] / "app.py"
+
+
+@pytest.fixture(autouse=True)
+def mock_service_mode(monkeypatch):
+    monkeypatch.setenv("BOUSSLA_SERVICE", "mock")
+    st.cache_resource.clear()
+    yield
+    st.cache_resource.clear()
 
 
 def test_company_view_shows_own_operations_without_internal_index():
@@ -88,4 +102,6 @@ def test_officer_view_exposes_hypothesis_matrix_and_draft_export():
     assert any("Matrice des hypothèses et sensibilité" in item.value for item in app.markdown)
     assert any("Brouillons exportables du dossier" in item.value for item in app.markdown)
     assert any(item.key == "draft_audience_selector" for item in app.radio)
+    app.button(key="generate_draft").click().run()
+    assert not app.exception
     assert any("Télécharger le brouillon" in item.label for item in app.download_button)

@@ -3,7 +3,6 @@
 from datetime import datetime, timezone
 from hashlib import sha256
 from pathlib import Path
-from uuid import uuid4
 
 import streamlit as st
 
@@ -111,11 +110,10 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
     if case.scenarios:
         st.dataframe([{
             "Scénario": s.label,
-            "Affecté (P1)": s.inputs.get("assigned", "N/D"),
-            "Base": s.inputs.get("baseline", "N/D"),
-            "Marge fictive": s.inputs.get("margin", "N/D"),
-            "Borne hypothétique": s.outputs.get("hypothetical_bound", "N/D"),
-            "Résidu calculé": s.outputs.get("residual", "N/D"),
+            "Marge fictive": s.inputs.get("quantity_margin", s.inputs.get("margin", "N/D")),
+            "Résidu calculé": s.outputs.get("residual_units", s.outputs.get("residual", "N/D")),
+            "Unité": s.outputs.get("unit", "N/D"),
+            "Statut": s.outputs.get("status", "HYPOTHETICAL"),
         } for s in case.scenarios], hide_index=True, width="stretch")
         st.caption("Calculs de sensibilité purement arithmétiques et hypothétiques : ne constituent pas une décision ni une modification du dossier.")
 
@@ -123,12 +121,20 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
     draft_audience_label = st.radio("Audience du brouillon", ["Interne (Agent)", "Destinataire (Entreprise)"],
                                     horizontal=True, key="draft_audience_selector")
     audience = Audience.OFFICER if "Interne" in draft_audience_label else Audience.COMPANY
-    draft = service.export_dossier(actor, case.case_id, audience, case.case_version)
-    st.caption(f"{draft.disclaimer_fr} · {draft.filename}")
-    with st.expander(f"Aperçu du brouillon ({draft.audience.value})", expanded=False):
-        st.markdown(draft.content_markdown)
-    st.download_button(f"Télécharger le brouillon ({draft.audience.value})", data=draft.content_markdown,
-                       file_name=draft.filename, mime="text/markdown", key=f"dl_draft_{draft.audience.value}")
+    # Export is an explicit human action bound to the current version (logged by the service).
+    if st.button("Générer le brouillon", key="generate_draft"):
+        service_action(lambda: service.export_dossier(actor, case.case_id, audience, case.case_version),
+                       on_success=lambda artifact: st.session_state.__setitem__("dossier_draft", artifact))
+    draft = st.session_state.get("dossier_draft")
+    if draft is not None and draft.case_id == case.case_id:
+        if draft.case_version != case.case_version:
+            st.warning("Ce brouillon appartient à une ancienne version. Générez-le à nouveau.")
+        else:
+            st.caption(f"{draft.disclaimer_fr} · {draft.filename}")
+            with st.expander(f"Aperçu du brouillon ({draft.audience.value})", expanded=False):
+                st.markdown(draft.content_markdown)
+            st.download_button(f"Télécharger le brouillon ({draft.audience.value})", data=draft.content_markdown,
+                               file_name=draft.filename, mime="text/markdown", key=f"dl_draft_{draft.audience.value}")
 
     st.markdown("#### Demande de précision")
     if st.button("Préparer une demande neutre", key="prepare_request"):
@@ -142,7 +148,7 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
             st.write(draft.text_fr)
             if st.button("Publier dans la boîte de démo", key="publish_request"):
                 service_action(lambda: service.publish_clarification(actor, case.case_id, draft.draft_id,
-                                                                    case.case_version, str(uuid4())),
+                                                                    case.case_version, f"ui:publish:{draft.draft_id}"),
                                on_success=lambda _: st.session_state.pop("clarification_draft", None))
 
     st.markdown("#### Révision des pièces proposées")
@@ -155,13 +161,13 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
         left, right = st.columns(2)
         if proposal.source_document_id is None:
             left.warning("Aucune pièce jointe : une déclaration seule ne suffit pas à accepter cette répartition.")
-        elif left.button("Accepter dans ce dossier", key=f"accept_{proposal.proposal_id}"):
+        elif left.button("Accepter dans ce dossier", key=f"accept_{proposal.proposal_id}_v{case.case_version}"):
             service_action(lambda: service.accept_evidence(actor, case.case_id, proposal.proposal_id,
-                                                          case.case_version, str(uuid4())),
+                                                          case.case_version, f"ui:decide:{proposal.proposal_id}:v{case.case_version}"),
                            on_success=lambda result: st.session_state.__setitem__("last_revision", result))
-        if right.button("Rejeter la proposition", key=f"reject_{proposal.proposal_id}"):
+        if right.button("Rejeter la proposition", key=f"reject_{proposal.proposal_id}_v{case.case_version}"):
             service_action(lambda: service.reject_evidence(actor, case.case_id, proposal.proposal_id,
-                                                          case.case_version, "Portée non retenue", str(uuid4())),
+                                                          case.case_version, "Portée non retenue", f"ui:decide:{proposal.proposal_id}:v{case.case_version}"),
                            on_success=lambda result: st.session_state.__setitem__("last_revision", result))
     if not pending:
         st.caption("Aucune proposition en attente.")
@@ -173,7 +179,14 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
         before = revision.score_before.review_index if revision.score_before else None
         after = revision.score_after.review_index if revision.score_after else None
         st.write(f"Priorité de revue : {before} → {after}")
-        st.caption("Valeurs recomputées par le service MOCK ; ne constituent pas une mesure des contrôles réels.")
+        if revision.mode.value == "MOCK":
+            st.caption("Valeurs recomputées par le service MOCK ; ne constituent pas une mesure des contrôles réels.")
+        else:
+            st.caption("Valeurs recalculées par les contrôles déterministes après acceptation ; la version précédente reste consultable.")
+        changed = {a.allocation_id: a.quantity for a in revision.allocations_after}
+        st.write("Affectations : " + ", ".join(f"{a.target_project_id} {a.quantity}" for a in revision.allocations_before)
+                 + " → " + ", ".join(f"{a.target_project_id} {q}" for a in revision.allocations_after
+                                     for q in [changed[a.allocation_id]]))
 
     history = service.get_history(actor, case.case_id)
     st.markdown("#### Historique du dossier")
@@ -186,4 +199,7 @@ def render_diagnostics(case: OfficerCaseView) -> None:
     st.write(f"Vue du dossier : {case.mode.value}")
     for node, mode in case.mode_by_node.items():
         st.write(f"{node} : {mode.value}")
-    st.info("Mesures de tests intégrés : NOT_RUN dans cette interface. Les chiffres du service MOCK sont des données de démonstration.")
+    if case.mode.value == "MOCK":
+        st.info("Mesures de tests intégrés : NOT_RUN dans cette interface. Les chiffres du service MOCK sont des données de démonstration.")
+    else:
+        st.info("Mesures de tests intégrés : NOT_RUN dans cette interface. Les modes ci-dessus indiquent ce qui a réellement été exécuté.")

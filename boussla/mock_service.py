@@ -463,6 +463,7 @@ class MockBousslaService:
         self.requests[request_id] = rv.model_copy(update={"request": rv.request.model_copy(update={"status": RequestStatus.RESPONDED})})
         proposal_ids: tuple[str, ...] = ()
         if alloc := payload.get("allocation"):
+            alloc = alloc.get("splits", alloc)  # accept the real service's shape too
             prop = EvidenceProposal(
                 proposal_id=f"PROP-{uuid.uuid4().hex[:6].upper()}", case_id=case_id, expected_version=self.version + 1,
                 source_document_id=doc_ids[0] if doc_ids else None, source_response_id=resp.response_id,

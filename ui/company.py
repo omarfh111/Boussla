@@ -105,14 +105,17 @@ def render_context(service, actor, case: CompanyCaseView) -> None:
                     answer = st.text_area("Votre réponse", key=f"answer_{request.request.request_id}")
                     attachment = st.file_uploader("Pièce d'affectation, si disponible (PDF)", type=["pdf"], key=f"response_file_{request.request.request_id}")
                     allocation = st.checkbox("Proposer une répartition entre les deux lots de la démo", key=f"allocation_{request.request.request_id}")
-                    p1 = st.text_input("Quantité P1", value="1000", key=f"p1_{request.request.request_id}") if allocation else None
-                    p2 = st.text_input("Quantité P2", value="1000", key=f"p2_{request.request.request_id}") if allocation else None
+                    lots = [p.project_id for p in case.projects][:2]
+                    p1 = st.text_input(f"Quantité {lots[0]}" if lots else "Quantité lot 1", value="1000", key=f"p1_{request.request.request_id}") if allocation else None
+                    p2 = st.text_input(f"Quantité {lots[1]}" if len(lots) > 1 else "Quantité lot 2", value="1000", key=f"p2_{request.request.request_id}") if allocation else None
                     send = st.form_submit_button("Envoyer la réponse dans la boîte de démo")
                 if send:
                     if not answer.strip():
                         st.warning("Rédigez une réponse avant l'envoi.")
                     elif allocation and (not _valid_quantity(p1) or not _valid_quantity(p2)):
                         st.warning("Indiquez des quantités positives ou nulles pour les deux lots.")
+                    elif allocation and (len(lots) < 2 or not case.allocations):
+                        st.warning("Aucune affectation ou aucun second lot connu : répondez sans répartition.")
                     else:
                         def submit():
                             version = case.case_version
@@ -125,7 +128,10 @@ def render_context(service, actor, case: CompanyCaseView) -> None:
                             payload = {"answers": {q.question_id: answer.strip() for q in request.questions},
                                        "document_ids": ids}
                             if allocation:
-                                payload["allocation"] = {"P1": p1.strip(), "P2": p2.strip()}
+                                current = case.allocations[0]  # the company's own recorded allocation line
+                                payload["allocation"] = {"transaction_id": current.transaction_id,
+                                                         "line_id": current.line_id,
+                                                         "splits": {lots[0]: p1.strip(), lots[1]: p2.strip()}}
                             return service.submit_response(actor, case.case_id, request.request.request_id,
                                                            payload, version, str(uuid4()))
                         service_action(submit)
