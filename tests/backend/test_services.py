@@ -309,3 +309,14 @@ def test_invalid_project_dates_on_create_case(svc, actors):
     for payload in ({"label": "x", "planned_start": "32/13/2026"},
                     {"label": "x", "planned_start": "2026-12-01", "planned_end": "2026-01-01"}):
         assert code(lambda: svc.create_case(actors[0], "DEMO-BAT", payload, str(payload))) is ErrorCode.INSUFFICIENT_INFORMATION
+
+
+@pytest.mark.parametrize("cursor", ["abc", "-1", "1.5"])
+def test_invalid_queue_cursor_is_a_typed_error(svc, actors, cursor):
+    assert code(lambda: svc.list_queue(actors[1], None, 10, cursor)) is ErrorCode.INSUFFICIENT_INFORMATION
+
+
+def test_queue_pagination(svc, actors):
+    page = svc.list_queue(actors[1], None, 10, "0")
+    assert len(page.items) == 1 and page.next_cursor is None
+    assert svc.list_queue(actors[1], None, 10, "5").items == ()

@@ -276,7 +276,12 @@ class BousslaAppService:
                 active_finding_count=sum(f.status is FindingStatus.UNRESOLVED for f in ev.findings),
                 clarification_status=ev.score.clarification_status, scope_note=ev.score.scope_note))
         items.sort(key=lambda i: (-(i.review_index if i.review_index is not None else -1), i.case_id))
-        start = int(cursor or 0)
+        try:
+            start = int(cursor) if cursor else 0
+        except ValueError:
+            start = -1
+        if start < 0:
+            raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION, "Curseur de pagination invalide")
         page = items[start:start + limit]
         nxt = str(start + limit) if start + limit < len(items) else None
         return QueuePage(items=tuple(page), next_cursor=nxt,
