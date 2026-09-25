@@ -1,0 +1,1 @@
+"""Document interpretation adapters."""
