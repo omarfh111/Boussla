@@ -6,7 +6,7 @@ from pathlib import Path
 
 from boussla.checks import compare_quantity_allocations
 from boussla.contracts import (
-    Allocation, BaselineKind, Delivery, FindingStatus, InvoiceObservation,
+    Allocation, AllocationTarget, BaselineKind, Delivery, FindingStatus, InvoiceObservation,
     QuantityReference, Transaction, TransactionInputs,
 )
 
@@ -98,3 +98,26 @@ def test_wrong_unit_reference_abstains():
     }))
     assert finding.status is FindingStatus.INSUFFICIENT
     assert finding.reason_code == "PROCUREMENT_BASELINE_UNAVAILABLE"
+
+
+def test_warehouse_transfer_requires_separate_scope_rules():
+    inputs = _inputs()
+    transfer = inputs.allocations[0].model_copy(update={
+        "allocation_id": "WAREHOUSE-TRANSFER", "target_type": AllocationTarget.WAREHOUSE,
+        "target_project_id": None, "quantity": "0",
+    })
+    finding = compare_quantity_allocations(inputs.model_copy(update={
+        "allocations": (*inputs.allocations, transfer),
+    }))
+    assert finding.status is FindingStatus.INSUFFICIENT
+    assert finding.reason_code == "TRANSFER_SCOPE_UNSUPPORTED"
+
+
+def test_duplicate_receipt_identifier_cannot_support_quantity_points():
+    inputs = _inputs()
+    half_receipt = inputs.deliveries[0].model_copy(update={"quantity": "1000"})
+    finding = compare_quantity_allocations(inputs.model_copy(update={
+        "deliveries": (half_receipt, half_receipt),
+    }))
+    assert finding.status is FindingStatus.INSUFFICIENT
+    assert finding.reason_code == "DUPLICATE_RECEIPT_ID"

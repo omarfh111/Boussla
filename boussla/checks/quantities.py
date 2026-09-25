@@ -62,12 +62,18 @@ def compare_quantity_allocations(inputs: TransactionInputs) -> Finding:
     if any(a.fact_kind in {"USER_ESTIMATE", "CONSUMPTION_ESTIMATE"} for a in accepted):
         return _finding(inputs, FindingStatus.INSUFFICIENT, "ESTIMATE_ONLY_ALLOCATION",
                         tuple(refs), missing=("ACCEPTED_PROCUREMENT_ASSIGNMENT",))
+    if any(a.target_type is not AllocationTarget.PROJECT for a in accepted):
+        return _finding(inputs, FindingStatus.INSUFFICIENT, "TRANSFER_SCOPE_UNSUPPORTED",
+                        tuple(refs), missing=("PROJECT_ONLY_ALLOCATION_LEDGER",))
     deliveries = [d for d in inputs.deliveries if d.transaction_id == transaction.transaction_id
                   and d.item_code == line.normalized_item_code and d.unit == line.unit
                   and d.status in ACCEPTED_DELIVERY_STATUSES and d.received_at <= inputs.as_of.date()]
     if not deliveries:
         return _finding(inputs, FindingStatus.INSUFFICIENT, "ELIGIBLE_RECEIPT_UNAVAILABLE",
                         tuple(refs), missing=("ACCEPTED_SAME_ITEM_DELIVERY",))
+    if len({d.delivery_id for d in deliveries}) != len(deliveries):
+        return _finding(inputs, FindingStatus.INSUFFICIENT, "DUPLICATE_RECEIPT_ID",
+                        tuple(refs), missing=("UNIQUE_DELIVERY_RECORDS",))
     total_assigned = sum((Decimal(a.quantity) for a in accepted), Decimal(0))
     purchased = Decimal(line.quantity)
     received = sum((Decimal(d.quantity) for d in deliveries), Decimal(0))
