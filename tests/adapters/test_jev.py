@@ -44,9 +44,10 @@ def test_provider_error_and_invalid_answer_fall_back_to_manual():
         httpx.Response(401),
         httpx.Response(429),
         httpx.Response(529),
-        httpx.Response(200, json={"model": "jev-1.13.0", "answers": {"document_type": {
-            "type": "choice", "choice": "INVOICE", "confidence": float("nan"),
-        }}}),
+        # NaN confidence sent as raw JSON: httpx refuses to serialize float("nan") itself.
+        httpx.Response(200, headers={"content-type": "application/json"}, content=(
+            b'{"model": "jev-1.13.0", "answers": {"document_type": '
+            b'{"type": "choice", "choice": "INVOICE", "confidence": NaN}}}')),
     ):
         client = httpx.Client(transport=httpx.MockTransport(lambda request: response))
         result = JevDocumentRouter(api_key="synthetic-test-key", client=client).classify(
