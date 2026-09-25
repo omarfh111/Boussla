@@ -150,6 +150,9 @@ class WorkflowRunner:
                 "ORDER BY created_seq DESC LIMIT 1", (graph, case_id, actor.actor_id, anchor)).fetchone()
             return row[0] if row else None
 
+    def _incarnation(self, case_id: str) -> str:
+        return self.service.store.case_incarnation(case_id)
+
     @staticmethod
     def _cfg(thread_id: str) -> dict:
         return {"configurable": {"thread_id": thread_id}}
@@ -196,7 +199,7 @@ class WorkflowRunner:
         trusted, meta = self.service._open(actor, case_id, "start_analysis")
         if expected_version != meta["version"]:
             raise BousslaError(ErrorCode.STALE_REVISION, "Le dossier a changé ; rechargez-le")
-        tid = self._thread("analysis", case_id, trusted, f"v{expected_version}", create=True)
+        tid = self._thread("analysis", case_id, trusted, f"{self._incarnation(case_id)}|v{expected_version}", create=True)
         cfg = self._cfg(tid)
         state = self.analysis_graph.get_state(cfg)
         if not state.values:  # new thread; an existing one is returned as-is
@@ -206,7 +209,7 @@ class WorkflowRunner:
 
     def submit_answers(self, actor: Actor, case_id: str, answers: dict[str, str]) -> AnalysisView:
         trusted, _ = self.service._open(actor, case_id, "answer_questions")
-        tid = self._thread("analysis", case_id, trusted, "v%", create=False)
+        tid = self._thread("analysis", case_id, trusted, f"{self._incarnation(case_id)}|v%", create=False)
         if tid is None:
             raise BousslaError(ErrorCode.INVALID_STATE, "Aucune analyse en attente de réponse")
         cfg = self._cfg(tid)
@@ -258,7 +261,7 @@ class WorkflowRunner:
         trusted, meta = self.service._open(actor, case_id, "accept_evidence")
         if expected_version != meta["version"]:
             raise BousslaError(ErrorCode.STALE_REVISION, "Le dossier a changé ; rechargez-le")
-        tid = self._thread("decision", case_id, trusted, f"{proposal_id}@v{expected_version}", create=True)
+        tid = self._thread("decision", case_id, trusted, f"{self._incarnation(case_id)}|{proposal_id}@v{expected_version}", create=True)
         cfg = self._cfg(tid)
         if not self.decision_graph.get_state(cfg).values:
             self.decision_graph.invoke({"case_id": case_id, "actor_id": trusted.actor_id, "proposal_id": proposal_id,
@@ -269,7 +272,7 @@ class WorkflowRunner:
 
     def decide(self, actor: Actor, case_id: str, proposal_id: str, accept: bool, reason: str = "") -> RevisionResult:
         trusted, _ = self.service._open(actor, case_id, "accept_evidence" if accept else "reject_evidence")
-        tid = self._thread("decision", case_id, trusted, f"{proposal_id}@v%", create=False)
+        tid = self._thread("decision", case_id, trusted, f"{self._incarnation(case_id)}|{proposal_id}@v%", create=False)
         if tid is None:
             raise BousslaError(ErrorCode.INVALID_STATE, "Aucune décision ouverte pour cette proposition")
         cfg = self._cfg(tid)
