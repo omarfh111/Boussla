@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-from boussla.config import Settings, get_settings
+from boussla.config import Settings, get_settings, use_os_trust_store
 from boussla.contracts import (
     Actor, Allocation, AllocationChange, AllocationStatus, AllocationTarget, AnalysisStatus, AnalysisView,
     Audience, BousslaError, ClarificationDraft, ClarificationRequest, ClarificationResponse, ClarificationStatus,
@@ -58,7 +58,8 @@ class BousslaAppService:
     mode = Mode.LIVE
 
     def __init__(self, store: CaseStore, registry: ActorRegistry | None = None, checks=None,
-                 settings: Settings | None = None, field_extractor=None, text_extractor=None) -> None:
+                 settings: Settings | None = None, field_extractor=None, text_extractor=None,
+                 integrity_inspector=None) -> None:
         self.store = store
         self.registry = registry or ActorRegistry.demo()
         self.checks = checks or get_checks_engine()
@@ -66,6 +67,7 @@ class BousslaAppService:
         self.enterprises = load_enterprises()
         self.text_extractor = text_extractor
         self.field_extractor = field_extractor
+        self.integrity_inspector = integrity_inspector
 
     # ================================================================ helpers
     def _open(self, actor: Actor, case_id: str, action: str) -> tuple[Actor, dict]:
@@ -95,6 +97,7 @@ class BousslaAppService:
             "response": s.facts(case_id, "response", ClarificationResponse, v),
             "proposal": s.facts(case_id, "proposal", EvidenceProposal, v),
             "extraction": s.facts(case_id, "extraction", ExtractionProposal, v),
+            "integrity": s.facts(case_id, "integrity", IntegrityReport, v),
         }
 
     def _clarification_status(self, requests: list[RequestView]) -> ClarificationStatus:
@@ -186,9 +189,11 @@ class BousslaAppService:
 
     def _doc_views(self, facts: dict[str, list], version: int) -> tuple[DocumentView, ...]:
         extractions = {e.document_id: e for e in facts["extraction"]}
+        integrity = {i.document_id: i for i in facts["integrity"]}
         return tuple(DocumentView(document=d, extraction=extractions.get(d.document_id),
-                                  integrity=IntegrityReport(document_id=d.document_id, sha256=d.sha256,
-                                                            limitations=("INTEGRITY_ADAPTER_NOT_RUN",)),
+                                  integrity=integrity.get(d.document_id) or IntegrityReport(
+                                      document_id=d.document_id, sha256=d.sha256,
+                                      limitations=("INTEGRITY_ADAPTER_NOT_RUN",)),
                                   case_version=version, mode=Mode.LIVE) for d in facts["document"])
 
     def _company_name(self, company_id: str) -> str:
@@ -310,8 +315,9 @@ class BousslaAppService:
             uploader_actor_id=actor.actor_id, acquisition_channel=channel,
             origin_group_id=f"COMPANY-{meta['company_id']}" if actor.role is Role.COMPANY else "OFFICER-UPLOAD",
             confidentiality_scope="CASE_PARTIES", extraction_status="NOT_RUN", processing_limitations=tuple(limitations))
-        # Extraction (possibly a model call) happens BEFORE the write transaction.
+        # Extraction/integrity (possibly a model call) happen BEFORE the write transaction.
         extraction = self._extract(document, upload_bytes)
+        integrity = self._inspect(document, upload_bytes)
         if extraction is not None:
             document = document.model_copy(update={"extraction_status": extraction.status})
         _, path = self.store.save_original(upload_bytes, ".pdf")
@@ -327,13 +333,23 @@ class BousslaAppService:
                 tx.put("extraction", extraction.proposal_id, extraction)
             v = tx.commit_version(f"Pièce déposée : {safe_name}")
             tx.event("UPLOAD", actor.actor_id, f"Pièce déposée ({doc_id}) — original conservé, empreinte SHA-256", (doc_id,))
-            view = DocumentView(document=document, extraction=extraction, case_version=v, mode=Mode.LIVE,
-                                integrity=IntegrityReport(document_id=doc_id, sha256=digest,
-                                                          limitations=("INTEGRITY_ADAPTER_NOT_RUN",)))
+            tx.put("integrity", doc_id, integrity)
+            view = DocumentView(document=document, extraction=extraction, integrity=integrity, case_version=v,
+                                mode=Mode.LIVE)
             tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="upload_document", case_id=case_id,
                                           actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
                                           result_hash=stable_hash(view.model_dump(mode="json"))), view)
         return view
+
+    def _inspect(self, document: Document, content: bytes) -> IntegrityReport:
+        fallback = IntegrityReport(document_id=document.document_id, sha256=document.sha256,
+                                   limitations=("INTEGRITY_ADAPTER_NOT_RUN",))
+        if self.integrity_inspector is None:
+            return fallback
+        try:
+            return self.integrity_inspector.inspect(document, content)
+        except Exception:  # noqa: BLE001 - inspection failure is a limitation, never a finding
+            return fallback
 
     def _extract(self, document: Document, content: bytes) -> ExtractionProposal | None:
         if self.text_extractor is None or self.field_extractor is None:
@@ -739,10 +755,38 @@ class BousslaAppService:
             disclaimer_fr="Brouillon de démonstration ; aucune valeur juridique ; aucune notification envoyée.")
 
 
+def _discover_document_adapters(settings: Settings) -> dict:
+    """Lane C adapters when merged; absent modules leave the manual path (None)."""
+    found: dict = {}
+    try:
+        from boussla.documents.native_text import NativePdfExtractor
+        found["text_extractor"] = NativePdfExtractor(max_bytes=settings.max_upload_bytes,
+                                                     max_pages=settings.max_pdf_pages)
+    except ImportError:
+        return found
+    try:
+        from boussla.documents.integrity import PdfIntegrityInspector
+        found["integrity_inspector"] = PdfIntegrityInspector()
+    except ImportError:
+        pass
+    try:
+        if settings.llm_provider == "openai" and settings.secret("OPENAI_API_KEY"):
+            from boussla.adapters.model_extraction import OpenAIInvoiceExtractor
+            found["field_extractor"] = OpenAIInvoiceExtractor(api_key=settings.secret("OPENAI_API_KEY"))
+        else:
+            from boussla.documents.known_layout import KnownLayoutInvoiceExtractor
+            found["field_extractor"] = KnownLayoutInvoiceExtractor()
+    except ImportError:
+        pass
+    return found
+
+
 def build_service(settings: Settings | None = None, seed: bool = True) -> BousslaAppService:
-    """Default wiring: SQLite at CASE_DB_PATH, demo roster, B's checks or interim."""
+    """Default wiring: SQLite at CASE_DB_PATH, demo roster, B's checks (or the
+    labelled interim engine) and C's document adapters when present."""
     settings = settings or get_settings()
+    use_os_trust_store()
     store = CaseStore(settings.case_db_path, settings.upload_dir)
     if seed:
         seed_demo_case(store)
-    return BousslaAppService(store, settings=settings)
+    return BousslaAppService(store, settings=settings, **_discover_document_adapters(settings))

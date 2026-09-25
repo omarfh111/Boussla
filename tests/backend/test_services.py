@@ -209,3 +209,75 @@ def test_create_case_scoped(svc, actors):
     assert view.company_id == "DEMO-BAT" and view.case_version == 1
     assert svc.create_case(co, "DEMO-BAT", {"label": "Nouveau lot"}, "new-1").case_id == view.case_id
     assert code(lambda: svc.create_case(co, "DEMO-OTHER", {"label": "x"}, "n")) is ErrorCode.CROSS_COMPANY
+
+
+class _Text:
+    def extract_text(self, document, content):
+        from boussla.contracts import DocumentText, PageText
+        return DocumentText(document_id=document.document_id, pages=(PageText(page=1, text="Facture"),), status="OK")
+
+
+class _Fields:
+    def extract_fields(self, text):
+        from boussla.contracts import CandidateField, ExtractionProposal
+        return ExtractionProposal(proposal_id=f"EXT-{text.document_id}", document_id=text.document_id,
+                                  candidates=(CandidateField(field_name="invoice_number", raw_value="X"),),
+                                  mode=Mode.MANUAL, prompt_version="t")
+
+
+class _Integrity:
+    def inspect(self, document, content):
+        from boussla.contracts import IntegrityReport
+        return IntegrityReport(document_id=document.document_id, sha256=document.sha256, signature_status="UNSIGNED")
+
+
+class _Broken:
+    def inspect(self, document, content):
+        raise RuntimeError("boom")
+
+    def extract_text(self, document, content):
+        raise RuntimeError("boom")
+
+
+def _svc_with(tmp_path, **adapters):
+    settings = Settings(case_db_path=tmp_path / "a.sqlite", upload_dir=tmp_path / "u")
+    store = CaseStore(settings.case_db_path, settings.upload_dir)
+    seed_demo_case(store)
+    return BousslaAppService(store, ActorRegistry.demo(), settings=settings, **adapters)
+
+
+def test_injected_adapters_run_on_upload_and_confirm(tmp_path):
+    svc = _svc_with(tmp_path, text_extractor=_Text(), field_extractor=_Fields(), integrity_inspector=_Integrity())
+    co = svc.registry.actors["DEMO-COMPANY-BAT"]
+    dv = svc.upload_document(co, CASE, PDF, "f.pdf", "application/pdf", 1, "u")
+    assert dv.integrity.signature_status == "UNSIGNED" and dv.extraction.proposal_id.startswith("EXT-")
+    view = svc.get_case(co, CASE)
+    uploaded = next(d for d in view.documents if d.document.document_id == dv.document.document_id)
+    assert view.pending_transcriptions and uploaded.integrity.signature_status == "UNSIGNED"
+    after = svc.confirm_transcription(co, CASE, dv.extraction.proposal_id, {"invoice_number": "X"}, 2, "c")
+    assert after.case_version == 3 and not after.pending_transcriptions
+    with pytest.raises(BousslaError) as e:
+        svc.confirm_transcription(co, CASE, dv.extraction.proposal_id, {"iban": "x"}, 3, "c2")
+    assert e.value.code is ErrorCode.INVALID_EVIDENCE_REFERENCE
+
+
+def test_adapter_failures_degrade_to_manual(tmp_path):
+    svc = _svc_with(tmp_path, text_extractor=_Broken(), field_extractor=_Fields(), integrity_inspector=_Broken())
+    dv = svc.upload_document(svc.registry.actors["DEMO-COMPANY-BAT"], CASE, PDF, "f.pdf", "application/pdf", 1, "u")
+    assert dv.extraction is None and "INTEGRITY_ADAPTER_NOT_RUN" in dv.integrity.limitations
+
+
+def test_engine_discovery_prefers_lane_b(monkeypatch):
+    import sys
+    import types
+    from boussla import interim_checks
+    mod = types.ModuleType("boussla.checks")
+
+    class ChecksEngineV4(interim_checks.InterimChecks):
+        pass
+    mod.ChecksEngineV4 = ChecksEngineV4
+    monkeypatch.setitem(sys.modules, "boussla.checks", mod)
+    monkeypatch.setattr(interim_checks.importlib.util, "find_spec", lambda name: object())
+    import boussla
+    monkeypatch.setattr(boussla, "checks", mod, raising=False)
+    assert type(interim_checks.get_checks_engine()).__name__ == "ChecksEngineV4"

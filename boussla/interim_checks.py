@@ -276,12 +276,16 @@ class InterimChecks:
 
 
 def get_checks_engine():
-    """Lane B's engine when merged (module ``boussla.checks`` exposing the
-    ChecksEngine functions), else this interim adapter."""
-    spec = importlib.util.find_spec("boussla.checks")
-    if spec is not None:
+    """Lane B's engine when merged, else this interim adapter.
+
+    Accepts either ``boussla.checks.ChecksEngineV4`` (class) or a
+    ``boussla.checks`` module that itself exposes the ChecksEngine functions."""
+    from boussla.contracts import ChecksEngine
+    if importlib.util.find_spec("boussla.checks") is not None:
         from boussla import checks  # type: ignore[attr-defined]
-        from boussla.contracts import ChecksEngine
+        engine_cls = getattr(checks, "ChecksEngineV4", None)
+        if engine_cls is not None and isinstance(engine := engine_cls(), ChecksEngine):
+            return engine
         if isinstance(checks, ChecksEngine):
             return checks
     return InterimChecks()
