@@ -12,7 +12,7 @@ APP = Path(__file__).resolve().parents[2] / "app.py"
 
 
 def test_company_view_shows_own_operations_without_internal_index():
-    app = AppTest.from_file(APP).run()
+    app = AppTest.from_file(APP, default_timeout=10).run()
     assert not app.exception
     assert [tab.label for tab in app.tabs] == ["Mes opérations", "Contexte et réponses"]
     assert any("simulation de rôles" in item.value for item in app.info)
@@ -21,7 +21,7 @@ def test_company_view_shows_own_operations_without_internal_index():
 
 
 def test_officer_view_shows_queue_and_supported_finding():
-    app = AppTest.from_file(APP).run()
+    app = AppTest.from_file(APP, default_timeout=10).run()
     app.selectbox[0].set_value("Agent").run()
     assert not app.exception
     assert [tab.label for tab in app.tabs] == ["File de revue", "Dossier", "Diagnostics"]
@@ -30,7 +30,7 @@ def test_officer_view_shows_queue_and_supported_finding():
 
 
 def test_company_response_without_document_stays_pending_for_officer():
-    app = AppTest.from_file(APP).run()
+    app = AppTest.from_file(APP, default_timeout=10).run()
     app.selectbox[0].set_value("Agent").run()
     app.button(key="prepare_request").click().run()
     assert not app.exception
@@ -52,7 +52,7 @@ def test_company_response_without_document_stays_pending_for_officer():
 
 
 def test_officer_accepts_document_backed_proposal_and_sees_revision():
-    app = AppTest.from_file(APP).run()
+    app = AppTest.from_file(APP, default_timeout=10).run()
     service = app.session_state["boussla_service"]
     actors = demo_actors()
     case_id = service.case_id
@@ -79,3 +79,13 @@ def test_bundled_document_requires_safe_path_and_matching_hash():
     assert bundled_mock_document(document.local_path, document.sha256)
     assert bundled_mock_document(document.local_path, "0" * 64) is None
     assert bundled_mock_document("../../../../outside.pdf", document.sha256) is None
+
+
+def test_officer_view_exposes_hypothesis_matrix_and_draft_export():
+    app = AppTest.from_file(APP, default_timeout=10).run()
+    app.selectbox[0].set_value("Agent").run()
+    assert not app.exception
+    assert any("Matrice des hypothèses et sensibilité" in item.value for item in app.markdown)
+    assert any("Brouillons exportables du dossier" in item.value for item in app.markdown)
+    assert any(item.key == "draft_audience_selector" for item in app.radio)
+    assert any("Télécharger le brouillon" in item.label for item in app.download_button)

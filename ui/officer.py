@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import streamlit as st
 
-from boussla.contracts import OfficerCaseView, ProposalStatus
+from boussla.contracts import Audience, OfficerCaseView, ProposalStatus
 from ui.common import amount, service_action
 
 
@@ -99,14 +99,36 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
             st.caption(passage.text)
         st.caption("Un passage retrouvé est un candidat ; son applicabilité requiert une revue humaine.")
 
-    st.markdown("#### Hypothèses et sensibilité")
-    for hypothesis in case.hypotheses:
-        st.write(f"{hypothesis.statement_template_id} · {hypothesis.status.value}")
-        if hypothesis.missing_evidence_types:
-            st.caption("Pièces encore utiles : " + ", ".join(hypothesis.missing_evidence_types))
-    for scenario in case.scenarios:
-        st.write(f"{scenario.label} · hypothétique · ne modifie pas le dossier")
-        st.json(scenario.outputs)
+    st.markdown("#### Matrice des hypothèses et sensibilité")
+    if case.hypotheses:
+        st.dataframe([{
+            "Hypothèse": h.hypothesis_id,
+            "Énoncé": h.statement_template_id,
+            "Statut": h.status.value,
+            "Pièces utiles": ", ".join(h.missing_evidence_types) if h.missing_evidence_types else "Aucune",
+            "Portée": h.scope,
+        } for h in case.hypotheses], hide_index=True, width="stretch")
+    if case.scenarios:
+        st.dataframe([{
+            "Scénario": s.label,
+            "Affecté (P1)": s.inputs.get("assigned", "N/D"),
+            "Base": s.inputs.get("baseline", "N/D"),
+            "Marge fictive": s.inputs.get("margin", "N/D"),
+            "Borne hypothétique": s.outputs.get("hypothetical_bound", "N/D"),
+            "Résidu calculé": s.outputs.get("residual", "N/D"),
+        } for s in case.scenarios], hide_index=True, width="stretch")
+        st.caption("Calculs de sensibilité purement arithmétiques et hypothétiques : ne constituent pas une décision ni une modification du dossier.")
+
+    st.markdown("#### Brouillons exportables du dossier")
+    draft_audience_label = st.radio("Audience du brouillon", ["Interne (Agent)", "Destinataire (Entreprise)"],
+                                    horizontal=True, key="draft_audience_selector")
+    audience = Audience.OFFICER if "Interne" in draft_audience_label else Audience.COMPANY
+    draft = service.export_dossier(actor, case.case_id, audience, case.case_version)
+    st.caption(f"{draft.disclaimer_fr} · {draft.filename}")
+    with st.expander(f"Aperçu du brouillon ({draft.audience.value})", expanded=False):
+        st.markdown(draft.content_markdown)
+    st.download_button(f"Télécharger le brouillon ({draft.audience.value})", data=draft.content_markdown,
+                       file_name=draft.filename, mime="text/markdown", key=f"dl_draft_{draft.audience.value}")
 
     st.markdown("#### Demande de précision")
     if st.button("Préparer une demande neutre", key="prepare_request"):
