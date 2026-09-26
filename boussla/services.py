@@ -33,7 +33,9 @@ from boussla.contracts import (
     ProposalStatus, PurposeCategory, QuantityReference, QueueItem, QueuePage, RequestStatus, RequestView,
     ResponseView, RevisionResult, Role, Scenario, ScoreSnapshot, Transaction, TransactionInputs,
     TransactionSummary, ActionReceipt, ExtractionProposal, DocumentClass, DocumentText, RouterResult,
-    CompanyHistorySignal, InvestigatorBrief,
+    CompanyHistorySignal, SettlementAdjustment, InvestigatorBriefView, BriefObservationView, BriefHypothesisView,
+    EnterpriseProfileView, MonthlyActivityView, PaymentTimelineEntry, InvoiceComparisonView, HorizonBucket,
+    AdminEnterpriseView, AdminPortfolioResult, Enterprise,
 )
 from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
@@ -44,10 +46,30 @@ from boussla.playbook import (
 from boussla.security import DEMO_BANNER_FR, ActorRegistry, authorize
 from boussla.seed import load_enterprises, seed_demo_case
 from boussla.store import CaseStore, ReceiptNote, stable_hash, utcnow
-from boussla.triage import PENDING_STATUSES, assess_triage, clarification_deadlines
+from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clarification_deadlines
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
+AUTO_REASON_TEXT_FR = "Précisions demandées automatiquement à partir des informations disponibles."
+# Human-readable names for lane C's fixed hypothesis catalogue (presentation only).
+HYPOTHESIS_NAMES_FR = {
+    "SECOND_PROJECT_ALLOCATION": "Affectation à un second projet",
+    "STOCK_REMAINING": "Stock restant",
+    "PARTIAL_DELIVERY": "Livraison partielle",
+    "CREDIT_NOTE_OR_REVERSAL": "Avoir ou annulation",
+    "PAYMENT_SCHEDULE": "Échéancier de paiement",
+    "SELLER_TRANSCRIPTION_ERROR": "Transcription côté vendeur à vérifier",
+    "BUYER_TRANSCRIPTION_ERROR": "Transcription côté acheteur à vérifier",
+    "LATER_INVOICE_CORRECTION": "Correction ultérieure de facture",
+    "UNIT_OR_ITEM_MAPPING_ISSUE": "Unité ou article à rapprocher",
+    "MISSING_SUPPORTING_DOCUMENT": "Pièce justificative manquante",
+}
+# Deterministic playbook hypotheses (checks engine) -> lane C catalogue evidence features.
+PLAYBOOK_TO_CATALOGUE = {"SECOND_AUTHORIZED_PACKAGE": "SECOND_PROJECT_ALLOCATION",
+                         "AUTHORIZED_STOCK": "STOCK_REMAINING"}
+COMPARED_INVOICE_FIELDS = ("invoice_number", "invoice_version", "issued_on", "currency", "net_millimes",
+                           "tax_millimes", "gross_millimes")
+COMPARED_LINE_FIELDS = ("item_description", "quantity", "unit", "unit_price_millimes", "line_net_millimes")
 """Author of automatic clarification events. Not an Actor: it cannot call the service."""
 
 # Input contracts for dictionary payloads: any other property is a typed INVALID_INPUT
@@ -133,6 +155,112 @@ class _GuardedInterpreter:
             return unknown_interpretation(Mode.TEMPLATE, "MODEL_RESPONSE_UNUSABLE")
 
 
+# =============================================================== demo administration
+# Synthetic data only, DEMO_OPERATOR only. Lane B's pure functions produce the new portfolio
+# state; this layer authorizes, persists and (re)materializes the enterprise cases.
+def _require_portfolio(svc: "BousslaAppService"):
+    if svc.portfolio is None:
+        raise BousslaError(ErrorCode.INVALID_STATE, "Portefeuille synthétique désactivé")
+    return svc.portfolio
+
+
+def _admin_view(svc: "BousslaAppService", e: Enterprise) -> AdminEnterpriseView:
+    case_id = svc.portfolio.case_id(e.company_id)
+    exists = svc.store.case_exists(case_id)
+    return AdminEnterpriseView(
+        company_id=e.company_id, display_name=e.display_name, sector=e.sector, synthetic_identifier=e.synthetic_mf,
+        case_id=case_id, case_version=svc.store.case_meta(case_id)["version"] if exists else None,
+        transaction_count=len(svc.portfolio.bundle(e.company_id)["events"]))
+
+
+def _officers(svc: "BousslaAppService"):
+    return [a.actor_id for a in svc.registry.actors.values() if a.role is Role.OFFICER]
+
+
+def _materialize(svc: "BousslaAppService") -> list[str]:
+    portfolio = _require_portfolio(svc)
+    case_ids = portfolio.materialize_all(svc.store)
+    svc.enterprises.update({e.company_id: e for e in portfolio.enterprises()})
+    for officer in _officers(svc):
+        for case_id in case_ids:
+            svc.registry.assign(officer, case_id)
+    return case_ids
+
+
+def _drop_enterprise_case(svc: "BousslaAppService", company_id: str) -> None:
+    case_id = svc.portfolio.case_id(company_id)
+    svc.store.delete_case(case_id)
+    svc.registry.unassign(case_id)
+    svc.enterprises.pop(company_id, None)
+    svc._brief_questions.pop(case_id, None)
+    svc._brief_cache.clear()
+    svc._reference_cache.clear()
+    svc._context_cache.clear()
+
+
+class _DemoAdministration:
+    """Base of BousslaAppService: synthetic demo administration, apart from the case workflow."""
+
+    def admin_list_enterprises(self, actor: Actor) -> tuple[AdminEnterpriseView, ...]:
+        authorize(self.registry, actor, "admin_list_enterprises")
+        portfolio = _require_portfolio(self)
+        return tuple(_admin_view(self, e) for e in portfolio.enterprises())
+
+    def admin_seed_portfolio(self, actor: Actor) -> AdminPortfolioResult:
+        """Materialize any missing portfolio case (idempotent; never overwrites a case)."""
+        authorize(self.registry, actor, "admin_seed_portfolio")
+        case_ids = _materialize(self)
+        return AdminPortfolioResult(action="SEED", enterprise_count=len(case_ids), case_ids=tuple(case_ids))
+
+    def admin_reset_portfolio(self, actor: Actor, confirm: str) -> AdminPortfolioResult:
+        """Explicit destructive reset of synthetic portfolio cases to lane B's defaults."""
+        authorize(self.registry, actor, "admin_reset_portfolio")
+        portfolio = _require_portfolio(self)
+        if confirm != "RESET":
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Confirmation « RESET » requise", fields=["confirm"])
+        for e in portfolio.enterprises():
+            _drop_enterprise_case(self, e.company_id)
+        portfolio.reset()
+        case_ids = _materialize(self)
+        return AdminPortfolioResult(action="RESET", enterprise_count=len(case_ids), case_ids=tuple(case_ids))
+
+    def admin_add_enterprise(self, actor: Actor, payload: dict, request_id: str) -> AdminEnterpriseView:
+        """Add an empty synthetic enterprise (identity only, no claimed coverage). The ID is
+        derived from the idempotency key, so a retried request returns the same enterprise."""
+        authorize(self.registry, actor, "admin_add_enterprise")
+        portfolio = _require_portfolio(self)
+        _reject_unexpected(payload, frozenset({"display_name", "sector"}), "Entreprise")
+        name, sector = payload.get("display_name"), payload.get("sector")
+        if not isinstance(name, str) or not isinstance(sector, str) or not name.strip() or not sector.strip():
+            raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION, "Nom et secteur requis", fields=["display_name", "sector"])
+        suffix = stable_hash(["admin_add_enterprise", request_id])[:6].upper()
+        company_id = f"SYN-USR-{suffix}"
+        if not portfolio.is_member(company_id):
+            clean_name = name.strip()[:80]
+            portfolio.add(Enterprise(
+                company_id=company_id, synthetic_mf=f"SYNTHETIC-MF-USR-{suffix}", sector=sector.strip()[:60],
+                display_name=clean_name if clean_name.startswith("SYNTHÉTIQUE") else f"SYNTHÉTIQUE — {clean_name}",
+                created_on=utcnow().date()))
+        _materialize(self)
+        return _admin_view(self, next(e for e in portfolio.enterprises() if e.company_id == company_id))
+
+    def admin_delete_enterprise(self, actor: Actor, company_id: str, confirm: str) -> AdminPortfolioResult:
+        """Delete one synthetic portfolio enterprise and its demo case. The curated case
+        and any company outside the synthetic portfolio can never be deleted here."""
+        authorize(self.registry, actor, "admin_delete_enterprise")
+        portfolio = _require_portfolio(self)
+        from boussla.portfolio_runtime import SYNTHETIC_ID
+        if not isinstance(company_id, str) or not SYNTHETIC_ID.fullmatch(company_id) or not portfolio.is_member(company_id):
+            raise BousslaError(ErrorCode.NOT_FOUND, "Entreprise synthétique inconnue")
+        if confirm != company_id:
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Confirmation par l'identifiant requise", fields=["confirm"])
+        _drop_enterprise_case(self, company_id)
+        portfolio.delete(company_id)
+        return AdminPortfolioResult(action="DELETE", enterprise_count=len(portfolio.enterprises()),
+                                    case_ids=(portfolio.case_id(company_id),))
+
+
+
 @dataclass(frozen=True)
 class Evaluation:
     """Deterministic analysis of one case version (derived, never stored as fact)."""
@@ -144,26 +272,34 @@ class Evaluation:
     score: ScoreSnapshot
 
 
-class BousslaAppService:
+class BousslaAppService(_DemoAdministration):
     mode = Mode.LIVE
 
     def __init__(self, store: CaseStore, registry: ActorRegistry | None = None, checks=None,
                  settings: Settings | None = None, field_extractor=None, text_extractor=None,
                  integrity_inspector=None, document_router=None, reference_assistant=None,
-                 context_assistant=None, history_signal_provider=None, investigator=None, clock=None) -> None:
+                 context_assistant=None, history_signal_provider=None, investigator=None, clock=None,
+                 portfolio=None) -> None:
         self.store = store
         # Read-time clock for demo deadlines/triage only (tests inject a fixed clock).
         self.clock = clock or utcnow
         # Optional lane B history signals and lane C investigator brief (officer-only,
         # guarded, never inputs to checks, scores, acceptance or revisions).
-        self.history_signal_provider = history_signal_provider
         self.investigator = investigator
+        self._brief_cache: dict[tuple, tuple] = {}
+        self._brief_questions: dict[str, tuple[str, ...]] = {}
+        # Lane B synthetic operational portfolio (PortfolioRuntime): identities join the
+        # enterprise registry and it is the default history-signal provider.
+        self.portfolio = portfolio
+        self.history_signal_provider = history_signal_provider or portfolio
         self.registry = registry or ActorRegistry.demo()
         self.checks = checks or get_checks_engine()
         # Hypothesis tests: lane B's if provided, else the labelled interim playbook tests.
         self._hypothesis_engine = self.checks if hasattr(self.checks, "test_hypotheses") else InterimChecks()
         self.settings = settings or get_settings()
         self.enterprises = load_enterprises()
+        if portfolio is not None:
+            self.enterprises.update({e.company_id: e for e in portfolio.enterprises()})
         self.text_extractor = text_extractor
         self.field_extractor = field_extractor
         self.integrity_inspector = integrity_inspector
@@ -205,6 +341,7 @@ class BousslaAppService:
             "quantity_reference": s.facts(case_id, "quantity_reference", QuantityReference, v),
             "context_claim": s.facts(case_id, "context_claim", ContextClaim, v),
             "delivery": s.facts(case_id, "delivery", Delivery, v),
+            "settlement_adjustment": s.facts(case_id, "settlement_adjustment", SettlementAdjustment, v),
             "document": s.facts(case_id, "document", Document, v),
             "project": s.facts(case_id, "project", Project, v),
             "request": s.facts(case_id, "request", RequestView, v),
@@ -241,6 +378,8 @@ class BousslaAppService:
                 case_id=case_id, company_id=company_id, case_version=version, as_of=utcnow(), transaction=tx,
                 invoice_observations=tuple(o for o in facts["invoice_observation"] if o.transaction_id == tx.transaction_id),
                 payments=tuple(facts["payment"]), payment_allocations=tuple(facts["payment_allocation"]),
+                settlement_adjustments=tuple(a for a in facts.get("settlement_adjustment", ())
+                                             if a.transaction_id == tx.transaction_id),
                 identity_mappings=tuple(facts["identity_mapping"]),
                 allocations=tuple(a for a in facts["allocation"] if a.transaction_id == tx.transaction_id),
                 quantity_references=tuple(facts["quantity_reference"]),
@@ -341,19 +480,22 @@ class BousslaAppService:
                 context_claims=tuple(c for c in facts["context_claim"] if c.company_id == company),
                 allocations=tuple(facts["allocation"]),
                 pending_transcriptions=tuple(e for e in facts["extraction"] if e.status == "PROPOSED"),
-                open_questions=open_q, inbox=published,
+                open_questions=open_q, inbox=self._decorated_requests(published),
                 responses=tuple(r for r in facts["response"] if r.author_actor_id == actor.actor_id),
                 context_assessment=self._context_assessment(case_id, company, v, facts)[0],
                 mode=Mode.LIVE, banner_fr=DEMO_BANNER_FR)
         ev = self._evaluate(case_id, company, v, facts)
+        scenarios = ev.scenarios + self._reallocation_scenarios(case_id, company, v, facts, ev)
         view = OfficerCaseView(
             case_id=case_id, company_id=company, company_display_name=self._company_name(company), case_version=v,
             documents=self._doc_views(facts, v), transactions=self._summaries(facts),
             invoice_observations=tuple(facts["invoice_observation"]), payments=tuple(facts["payment"]),
             projects=tuple(facts["project"]), context_claims=tuple(facts["context_claim"]),
             quantity_references=tuple(facts["quantity_reference"]), allocations=tuple(facts["allocation"]),
-            findings=ev.findings, hypotheses=ev.hypotheses, scenarios=ev.scenarios, score=ev.score,
-            requests=tuple(facts["request"]), responses=tuple(facts["response"]), proposals=tuple(facts["proposal"]),
+            findings=ev.findings, hypotheses=ev.hypotheses, scenarios=scenarios, score=ev.score,
+            requests=self._decorated_requests(facts["request"]), responses=tuple(facts["response"]),
+            proposals=tuple(facts["proposal"]), deliveries=tuple(facts["delivery"]),
+            **self._enterprise_360(company, facts),
             mode=Mode.LIVE, mode_by_node={"checks": Mode.LIVE, "retrieval": self._retrieval_mode(),
                                           "router": self._router_mode(facts)},
             banner_fr=DEMO_BANNER_FR)
@@ -364,13 +506,14 @@ class BousslaAppService:
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())
-        return self._with_investigator_brief(view)
+        return self._with_investigator_brief(view, facts)
 
     # ------------------------------------------------------- triage (queue urgency)
     def _history_signals(self, company_id: str, now: datetime):
         """Lane B history signals for this company; any failure is ignored (mode ERROR)."""
-        if self.history_signal_provider is None:
-            return (), Mode.NOT_RUN
+        if self.history_signal_provider is None or (
+                self.history_signal_provider is self.portfolio and not self.portfolio.is_member(company_id)):
+            return (), Mode.NOT_RUN  # no synthetic history for this company
         try:
             raw = self.history_signal_provider.signals(company_id, now.date())
             signals = tuple(s for s in raw if isinstance(s, CompanyHistorySignal) and s.company_id == company_id)
@@ -389,30 +532,278 @@ class BousslaAppService:
                                history_signals=signals, now=now)
         return triage, deadlines, signals, history_mode
 
-    def _with_investigator_brief(self, view: OfficerCaseView) -> OfficerCaseView:
-        """Lane C officer brief, validated against the view it describes. Anything that
-        does not cite this exact case version, existing findings, retrieved rules and
-        allowlisted questions is dropped (mode ERROR); the view is otherwise unchanged."""
+    # ------------------------------------------------------- lane C investigator
+    def _with_investigator_brief(self, view: OfficerCaseView, facts: dict[str, list]) -> OfficerCaseView:
+        """Officer-only assisted analysis (lane C) after checks, history, context and retrieval.
+        Cached per case version + history/reference fingerprints; any failure leaves the
+        view unchanged (mode ERROR). Never feeds findings, scores, requests or revisions."""
         if self.investigator is None:
             return view.model_copy(update={"mode_by_node": {**view.mode_by_node, "investigator": Mode.NOT_RUN}})
-        mode = Mode.ERROR
-        brief = None
-        try:
-            candidate = self.investigator.brief(view)
-            findings = {f.finding_id for f in view.findings}
-            rules = {p.rule_id for p in view.candidate_passages}
-            if candidate is None:
-                mode = Mode.NOT_RUN
-            elif (isinstance(candidate, InvestigatorBrief) and candidate.case_id == view.case_id
-                  and candidate.case_version == view.case_version
-                  and set(candidate.suggested_question_ids) <= set(QUESTIONS)
-                  and all(set(p.cited_finding_ids) <= findings and set(p.cited_rule_ids) <= rules
-                          for p in candidate.points)):
-                brief, mode = candidate, candidate.mode
-        except Exception:  # noqa: BLE001 - assistive layer; never fatal
-            brief = None
-        return view.model_copy(update={"investigator_brief": brief,
-                                       "mode_by_node": {**view.mode_by_node, "investigator": mode}})
+        key = (view.case_id, view.case_version, tuple(sorted(s.signal_id for s in view.history_signals)),
+               tuple(sorted(p.rule_id for p in view.candidate_passages)))
+        cached = self._brief_cache.get(key)
+        if cached is None:
+            try:
+                cached = (self._investigator_brief(view, facts, self.investigator), None)
+            except Exception:  # noqa: BLE001 - model/selector failure: deterministic template brief
+                try:
+                    from boussla.investigator import InvestigatorAssistant
+                    cached = (self._investigator_brief(view, facts, InvestigatorAssistant()), None)
+                except Exception:  # noqa: BLE001 - assistive layer; never fatal, never a finding
+                    cached = (None, Mode.ERROR)
+            if len(self._brief_cache) > 256:
+                self._brief_cache.clear()
+            self._brief_cache[key] = cached
+        brief, error = cached
+        if brief is not None:
+            self._brief_questions[view.case_id] = brief.questions_proposed
+        return view.model_copy(update={"investigator_brief": brief, "mode_by_node": {
+            **view.mode_by_node, "investigator": error or (brief.mode if brief else Mode.NOT_RUN)}})
+
+    def _investigator_brief(self, view: OfficerCaseView, facts: dict[str, list],
+                            assistant) -> InvestigatorBriefView | None:
+        from boussla.investigator import (
+            HYPOTHESIS_CATALOGUE, ClarificationDigest, ContextDigest, EvidenceFeature, FindingDigest,
+            InvestigatorInput, ScenarioDigest,
+        )
+        from boussla.investigator.models import _CODE
+
+        aliases: dict[str, str] = {}
+
+        def code(ref: str) -> str:  # opaque, bounded reference codes only (no long numeric IDs)
+            return ref if _CODE.fullmatch(ref) else aliases.setdefault(ref, f"REF-{chr(65 + len(aliases) % 26)}"
+                                                                           f"{len(aliases) // 26 or ''}")
+
+        def codes(values, limit=10) -> tuple[str, ...]:
+            return tuple(dict.fromkeys(code(v) for v in values if v))[:limit]
+
+        # Only findings that still need an explanation reach the investigator.
+        order = {FindingStatus.UNRESOLVED: 0, FindingStatus.INSUFFICIENT: 1}
+        ranked = sorted((f for f in view.findings if f.status in order),
+                        key=lambda f: (order[f.status], f.finding_id))[:12]
+        findings = tuple(FindingDigest(
+            family=f.family, reason_code=code(f.reason_code or "UNSPECIFIED"), status=f.status,
+            evidence_refs=codes(r.document_id or r.source_record_id for r in f.evidence_refs),
+            missing_evidence=codes(f.missing_evidence_types, 5),
+            coverage_code="COMPLETE" if view.score and view.score.coverage_complete else "INCOMPLETE") for f in ranked)
+        known_refs = {r for f in findings for r in f.evidence_refs}
+        features = []
+        for h in view.hypotheses:
+            target = PLAYBOOK_TO_CATALOGUE.get(h.statement_template_id)
+            if target is None or any(ft.hypothesis_id == target for ft in features):
+                continue
+            features.append(EvidenceFeature(
+                hypothesis_id=target,
+                supporting_refs=tuple(r for r in codes(x.document_id or x.source_record_id for x in h.supporting_refs)
+                                      if r in known_refs),
+                contradicting_refs=tuple(r for r in codes(x.document_id or x.source_record_id
+                                                          for x in h.contradicting_refs) if r in known_refs),
+                missing_evidence=codes(h.missing_evidence_types, 5)))
+        ctx = view.context_assessment
+        context = None if ctx is None else ContextDigest(
+            declared_purpose_code=ctx.declared_purpose_category.value, declared_horizon_code=ctx.declared_horizon.value,
+            interpreted_horizon_code=ctx.interpreted_horizon.value if ctx.interpretation_mode is Mode.LIVE else "UNKNOWN",
+            consistency_code=ctx.consistency_status, reason_codes=tuple(ctx.reason_codes)[:10])
+        answered = sorted(self._answered_question_ids(facts) | {q for r in facts["response"] for q in r.answers})
+        choice_answers = sorted({a.strip() for r in facts["response"] for a in r.answers.values()
+                                 if a.strip() in HorizonBucket.__members__ or a.strip() in PurposeCategory.__members__})
+        history_codes = tuple(dict.fromkeys(s.reason_code.value for s in view.history_signals))
+        rule_ids = tuple(dict.fromkeys(p.rule_id for p in view.candidate_passages if _CODE.fullmatch(p.rule_id)))[:10]
+        scenario_digests = []
+        for n, sc in enumerate(view.scenarios[:5], 1):
+            idx = sc.outputs.get("hypothetical_review_index")
+            outcome = ("RESOLVES_IN_SIMULATION" if idx == "0" else "RESIDUAL_IN_SIMULATION" if idx is not None
+                       else "RESIDUAL_UNITS_REPORTED" if sc.outputs.get("residual_units") else "NOT_INDEXED")
+            scenario_digests.append(ScenarioDigest(f"SCENARIO-{n}", outcome,
+                                                   int(idx) if idx is not None and idx.isdigit() else None))
+        data = InvestigatorInput(
+            findings=findings, evidence_features=tuple(features[:10]), context=context,
+            history_signal_codes=history_codes[:10],
+            transaction_summary_codes=tuple(dict.fromkeys(t.corroboration_status for t in view.transactions
+                                                          if _CODE.fullmatch(t.corroboration_status)))[:5],
+            clarification=ClarificationDigest(
+                status=view.score.clarification_status if view.score else ClarificationStatus.NOT_REQUESTED,
+                answered_question_ids=tuple(q for q in answered if q in QUESTIONS)[:10],
+                answer_codes=tuple(choice_answers)[:10]),
+            reference_rule_ids=rule_ids, scenarios=tuple(scenario_digests))
+        result = assistant.assess(data, audience=Audience.OFFICER)
+        brief = result.brief
+        if brief is None:
+            return None
+        # Authority boundary: only catalogue hypotheses, allowlisted questions, retrieved rules
+        # and known history codes survive; anything else invalidates the brief.
+        if (len(brief.top_hypotheses) > 5
+                or any(h.hypothesis_id not in HYPOTHESIS_CATALOGUE for h in brief.top_hypotheses)
+                or any(q not in QUESTIONS for q in brief.suggested_question_ids)
+                or not set(brief.reference_rule_ids) <= {p.rule_id for p in view.candidate_passages}):
+            raise BousslaError(ErrorCode.MODEL_UNAVAILABLE, "Analyse assistée invalide")
+        asked = tuple(dict.fromkeys(q for r in facts["request"] if r.request.status is not RequestStatus.DRAFT
+                                    for q in r.request.question_ids))
+        observations = [BriefObservationView(kind=o.kind.value, text_fr=o.text_fr, source_codes=tuple(o.source_codes))
+                        for o in brief.key_observations]
+        observations += [BriefObservationView(
+            kind="FACT", text_fr=f"Historique synthétique observé ({s.period}) : {s.explanation_fr}",
+            source_codes=(s.reason_code.value,)) for s in view.history_signals if s.reason_code in ANOMALY_CODES][:5]
+        return InvestigatorBriefView(
+            case_id=view.case_id, case_version=view.case_version, summary_fr=brief.summary_fr,
+            key_observations=tuple(observations),
+            top_hypotheses=tuple(BriefHypothesisView(
+                hypothesis_id=h.hypothesis_id, name_fr=HYPOTHESIS_NAMES_FR[h.hypothesis_id], status=h.status.value,
+                supporting_refs=h.supporting_refs, contradicting_refs=h.contradicting_refs,
+                missing_evidence=h.missing_evidence, why_it_matters_fr=h.why_it_matters_fr)
+                for h in brief.top_hypotheses[:5]),
+            missing_information=tuple(brief.missing_information),
+            changes_since_previous_version=self._changes_since_previous(view),
+            questions_proposed=tuple(q for q in brief.suggested_question_ids if q not in asked)[:MAX_QUESTIONS_PER_ROUND],
+            questions_already_asked=asked, reference_rule_ids=tuple(brief.reference_rule_ids),
+            history_signal_codes=history_codes, limitations=tuple(brief.limitations), mode=brief.mode)
+
+    def _changes_since_previous(self, view: OfficerCaseView) -> tuple[str, ...]:
+        """Deterministic finding-status differences between this and the previous version."""
+        if view.case_version <= 1:
+            return ("Première version du dossier.",)
+        previous = self._evaluate(view.case_id, view.company_id, view.case_version - 1,
+                                  self._facts(view.case_id, view.case_version - 1))
+        before = {(f.transaction_id, f.family): f for f in previous.findings}
+        out = [f"{f.family.value} {f.transaction_id} : {before[(f.transaction_id, f.family)].status.value} → "
+               f"{f.status.value}" for f in view.findings
+               if (f.transaction_id, f.family) in before and before[(f.transaction_id, f.family)].status is not f.status]
+        if previous.score.review_index != (view.score.review_index if view.score else None):
+            out.append(f"Indice de revue : {previous.score.review_index} → {view.score.review_index}")
+        revision = next((r for r in self.store.revisions(view.case_id) if r.version == view.case_version), None)
+        if revision is not None:
+            out.append(f"Dernière révision : {revision.reason}")
+        return tuple(out) or ("Aucun changement de constat depuis la version précédente.",)
+
+    # ------------------------------------------------------- enterprise 360 (officer)
+    def _enterprise_360(self, company_id: str, facts: dict[str, list]) -> dict:
+        e = self.enterprises.get(company_id)
+        bundle = self.portfolio.bundle(company_id) if self.portfolio is not None else None
+        months: dict[str, dict] = {}
+        for tx in facts["transaction"]:
+            m = months.setdefault(tx.economic_period, {"tx": 0, "inv": 0, "out": 0})
+            m["tx"] += 1
+            m["inv"] += sum(o.transaction_id == tx.transaction_id for o in facts["invoice_observation"])
+        tx_of_payment = {a.payment_id: a.transaction_id for a in facts["payment_allocation"]}
+        for pay in facts["payment"]:
+            if pay.status is PaymentStatus.SETTLED:
+                months.setdefault(pay.occurred_at.strftime("%Y-%m"), {"tx": 0, "inv": 0, "out": 0})["out"] += \
+                    pay.amount_millimes
+        periods = sorted(months)
+        profile = None if e is None else EnterpriseProfileView(
+            company_id=company_id, display_name=e.display_name, synthetic_identifier=e.synthetic_mf, sector=e.sector,
+            created_on=e.created_on, portfolio_member=bundle is not None,
+            activity_start=bundle["history_start"] if bundle else (periods[0] if periods else None),
+            activity_end=bundle["history_end"] if bundle else (periods[-1] if periods else None))
+        return {
+            "enterprise_profile": profile,
+            "monthly_activity": tuple(MonthlyActivityView(month=m, transaction_count=v["tx"],
+                                                          invoice_observation_count=v["inv"],
+                                                          settled_outflow_millimes=v["out"])
+                                      for m, v in sorted(months.items())),
+            "payment_timeline": tuple(PaymentTimelineEntry(
+                payment_id=pay.payment_id, transaction_id=tx_of_payment.get(pay.payment_id), occurred_at=pay.occurred_at,
+                amount_millimes=pay.amount_millimes, currency=pay.currency, status=pay.status,
+                origin_group_id=pay.origin_group_id) for pay in sorted(facts["payment"], key=lambda x: x.occurred_at)),
+            "financial_snapshot": self.portfolio.financial_snapshot(company_id) if self.portfolio is not None else None,
+            "invoice_comparisons": self._invoice_comparisons(facts),
+        }
+
+    def _invoice_comparisons(self, facts: dict[str, list]) -> tuple[InvoiceComparisonView, ...]:
+        """Pair buyer/seller observations by authoritative transaction ID and compare
+        field by field. Agreement is corroboration, never validity or authenticity."""
+        out = []
+        for tx in facts["transaction"]:
+            obs = [o for o in facts["invoice_observation"] if o.transaction_id == tx.transaction_id]
+            buyer = next((o for o in obs if o.perspective is Perspective.BUYER_RECEIVED), None)
+            seller = next((o for o in obs if o.perspective is Perspective.SELLER_ISSUED), None)
+            if buyer is None or seller is None:
+                out.append(InvoiceComparisonView(
+                    transaction_id=tx.transaction_id, buyer_observation_id=buyer.observation_id if buyer else None,
+                    seller_observation_id=seller.observation_id if seller else None, status="SINGLE_OBSERVATION",
+                    label_fr="Observation unique — pas de comparaison indépendante"))
+                continue
+            diffs = [f for f in COMPARED_INVOICE_FIELDS if getattr(buyer, f) != getattr(seller, f)]
+            bl, sl = (buyer.lines[0] if buyer.lines else None), (seller.lines[0] if seller.lines else None)
+            if bl is not None and sl is not None:
+                diffs += [f"line.{f}" for f in COMPARED_LINE_FIELDS if getattr(bl, f) != getattr(sl, f)]
+            elif (bl is None) != (sl is None):
+                diffs.append("lines")
+            out.append(InvoiceComparisonView(
+                transaction_id=tx.transaction_id, buyer_observation_id=buyer.observation_id,
+                seller_observation_id=seller.observation_id, status="DIFFERENCES" if diffs else "CONCORDANT",
+                label_fr="Différences observées entre les deux observations" if diffs else "Observations concordantes",
+                difference_fields=tuple(diffs)))
+        return tuple(out)
+
+    # ------------------------------------------------------- deterministic scenarios
+    def _reallocation_scenarios(self, case_id: str, company_id: str, version: int, facts: dict[str, list],
+                                ev: Evaluation) -> tuple[Scenario, ...]:
+        """Hypothetical reallocation of an over-allocated quantity to another of the
+        company's projects with an unused quantity reference, evaluated by the SAME
+        deterministic checks on a cloned, non-canonical fact set. Nothing is written."""
+        out = []
+        refs = [r for r in facts["quantity_reference"] if r.company_id == company_id]
+        for f in ev.findings:
+            if f.family is not FindingFamily.QUANTITY or f.status is not FindingStatus.UNRESOLVED:
+                continue
+            allocs = [a for a in facts["allocation"] if a.transaction_id == f.transaction_id
+                      and a.status is AllocationStatus.ACCEPTED and a.target_project_id]
+            line = next((ln for o in facts["invoice_observation"] if o.transaction_id == f.transaction_id
+                         and o.perspective is Perspective.BUYER_RECEIVED for ln in o.lines), None)
+            if line is None:
+                continue
+
+            def ref_qty(project_id):
+                return sum((Decimal(r.quantity) for r in refs if r.project_id == project_id and r.unit == line.unit
+                            and r.item_code in (line.normalized_item_code, None)), Decimal(0))
+
+            for over in allocs:
+                excess = Decimal(over.quantity) - ref_qty(over.target_project_id)
+                if excess <= 0:
+                    continue
+                used = {a.target_project_id: Decimal(a.quantity) for a in allocs}
+                for project in sorted({r.project_id for r in refs} - {over.target_project_id}):
+                    headroom = ref_qty(project) - used.get(project, Decimal(0))
+                    moved = min(excess, headroom)
+                    if moved <= 0:
+                        continue
+                    kept = Decimal(over.quantity) - moved
+                    clone = [a for a in facts["allocation"] if a.allocation_id != over.allocation_id]
+                    clone += [over.model_copy(update={"quantity": str(kept)}), Allocation(
+                        allocation_id=f"HYP-{over.allocation_id}-{project}", transaction_id=over.transaction_id,
+                        line_id=over.line_id, target_project_id=project, target_type=AllocationTarget.PROJECT,
+                        quantity=str(moved), unit=over.unit, effective_on=over.effective_on,
+                        status=AllocationStatus.ACCEPTED, fact_kind="HYPOTHETICAL_SCENARIO")]
+                    after = self._evaluate(case_id, company_id, version, {**facts, "allocation": clone})
+                    qty_after = next((x for x in after.findings if x.transaction_id == f.transaction_id
+                                      and x.family is FindingFamily.QUANTITY), None)
+                    out.append(Scenario(
+                        scenario_id=f"{f.transaction_id}:REALLOCATION:{project}:v{version}",
+                        label=f"Réaffectation hypothétique {over.target_project_id}={kept} / {project}={moved}",
+                        inputs={"from_project": over.target_project_id or "", "to_project": project,
+                                "moved_quantity": str(moved), "unit": over.unit},
+                        outputs={"status": "HYPOTHETICAL", "current_review_index": str(ev.score.review_index),
+                                 "hypothetical_review_index": str(after.score.review_index),
+                                 "quantity_status_after": qty_after.status.value if qty_after else "NOT_EVALUATED",
+                                 "residual_units": qty_after.quantity_difference or "0" if qty_after else "",
+                                 "unit": over.unit},
+                        evidence_refs=f.evidence_refs))
+        return tuple(out)
+
+    # ------------------------------------------------------- clarification read model
+    def _decorated_requests(self, requests) -> tuple[RequestView, ...]:
+        """Read-time follow-up state (demo target vs clock) for requests awaiting a response."""
+        now = self.clock()
+        out = []
+        for rv in requests:
+            req = rv.request
+            state = None
+            if req.status in PENDING_STATUSES:
+                overdue = req.target_response_at is not None and now > req.target_response_at
+                state = "FOLLOW_UP_DUE" if overdue else "ON_TRACK"
+            out.append(rv.model_copy(update={"request": req.model_copy(update={"overdue_state": state})}))
+        return tuple(out)
 
     # ------------------------------------------------------- context consistency
     @staticmethod
@@ -506,7 +897,9 @@ class BousslaAppService:
                 continue
             facts = self._facts(meta["case_id"], meta["version"])
             ev = self._evaluate(meta["case_id"], meta["company_id"], meta["version"], facts)
-            triage = self._triage(meta["case_id"], meta["company_id"], meta["version"], ev, facts)[0]
+            triage, _, signals, _ = self._triage(meta["case_id"], meta["company_id"], meta["version"], ev, facts)
+            enterprise = self.enterprises.get(meta["company_id"])
+            dates = [o.issued_on for o in facts["invoice_observation"]] + [p.occurred_at.date() for p in facts["payment"]]
             items.append(QueueItem(
                 case_id=meta["case_id"], company_id=meta["company_id"],
                 company_display_name=self._company_name(meta["company_id"]), case_version=meta["version"],
@@ -514,10 +907,17 @@ class BousslaAppService:
                 coverage_complete=ev.score.coverage_complete,
                 active_finding_count=sum(f.status is FindingStatus.UNRESOLVED for f in ev.findings),
                 clarification_status=ev.score.clarification_status, scope_note=ev.score.scope_note,
-                triage_priority=triage.triage_priority, triage_reason_codes=triage.reason_codes))
-        # Queue order = operational urgency first, then documentary review priority.
+                triage_priority=triage.triage_priority, triage_reason_codes=triage.reason_codes,
+                sector=enterprise.sector if enterprise else None,
+                synthetic_identifier=enterprise.synthetic_mf if enterprise else None,
+                last_activity_at=max(dates) if dates else None,
+                history_signal_codes=tuple(dict.fromkeys(x.reason_code.value for x in signals)),
+                history_anomaly=any(x.reason_code in ANOMALY_CODES for x in signals) if signals else None))
+        # Queue order = operational urgency first, then documentary review priority (null
+        # last), then most recent activity, then case ID. React never computes an order.
         items.sort(key=lambda i: (-(i.triage_priority or 0),
-                                  -(i.review_index if i.review_index is not None else -1), i.case_id))
+                                  -(i.review_index if i.review_index is not None else -1),
+                                  -(i.last_activity_at.toordinal() if i.last_activity_at else 0), i.case_id))
         try:
             start = int(cursor) if cursor else 0
         except ValueError:
@@ -879,7 +1279,8 @@ class BousslaAppService:
             facts[kind] = [*facts[kind], *items]
         return facts
 
-    def _automatic_question_ids(self, ev: Evaluation, facts: dict[str, list], context_codes) -> list[str]:
+    def _automatic_question_ids(self, ev: Evaluation, facts: dict[str, list], context_codes,
+                                case_id: str | None = None) -> list[str]:
         requests = facts["request"]
         if any(r.request.status in PENDING_STATUSES for r in requests):
             return []  # one open request at a time
@@ -890,7 +1291,14 @@ class BousslaAppService:
             return []  # configured round budget exhausted
         asked = self._answered_question_ids(facts) | {q for r in published for q in r.request.question_ids}
         has_claim = any(not c.purpose_text.startswith("[Q-") for c in facts["context_claim"])
-        return merge_question_plan(context_codes, deterministic_plan(ev.findings, has_claim, asked), asked)
+        return merge_question_plan(context_codes, self._planner_ids(ev, has_claim, asked, case_id), asked)
+
+    def _planner_ids(self, ev: Evaluation, has_claim: bool, asked: set[str], case_id: str | None) -> list[str]:
+        """Deterministic finding plan first; the latest investigator suggestions (allowlisted
+        IDs only) can fill remaining slots. The global merge still caps a round at 3."""
+        planned = deterministic_plan(ev.findings, has_claim, asked)
+        suggested = [q for q in self._brief_questions.get(case_id or "", ()) if q in QUESTIONS and q not in asked]
+        return list(dict.fromkeys(planned + suggested))
 
     def _auto_clarify(self, tx, actor: Actor, case_id: str, company_id: str, facts_after: dict[str, list] | None,
                       context_codes) -> RequestView | None:
@@ -899,9 +1307,12 @@ class BousslaAppService:
             return None
         version = tx.begin_version()
         ev = self._evaluate(case_id, company_id, version, facts_after)
-        qids = self._automatic_question_ids(ev, facts_after, context_codes)
+        qids = self._automatic_question_ids(ev, facts_after, context_codes, case_id)
         if not qids:
             return None
+        reasons = tuple(dict.fromkeys([str(getattr(c, "value", c)) for c in context_codes] + [
+            f.reason_code for f in ev.findings if f.status in (FindingStatus.UNRESOLVED, FindingStatus.INSUFFICIENT)
+            and f.reason_code]))[:10]
         now = self.clock()
         fact_ids = tuple(dict.fromkeys(
             r.source_record_id or r.document_id for f in ev.findings if f.status is FindingStatus.UNRESOLVED
@@ -911,7 +1322,7 @@ class BousslaAppService:
             company_id=company_id, case_version=version, fact_ids=fact_ids, question_ids=tuple(qids),
             allowed_document_types=ALLOWED_RESPONSE_DOCUMENTS, target_response_at=now + timedelta(days=FOLLOW_UP_DAYS),
             status=RequestStatus.PUBLISHED_IN_DEMO, approved_by=None, published_at=now, available_in_inbox_at=now,
-            origin="AUTOMATIC")
+            origin="AUTOMATIC", reason_codes=reasons, reason_text_fr=AUTO_REASON_TEXT_FR)
         view = RequestView(request=req, questions=tuple(QUESTIONS[q] for q in qids), text_fr=AUTO_REQUEST_TEXT_FR,
                            mode=Mode.TEMPLATE)
         tx.put("request", req.request_id, view)
@@ -937,7 +1348,7 @@ class BousslaAppService:
         ev = self._evaluate(case_id, meta["company_id"], meta["version"], facts)
         # Same global merge policy as start_analysis: context contradictions first, one cap of 3.
         _, context_codes, _ = self._context_assessment(case_id, meta["company_id"], meta["version"], facts)
-        qids = (merge_question_plan(context_codes, deterministic_plan(ev.findings, True, set()), set())
+        qids = (merge_question_plan(context_codes, self._planner_ids(ev, True, set(), case_id), set())
                 or ["Q-SUPPORTING-DOC"])
         fact_ids = tuple(dict.fromkeys(
             r.source_record_id or r.document_id for f in ev.findings if f.status is FindingStatus.UNRESOLVED
@@ -1248,6 +1659,15 @@ class BousslaAppService:
             disclaimer_fr="Brouillon de démonstration ; aucune valeur juridique ; aucune notification envoyée.")
 
 
+def _discover_investigator():
+    """Lane C officer investigator (OpenAI selector when configured, else TEMPLATE)."""
+    try:
+        from boussla.investigator import investigator_assistant
+        return investigator_assistant()
+    except Exception:  # noqa: BLE001 - optional assistive layer
+        return None
+
+
 def _discover_document_adapters(settings: Settings) -> dict:
     """Lane C adapters when merged; absent modules leave the manual path (None)."""
     found: dict = {}
@@ -1310,6 +1730,18 @@ def build_service(settings: Settings | None = None, seed: bool = True) -> Boussl
     store = CaseStore(settings.case_db_path, settings.upload_dir)
     if seed:
         seed_demo_case(store)
-    return BousslaAppService(store, settings=settings, reference_assistant=_discover_reference_assistant(),
-                             context_assistant=_discover_context_assistant(),
-                             **_discover_document_adapters(settings))
+    portfolio = None
+    if settings.portfolio_enabled:
+        from boussla.portfolio_runtime import PortfolioRuntime
+        portfolio = PortfolioRuntime(settings.portfolio_state_path)
+    svc = BousslaAppService(store, settings=settings, reference_assistant=_discover_reference_assistant(),
+                            context_assistant=_discover_context_assistant(), investigator=_discover_investigator(),
+                            portfolio=portfolio, **_discover_document_adapters(settings))
+    if portfolio is not None and seed:
+        _materialize(svc)
+    elif portfolio is not None:  # existing cases only: assign them, create nothing
+        for e in portfolio.enterprises():
+            if store.case_exists(portfolio.case_id(e.company_id)):
+                for officer in _officers(svc):
+                    svc.registry.assign(officer, portfolio.case_id(e.company_id))
+    return svc

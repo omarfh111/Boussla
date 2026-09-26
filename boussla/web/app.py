@@ -18,10 +18,14 @@ from boussla.services import BousslaAppService, build_service
 
 ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "frontend" / "dist"
-ROLES = {"COMPANY": "DEMO-COMPANY-BAT", "OFFICER": "DEMO-OFFICER"}
+# Local role simulation: each header value maps to ONE server-side actor (no actor IDs accepted).
+ROLES = {"COMPANY": "DEMO-COMPANY-BAT", "OFFICER": "DEMO-OFFICER", "OPERATOR": "DEMO-OPERATOR"}
 SAFE_DETAILS = {"used", "available", "question_ids", "fields"}
 # Identity, scope and trust signals are server-side only; rejected anywhere in a JSON body.
-FORBIDDEN_INPUT_FIELDS = {"actor_id", "company_id", "assigned_case_ids", "role", "reference_expected"}
+# Server-computed outputs (index, triage, assisted analysis) can never be supplied either.
+FORBIDDEN_INPUT_FIELDS = {"actor_id", "company_id", "assigned_case_ids", "role", "reference_expected",
+                          "review_index", "score", "triage", "triage_priority", "investigator_brief"}
+ADMIN_NOTICE_FR = "Administration de données synthétiques — démonstration locale."
 MAX_JSON_BYTES = 1024 * 1024
 HTTP_ERROR_CODES = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED", 413: "LIMIT_EXCEEDED"}
 
@@ -109,8 +113,10 @@ async def bootstrap(request: Request):
     a = actor(request)
     cases = ([m["case_id"] for m in service(request).store.list_cases() if m["company_id"] == a.company_id]
              if a.role.value == "COMPANY" else list(a.assigned_case_ids))
+    operator = a.role.value == "DEMO_OPERATOR" and service(request).portfolio is not None
     return result({"role": a.role.value, "case_ids": cases,
-                   "banner_fr": "Simulation locale de rôles — pas une authentification de production."})
+                   "banner_fr": "Simulation locale de rôles — pas une authentification de production.",
+                   "demo_admin": {k: operator for k in ("can_list", "can_seed", "can_reset", "can_add", "can_delete")}})
 
 
 async def case(request: Request):
@@ -183,6 +189,30 @@ async def decide(request: Request):
     return result(value)
 
 
+async def admin_enterprises(request: Request):
+    a = actor(request)
+    if request.method == "GET":
+        return result({"items": service(request).admin_list_enterprises(a), "notice_fr": ADMIN_NOTICE_FR})
+    k, data = key(request), await body(request)
+    return result(service(request).admin_add_enterprise(a, data, k))
+
+
+async def admin_delete(request: Request):
+    a, data = actor(request), await body(request)
+    return result(service(request).admin_delete_enterprise(a, request.path_params["company_id"],
+                                                           str(data.get("confirm", ""))))
+
+
+async def admin_seed(request: Request):
+    a = actor(request)
+    return result(service(request).admin_seed_portfolio(a))
+
+
+async def admin_reset(request: Request):
+    a, data = actor(request), await body(request)
+    return result(service(request).admin_reset_portfolio(a, str(data.get("confirm", ""))))
+
+
 async def spa(request: Request):
     path = request.path_params.get("path", "")
     if path.startswith("api/"):
@@ -225,6 +255,10 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}/responses/{request_id}", respond, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/accept", decide, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/reject", decide, methods=["POST"]),
+        Route("/api/admin/enterprises", admin_enterprises, methods=["GET", "POST"]),
+        Route("/api/admin/enterprises/{company_id}", admin_delete, methods=["DELETE"]),
+        Route("/api/admin/portfolio/seed", admin_seed, methods=["POST"]),
+        Route("/api/admin/portfolio/reset", admin_reset, methods=["POST"]),
         Route("/{path:path}", spa),
     ]
     @asynccontextmanager
