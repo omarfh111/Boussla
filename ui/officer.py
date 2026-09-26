@@ -181,9 +181,9 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
 
         c_rev1, c_rev2 = st.columns(2)
         with c_rev1:
-            st.metric("Priorité avant révision (v1)", before if before is not None else "N/D")
+            st.metric(f"Priorité avant révision (v{revision.previous_version})", before if before is not None else "N/D")
         with c_rev2:
-            st.metric("Priorité après révision (v2)", after if after is not None else "0",
+            st.metric(f"Priorité après révision (v{revision.new_version})", after if after is not None else "N/D",
                       delta=f"{after - before}" if (before is not None and after is not None) else None,
                       delta_color="inverse")
 

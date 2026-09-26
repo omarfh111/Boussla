@@ -133,6 +133,12 @@ def test_full_release_loop_through_the_ui():
     assert version(at) == before + 1
     assert any("Priorité de revue : 40 → 0" in m.value for m in at.markdown)
     assert {m.label: m.value for m in at.metric}["Priorité de revue"] == "0"
+    # Revision metric labels must name the actual versions (here v5+), never hard-coded v1/v2.
+    metrics = {m.label: m.value for m in at.metric}
+    assert before > 2
+    assert metrics[f"Priorité avant révision (v{before})"] == "40"
+    assert metrics[f"Priorité après révision (v{before + 1})"] == "0"
+    assert "Priorité avant révision (v1)" not in metrics and "Priorité après révision (v2)" not in metrics
     assert any(f"Version {before + 1}" in m.value for m in at.markdown)
     store = svc(at).store
     assert [(a.target_project_id, a.quantity) for a in store.facts(CASE, "allocation", Allocation, version=before)] == [("P1", "2000")]
