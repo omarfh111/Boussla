@@ -148,3 +148,25 @@ def test_reset_case_store_with_surviving_checkpoints_starts_fresh(tmp_path):
     assert ver(r2) == 1 and view2.case_version == 1
     after = r2.submit_answers(co, CASE, {view2.questions[0].question_id: "y"})
     assert after.case_version == 2 and ver(r2) == 2
+
+
+def _interrupt_values(graph, runner, graph_name, case_id, actor):
+    """Every pending LangGraph interrupt value for the actor's thread (local, no LangSmith)."""
+    tid = runner._thread(graph_name, case_id, actor, f"{runner._incarnation(case_id)}|%", create=False)
+    state = graph.get_state(runner._cfg(tid))
+    return [i.value for task in state.tasks for i in task.interrupts]
+
+
+def test_interrupt_payloads_carry_no_identifiers(env):
+    make, actors = env
+    co, off = actors["DEMO-COMPANY-BAT"], actors["DEMO-OFFICER"]
+    r = make()
+    view = r.run_analysis(co, CASE, ver(r))
+    pid = _proposal(r, actors)
+    r.open_decision(off, CASE, pid, ver(r))
+    values = (_interrupt_values(r.analysis_graph, r, "analysis", CASE, co)
+              + _interrupt_values(r.decision_graph, r, "decision", CASE, off))
+    assert values == [{"kind": "await_answers"}, {"kind": "await_decision"}]
+    dumped = repr(values)
+    forbidden = [CASE, "DEMO-BAT", view.analysis_id, pid, *[q.question_id for q in view.questions]]
+    assert not [token for token in forbidden if token in dumped]

@@ -179,8 +179,9 @@ class WorkflowRunner:
         def await_answers(state: AnalysisState) -> dict:
             view = AnalysisView.model_validate(state["view"])
             # Code before interrupt() re-runs on resume: keep it pure.
-            answers = interrupt({"analysis_id": view.analysis_id, "case_version": view.case_version,
-                                 "question_ids": [q.question_id for q in view.questions]})
+            # Constant payload: interrupt values reach LangGraph/LangSmith traces. The trusted
+            # ids stay in checkpoint state and are returned by the public runner methods.
+            answers = interrupt({"kind": "await_answers"})
             actor = self._actor(state["actor_id"])
             key = f"wf:{view.analysis_id}:r{state.get('round', 0)}"
             with traced("record_answers", state["case_id"], round=state.get("round", 0)):
@@ -231,7 +232,7 @@ class WorkflowRunner:
             return {}
 
         def await_decision(state: DecisionState) -> dict:
-            decision = interrupt({"proposal_id": state["proposal_id"], "case_version": state["expected_version"]})
+            decision = interrupt({"kind": "await_decision"})  # constant: no ids in traces
             return {"decision": {"accept": bool(decision.get("accept")), "reason": str(decision.get("reason") or "")[:500]}}
 
         def commit(state: DecisionState) -> dict:
