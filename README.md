@@ -37,7 +37,9 @@
   <a href="#-architecture">Architecture</a> ·
   <a href="#-démarrage-rapide">Démarrage</a> ·
   <a href="#-qualité-et-validation">Validation</a> ·
-  <a href="docs/BOUSSLA_note_de_synthese.pdf">Note de synthèse (PDF)</a>
+  <a href="#-documents">Documents</a> ·
+  <a href="docs/BOUSSLA_note_de_synthese.pdf">Note de synthèse (PDF)</a> ·
+  <a href="docs/Barons.pdf">Présentation (PDF)</a>
 </p>
 
 ---
@@ -344,6 +346,16 @@ La sélection du rôle est une **simulation locale**, pas une authentification d
 | Scan de secrets (code, build, captures, historique) | **0** correspondance |
 
 Le détail est consigné dans [`docs/release/FINAL_RELEASE_REPORT.md`](docs/release/FINAL_RELEASE_REPORT.md) et résumé dans la [note de synthèse (PDF, 2 pages)](docs/BOUSSLA_note_de_synthese.pdf).
+
+---
+
+## ✦ Documents
+
+| Document | Contenu |
+|---|---|
+| 🎤 [**Présentation BOUSSLA — équipe Barons**](docs/Barons.pdf) (PDF, 15 diapositives) | Problème, intégration aux systèmes existants, flux de données actuels et cibles, architecture, IA assistive et moteurs déterministes, rapprochement bilatéral, déroulement du prototype, stack, validation, limites, feuille de route et équipe |
+| 📄 [**Note de synthèse**](docs/BOUSSLA_note_de_synthese.pdf) (PDF, 2 pages) | Le projet de bout en bout : constat, parcours, modèle d'autorité, architecture, garanties, validation |
+| 🧾 [**Rapport de version finale**](docs/release/FINAL_RELEASE_REPORT.md) | Intégration des quatre voies, banc d'épreuve tour 2, tests, fournisseurs, sécurité |
 
 ---
 
