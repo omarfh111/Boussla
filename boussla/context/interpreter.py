@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 import httpx
 
@@ -14,6 +15,10 @@ from boussla.context.models import (
 
 
 MAX_PURPOSE_CHARS = 2_000
+_SENSITIVE_PROSE = re.compile(
+    r"\b\d{5,}\b|@|\b(?:matricule(?:\s+fiscal)?|identifiant(?:\s+fiscal)?|"
+    r"facture|paiement|montant|dinars?|TND|DT)\b", re.I,
+)
 _SCHEMA = {
     "type": "object", "additionalProperties": False,
     "properties": {
@@ -41,7 +46,9 @@ class OpenAIContextInterpreter:
         self.client = client or httpx.Client(timeout=timeout, trust_env=False)
 
     def interpret(self, context: ContextInput) -> ContextInterpretation:
-        if not self._api_key or not context.purpose_text.strip() or len(context.purpose_text) > MAX_PURPOSE_CHARS:
+        if (not self._api_key or not context.purpose_text.strip()
+                or len(context.purpose_text) > MAX_PURPOSE_CHARS
+                or _SENSITIVE_PROSE.search(context.purpose_text)):
             return unknown_interpretation(Mode.NOT_RUN, "INTERPRETATION_NOT_AVAILABLE")
         model_input = {
             "purpose_text": context.purpose_text,

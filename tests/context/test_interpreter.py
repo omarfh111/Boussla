@@ -120,3 +120,15 @@ def test_oversized_prose_is_not_sent():
         raise AssertionError("oversized text sent to provider")
     result = interpreter(forbidden).interpret(context("x" * 2001))
     assert result.mode is Mode.NOT_RUN and result.suggested_horizon is HorizonBucket.UNKNOWN
+
+
+@pytest.mark.parametrize("unsafe_text", [
+    "Construction pour matricule fiscal 1234567/A/M/000 sur dix-huit mois",
+    "Projet avec facture 500 DT sur dix-huit mois",
+    "Travaux pour contact@example.org sur dix-huit mois",
+])
+def test_obvious_identifiers_or_financial_details_in_prose_are_not_sent(unsafe_text):
+    def forbidden(request):
+        raise AssertionError("unsafe prose sent to provider")
+    result = interpreter(forbidden).interpret(context(unsafe_text))
+    assert result.mode is Mode.NOT_RUN and result.suggested_horizon is HorizonBucket.UNKNOWN

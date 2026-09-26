@@ -62,6 +62,8 @@ playbook, UI, or scoring file is changed in this branch.
 The model payload contains only `purpose_text`, declared purpose category and
 horizon, planned start/end, and stage. It omits company IDs, tax IDs, amounts,
 payments, beneficiaries, project references, findings and review priority.
+Obvious tax IDs, contact addresses, invoice/payment terms and currency terms
+inside `purpose_text` cause a local `NOT_RUN` fallback before any provider call.
 Lane A must ensure user prose itself is suitable for the model before calling
 this layer; the core cannot identify arbitrary company names embedded in prose.
 No purpose text is logged as telemetry metadata.
