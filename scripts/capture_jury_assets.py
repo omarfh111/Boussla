@@ -1,250 +1,326 @@
-"""Automated capture of all 8 jury screenshots and animated demo video via Edge CDP."""
+"""Regenerate the 8 static jury screenshots in docs/screenshots/.
 
+ASSET GENERATION, NOT A TEST. UI correctness is established by tests/ui
+(Streamlit AppTest on the real service). Here the company's evidence upload and
+response are made through build_service() because headless file upload is out
+of scope; every other step is a real click in the running app.
+
+Isolation: a fresh temporary runtime (SQLite, checkpoints, uploads, traces), its
+own Streamlit server and a temporary browser profile. Provider keys are blanked
+and Jev/LangSmith/LLM are disabled, so no external calls are made and the
+developer's runtime/ and .env are never touched. Data is the synthetic
+CASE-BRICKS-001 fixture only.
+
+Each capture waits until its expected text is visible (not a fixed sleep), and
+the run fails if any two screenshots are byte-identical.
+
+Usage (repository root, Windows Edge by default):
+    python scripts/capture_jury_assets.py [--browser PATH] [--port 8599] [--cdp-port 9333]
+"""
+from __future__ import annotations
+
+import argparse
 import asyncio
-import base64
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-import httpx
-from PIL import Image
-import websockets
-
-from boussla.config import FIXTURE_ROOT
-from boussla.contracts import Audience
-from boussla.services import build_service
-
-EDGE_PATH = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
-OUTPUT_DIR = Path("docs/screenshots")
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+ROOT = Path(__file__).resolve().parents[1]
+OUTPUT_DIR = ROOT / "docs" / "screenshots"
 CASE_ID = "CASE-BRICKS-001"
+DEFAULT_BROWSER = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+WIDTH, HEIGHT = 1440, 1050
+SHOTS = (
+    "01_company_operations_context.png",
+    "02_officer_review_queue_index40.png",
+    "03_officer_dossier_discrepancy.png",
+    "04_clarification_request.png",
+    "05_company_response_evidence.png",
+    "06_before_after_revision_40_to_0.png",
+    "07_history_case_versions.png",
+    "08_diagnostics_real_status.png",
+)
 
 
-async def capture_tab(ws, output_path: Path, js_before: list[str] = None, wait_before: float = 2.0):
-    if js_before:
-        for js in js_before:
-            await ws.send(json.dumps({
-                "id": 99,
-                "method": "Runtime.evaluate",
-                "params": {"expression": js}
-            }))
-            await asyncio.sleep(wait_before)
-
-    await ws.send(json.dumps({
-        "id": 100,
-        "method": "Page.captureScreenshot",
-        "params": {"format": "png"}
-    }))
-
-    while True:
-        raw = await ws.recv()
-        data = json.loads(raw)
-        if data.get("id") == 100:
-            img = base64.b64decode(data["result"]["data"])
-            output_path.write_bytes(img)
-            print(f"Captured {output_path.name} ({len(img):,} bytes)")
-            break
+def isolated_env(runtime: Path) -> dict[str, str]:
+    """Clean demo runtime with every external provider disabled."""
+    env = {k: v for k, v in os.environ.items() if k != "BOUSSLA_SERVICE"}
+    env.update({
+        "CASE_DB_PATH": str(runtime / "cases.sqlite"), "CHECKPOINT_DB_PATH": str(runtime / "checkpoints.sqlite"),
+        "UPLOAD_DIR": str(runtime / "uploads"), "EVENT_LOG_PATH": str(runtime / "events.jsonl"),
+        "OPENAI_API_KEY": "", "TYPESAFE_API_KEY": "", "LANGSMITH_API_KEY": "",
+        "LLM_PROVIDER": "manual", "JEV_ENABLED": "false", "LANGSMITH_TRACING": "false",
+    })
+    return env
 
 
-async def run_journey_and_capture():
+class Page:
+    """Minimal Chrome DevTools Protocol client for one tab."""
+
+    def __init__(self, ws) -> None:
+        self.ws, self.next_id = ws, 0
+
+    async def call(self, method: str, params: dict | None = None) -> dict:
+        self.next_id += 1
+        await self.ws.send(json.dumps({"id": self.next_id, "method": method, "params": params or {}}))
+        while True:
+            msg = json.loads(await self.ws.recv())
+            if msg.get("id") == self.next_id:
+                if "error" in msg:
+                    raise RuntimeError(f"{method}: {msg['error']}")
+                return msg.get("result", {})
+
+    async def js(self, expression: str):
+        result = await self.call("Runtime.evaluate", {"expression": expression, "returnByValue": True})
+        return result.get("result", {}).get("value")
+
+    async def wait_text(self, text: str, timeout: float = 30.0, present: bool = True) -> None:
+        """Wait until `text` is (or is no longer) in the *visible* page text."""
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if bool(await self.js(f"document.body.innerText.includes({json.dumps(text)})")) is present:
+                await self.wait_idle(deadline)
+                return
+            await asyncio.sleep(0.25)
+        raise TimeoutError(f"text {'not found' if present else 'still visible'}: {text!r}")
+
+    async def wait_idle(self, deadline: float) -> None:
+        """Wait until Streamlit's run-status widget is gone, then let canvas grids paint."""
+        while time.monotonic() < deadline:
+            if not await self.js("!!document.querySelector('[data-testid=\"stStatusWidget\"]')"):
+                break
+            await asyncio.sleep(0.25)
+        await asyncio.sleep(1.5)
+
+    async def goto(self, url: str, expect: str) -> None:
+        await self.call("Page.navigate", {"url": url})
+        await self.wait_text(expect)
+
+    async def click_tab(self, label: str, expect: str) -> None:
+        ok = await self.js(f"""(() => {{
+            const tab = [...document.querySelectorAll('[role="tab"]')]
+                .find(t => t.innerText.trim().startsWith({json.dumps(label)}));
+            if (!tab) return false; tab.click(); return true; }})()""")
+        if not ok:
+            raise RuntimeError(f"tab not found: {label}")
+        await self.wait_text(expect)
+
+    async def click_button(self, label: str, expect: str, present: bool = True) -> None:
+        ok = await self.js(f"""(() => {{
+            const b = [...document.querySelectorAll('button')]
+                .find(x => x.innerText.includes({json.dumps(label)}) && x.offsetParent !== null);
+            if (!b) return false; b.click(); return true; }})()""")
+        if not ok:
+            raise RuntimeError(f"visible button not found: {label}")
+        await self.wait_text(expect, present=present)
+
+    async def scroll_to(self, text: str) -> None:
+        """Scroll the smallest *visible* element containing `text` to the top."""
+        ok = await self.js(f"""(() => {{
+            const hits = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,label,div')]
+                .filter(e => e.offsetParent !== null && (e.innerText || '').includes({json.dumps(text)}));
+            if (!hits.length) return false;
+            hits.sort((a, b) => a.innerText.length - b.innerText.length);
+            hits[0].scrollIntoView({{block: 'start'}}); return true; }})()""")
+        if not ok:
+            raise RuntimeError(f"section not found: {text}")
+        await asyncio.sleep(0.6)
+
+    async def scroll_top(self) -> None:
+        await self.js("document.querySelectorAll('*').forEach(e => { if (e.scrollTop) e.scrollTop = 0; }); window.scrollTo(0, 0);")
+        await asyncio.sleep(0.4)
+
+    async def shot(self, name: str, from_text: str | None = None) -> None:
+        """Viewport screenshot, or (from_text) a clip starting at that visible section,
+        used when a section sits at the page bottom and cannot be scrolled to the top."""
+        params: dict = {"format": "png"}
+        if from_text:
+            top = await self.js(f"""(() => {{
+                const hits = [...document.querySelectorAll('h1,h2,h3,h4,h5,h6,p,span,label,div')]
+                    .filter(e => e.offsetParent !== null && (e.innerText || '').includes({json.dumps(from_text)}));
+                hits.sort((a, b) => a.innerText.length - b.innerText.length);
+                return hits.length ? Math.max(0, hits[0].getBoundingClientRect().top - 16) : null; }})()""")
+            if top is None:
+                raise RuntimeError(f"section not found: {from_text}")
+            params["clip"] = {"x": 0, "y": top, "width": WIDTH, "height": HEIGHT - top, "scale": 1}
+        data = (await self.call("Page.captureScreenshot", params))["data"]
+        import base64
+        (OUTPUT_DIR / name).write_bytes(base64.b64decode(data))
+        print(f"  captured {name}")
+
+
+def respond_with_evidence_via_service() -> None:
+    """Company evidence upload + reallocation response (service call, not a UI click)."""
+    from boussla.config import FIXTURE_ROOT
+    from boussla.services import build_service
+
+    svc = build_service()
+    company, officer = svc.registry.actors["DEMO-COMPANY-BAT"], svc.registry.actors["DEMO-OFFICER"]
+    case = svc.get_case(officer, CASE_ID)
+    request = case.requests[-1]
+    pdf = (FIXTURE_ROOT / "documents" / "06_second_project_allocation.pdf").read_bytes()
+    doc = svc.upload_document(company, CASE_ID, pdf, "affectation_P2.pdf", "application/pdf",
+                              case.case_version, "capture-upload")
+    allocation = case.allocations[0]
+    svc.submit_response(company, CASE_ID, request.request.request_id, {
+        "answers": {q.question_id: "1 000 unités pour P1 et 1 000 unités pour P2, pièce d'affectation jointe."
+                    for q in request.questions},
+        "document_ids": [doc.document.document_id],
+        "allocation": {"transaction_id": allocation.transaction_id, "line_id": allocation.line_id,
+                       "splits": {"P1": "1000", "P2": "1000"}},
+    }, doc.case_version, "capture-response")
+
+
+async def journey(cdp_port: int, app: str) -> None:
+    import httpx
+    import websockets
+
     async with httpx.AsyncClient() as client:
-        r = await client.put("http://127.0.0.1:9222/json/new?http://localhost:8501/?role=Entreprise")
-        tab = r.json()
-        target_id = tab["id"]
-        ws_url = tab["webSocketDebuggerUrl"]
+        tab = (await client.put(f"http://127.0.0.1:{cdp_port}/json/new?about:blank")).json()
+    async with websockets.connect(tab["webSocketDebuggerUrl"], max_size=50_000_000) as ws:
+        page = Page(ws)
+        await page.call("Page.enable")
+        await page.call("Emulation.setDeviceMetricsOverride",
+                        {"width": WIDTH, "height": HEIGHT, "deviceScaleFactor": 1, "mobile": False})
 
+        await page.goto(f"{app}/?role=Entreprise", "Facturé et réglé observé")
+        await page.shot(SHOTS[0])
+
+        await page.goto(f"{app}/?role=Agent", "pas probabilité de fraude")  # queue grid is a canvas
+        await page.shot(SHOTS[1])
+
+        await page.click_tab("Dossier", "Références de quantité")
+        await page.scroll_to("Références de quantité")
+        await page.shot(SHOTS[2])
+
+        await page.click_button("Préparer une demande neutre", "Publier dans la boîte de démo")
+        await page.scroll_to("Demande de précision")
+        await page.shot(SHOTS[3])
+        await page.click_button("Publier dans la boîte de démo", "Publier dans la boîte de démo", present=False)
+
+        respond_with_evidence_via_service()
+
+        await page.goto(f"{app}/?role=Entreprise", "Facturé et réglé observé")
+        await page.click_tab("Contexte et réponses", "Réponses enregistrées")
+        await page.scroll_to("Boîte de demandes")
+        await page.shot(SHOTS[4])
+
+        await page.goto(f"{app}/?role=Agent", "pas probabilité de fraude")
+        await page.click_tab("Dossier", "Accepter dans ce dossier")
+        await page.click_button("Accepter dans ce dossier", "Avant / après la décision")
+        await page.scroll_to("Avant / après la décision")
+        await page.shot(SHOTS[5])
+
+        await page.scroll_to("Historique du dossier")
+        await page.shot(SHOTS[6], from_text="Historique du dossier")
+
+        await page.scroll_top()
+        await page.click_tab("Diagnostics", "Comprendre les statuts")
+        await page.shot(SHOTS[7])
+
+    async with httpx.AsyncClient() as client:
+        await client.get(f"http://127.0.0.1:{cdp_port}/json/close/{tab['id']}")
+
+
+def port_free(port: int) -> bool:
+    import socket
+    with socket.socket() as sock:
+        return sock.connect_ex(("127.0.0.1", port)) != 0
+
+
+def stop_tree(proc: subprocess.Popen) -> None:
+    """Stop a process and its children (headless browsers spawn several)."""
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True)
+    else:
+        proc.terminate()
     try:
-        async with websockets.connect(ws_url, max_size=50_000_000) as ws:
-            await ws.send(json.dumps({"id": 1, "method": "Page.enable"}))
-            await asyncio.sleep(4)
-
-            # 1. Company Operations & Context
-            print("Capturing 01_company_operations_context.png...")
-            await capture_tab(ws, OUTPUT_DIR / "01_company_operations_context.png")
-
-            # 2. Officer Review Queue (index 40)
-            print("Capturing 02_officer_review_queue_index40.png...")
-            await ws.send(json.dumps({
-                "id": 2,
-                "method": "Page.navigate",
-                "params": {"url": "http://localhost:8501/?role=Agent"}
-            }))
-            await asyncio.sleep(4)
-            await capture_tab(ws, OUTPUT_DIR / "02_officer_review_queue_index40.png")
-
-            # 3. Officer Dossier showing discrepancy 2000 vs 1000
-            print("Capturing 03_officer_dossier_discrepancy.png...")
-            await capture_tab(
-                ws,
-                OUTPUT_DIR / "03_officer_dossier_discrepancy.png",
-                js_before=["document.querySelectorAll('button[data-baseweb=\"tab\"]')[1].click();"],
-                wait_before=2.5
-            )
-
-            # 4. Clarification Request Preparation
-            print("Capturing 04_clarification_request.png...")
-            await capture_tab(
-                ws,
-                OUTPUT_DIR / "04_clarification_request.png",
-                js_before=[
-                    "Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Préparer une demande')).click();",
-                    "window.scrollBy(0, 400);"
-                ],
-                wait_before=2.0
-            )
-
-            # Publish clarification in demo box
-            await ws.send(json.dumps({
-                "id": 5,
-                "method": "Runtime.evaluate",
-                "params": {"expression": "Array.from(document.querySelectorAll('button')).find(b => b.innerText.includes('Publier dans la boîte')).click();"}
-            }))
-            await asyncio.sleep(2.0)
-
-            # 5. Company response and evidence
-            print("Capturing 05_company_response_evidence.png...")
-            await ws.send(json.dumps({
-                "id": 6,
-                "method": "Page.navigate",
-                "params": {"url": "http://localhost:8501/?role=Entreprise"}
-            }))
-            await asyncio.sleep(4)
-            await capture_tab(
-                ws,
-                OUTPUT_DIR / "05_company_response_evidence.png",
-                js_before=[
-                    "document.querySelectorAll('button[data-baseweb=\"tab\"]')[1].click();",
-                    "window.scrollBy(0, 300);"
-                ],
-                wait_before=2.0
-            )
-
-            # Respond with allocation from Company via service
-            svc = build_service()
-            actor_co = svc.registry.actors["DEMO-COMPANY-BAT"]
-            actor_off = svc.registry.actors["DEMO-OFFICER"]
-            c = svc.get_case(actor_off, CASE_ID)
-            v = c.case_version
-            req_id = c.requests[-1].request.request_id
-
-            alloc_pdf = (FIXTURE_ROOT / "documents" / "06_second_project_allocation.pdf").read_bytes()
-            doc_view = svc.upload_document(actor_co, CASE_ID, alloc_pdf, "affectation_P2.pdf", "application/pdf", v, "up-p2")
-            v_after_doc = doc_view.case_version
-
-            curr_alloc = c.allocations[0]
-            resp_payload = {
-                "answers": {q.question_id: "Affectation validée sur le second chantier." for q in c.requests[-1].questions},
-                "document_ids": [doc_view.document.document_id],
-                "allocation": {
-                    "transaction_id": curr_alloc.transaction_id,
-                    "line_id": curr_alloc.line_id,
-                    "splits": {"P1": "1000", "P2": "1000"}
-                }
-            }
-            svc.submit_response(actor_co, CASE_ID, req_id, resp_payload, v_after_doc, "resp-p2")
-
-            # 6. Before / after revision showing 40 -> 0
-            print("Capturing 06_before_after_revision_40_to_0.png...")
-            await ws.send(json.dumps({
-                "id": 7,
-                "method": "Page.navigate",
-                "params": {"url": "http://localhost:8501/?role=Agent"}
-            }))
-            await asyncio.sleep(4)
-            # Click tab Dossier, then click "Accepter dans ce dossier"
-            await capture_tab(
-                ws,
-                OUTPUT_DIR / "06_before_after_revision_40_to_0.png",
-                js_before=[
-                    "document.querySelectorAll('button[data-baseweb=\"tab\"]')[1].click();",
-                    "setTimeout(() => { const b = Array.from(document.querySelectorAll('button')).find(x => x.innerText.includes('Accepter dans ce dossier')); if (b) b.click(); }, 1000);",
-                    "window.scrollBy(0, 600);"
-                ],
-                wait_before=3.5
-            )
-
-            # 7. History showing case versions
-            print("Capturing 07_history_case_versions.png...")
-            await capture_tab(
-                ws,
-                OUTPUT_DIR / "07_history_case_versions.png",
-                js_before=["window.scrollTo(0, document.body.scrollHeight);"],
-                wait_before=1.5
-            )
-
-            # 8. Diagnostics real integration statuses
-            print("Capturing 08_diagnostics_real_status.png...")
-            await capture_tab(
-                ws,
-                OUTPUT_DIR / "08_diagnostics_real_status.png",
-                js_before=[
-                    "window.scrollTo(0, 0);",
-                    "document.querySelectorAll('button[data-baseweb=\"tab\"]')[2].click();"
-                ],
-                wait_before=2.0
-            )
-
-    finally:
-        async with httpx.AsyncClient() as client:
-            await client.get(f"http://127.0.0.1:9222/json/close/{target_id}")
+        proc.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
-def main():
-    print("=== Starting Edge Headless with CDP ===")
-    edge_proc = subprocess.Popen([
-        EDGE_PATH,
-        "--headless=new",
-        "--remote-debugging-port=9222",
-        "--disable-gpu",
-        "--window-size=1440,1050",
-        "about:blank"
-    ])
-    time.sleep(2)
+def stop_by_marker(marker: str) -> None:
+    """Stop leftover processes whose command line contains our unique temp path
+    (headless browsers re-parent their children, so the launcher tree is not enough)."""
+    if os.name == "nt":
+        script = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*" + marker.replace("'", "") +
+                  "*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }")
+        subprocess.run(["powershell", "-NoProfile", "-Command", script], capture_output=True)
+    else:
+        subprocess.run(["pkill", "-f", marker], capture_output=True)
 
+
+def wait_http(url: str, timeout: float = 60.0) -> None:
+    import httpx
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            if httpx.get(url, timeout=2).status_code == 200:
+                return
+        except httpx.HTTPError:
+            pass
+        time.sleep(0.5)
+    raise TimeoutError(url)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--browser", default=os.environ.get("BOUSSLA_CAPTURE_BROWSER", DEFAULT_BROWSER))
+    parser.add_argument("--port", type=int, default=8599)
+    parser.add_argument("--cdp-port", type=int, default=9333)
+    args = parser.parse_args()
+
+    busy = [p for p in (args.port, args.cdp_port) if not port_free(p)]
+    if busy:
+        print(f"ERROR: port(s) {busy} already in use; stop the other process or pass --port/--cdp-port",
+              file=sys.stderr)
+        return 2
+    runtime = Path(tempfile.mkdtemp(prefix="boussla-capture-"))
+    env = isolated_env(runtime)
+    os.environ.clear()
+    os.environ.update(env)  # the in-process service call uses the same isolated runtime
+    sys.path.insert(0, str(ROOT))
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    app = f"http://127.0.0.1:{args.port}"
+    procs = []
     try:
-        asyncio.run(run_journey_and_capture())
-
-        print("=== Compiling animated demonstration video walkthrough (WebP) ===")
-        png_names = [
-            "01_company_operations_context.png",
-            "02_officer_review_queue_index40.png",
-            "03_officer_dossier_discrepancy.png",
-            "04_clarification_request.png",
-            "05_company_response_evidence.png",
-            "06_before_after_revision_40_to_0.png",
-            "07_history_case_versions.png",
-            "08_diagnostics_real_status.png",
-        ]
-        images = []
-        for name in png_names:
-            p = OUTPUT_DIR / name
-            if p.exists():
-                images.append(Image.open(p).convert("RGB"))
-
-        if images:
-            resized = [img.resize((1200, int(1200 * img.height / img.width)), Image.Resampling.LANCZOS) for img in images]
-            anim_path = OUTPUT_DIR / "boussla_demo_walkthrough.webp"
-            resized[0].save(
-                anim_path,
-                format="WEBP",
-                save_all=True,
-                append_images=resized[1:],
-                duration=3500,
-                loop=0,
-                quality=90
-            )
-            print(f"Saved animated walkthrough: {anim_path} ({anim_path.stat().st_size:,} bytes)")
-
-        print("=== ALL JURY ASSETS PRODUCED SUCCESSFULLY! ===")
-
+        procs.append(subprocess.Popen(
+            [sys.executable, "-m", "streamlit", "run", "app.py", "--server.headless", "true",
+             "--server.port", str(args.port), "--browser.gatherUsageStats", "false"],
+            cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        wait_http(f"{app}/_stcore/health")
+        procs.append(subprocess.Popen(
+            [args.browser, "--headless=new", f"--remote-debugging-port={args.cdp_port}", "--disable-gpu",
+             f"--user-data-dir={runtime / 'browser-profile'}", "--no-first-run", f"--window-size={WIDTH},{HEIGHT}",
+             "about:blank"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+        wait_http(f"http://127.0.0.1:{args.cdp_port}/json/version")
+        print(f"Capturing from a clean runtime at {runtime}")
+        asyncio.run(journey(args.cdp_port, app))
     finally:
-        edge_proc.terminate()
+        for proc in reversed(procs):
+            stop_tree(proc)
+        stop_by_marker(str(runtime / "browser-profile"))
+        time.sleep(1)
+        shutil.rmtree(runtime, ignore_errors=True)
+
+    digests = {name: hashlib.sha256((OUTPUT_DIR / name).read_bytes()).hexdigest() for name in SHOTS}
+    for name, digest in digests.items():
+        print(f"  {digest[:16]}  {name}")
+    if len(set(digests.values())) != len(SHOTS):
+        print("ERROR: duplicate screenshots (identical bytes)", file=sys.stderr)
+        return 1
+    print(f"OK: {len(SHOTS)} distinct screenshots")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
