@@ -20,7 +20,7 @@ def load(name):
 
 
 def test_contract_version():
-    assert CONTRACT_VERSION == "boussla-context-1"
+    assert CONTRACT_VERSION == "boussla-automation-1"
 
 
 @pytest.mark.parametrize("model,name,drop", [
