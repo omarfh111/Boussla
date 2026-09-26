@@ -1,0 +1,135 @@
+import type {
+  Role,
+  ApiErrorBody,
+  Bootstrap,
+  CompanyCaseView,
+  OfficerCaseView,
+  QueuePage,
+  HistoryView,
+  ClarificationDraft,
+  RequestView,
+  RevisionResult,
+  DocumentView,
+  ResponseView,
+} from "./types";
+
+export class ApiError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+export async function request<T>(
+  role: Role,
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+  try {
+    const response = await fetch(`/api${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { "X-Boussla-Demo-Role": role, ...init.headers },
+    });
+    if (!response.ok) {
+      const payload = (await response
+        .json()
+        .catch(() => null)) as ApiErrorBody | null;
+      throw new ApiError(
+        payload?.error?.code ?? "NETWORK_ERROR",
+        payload?.error?.message ?? "Le service est indisponible.",
+      );
+    }
+    return (await response.json()) as T;
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(
+      "NETWORK_ERROR",
+      error instanceof DOMException && error.name === "AbortError"
+        ? "Le service met trop de temps à répondre."
+        : "Connexion au service impossible.",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export const api = {
+  bootstrap: (r: Role) => request<Bootstrap>(r, "/demo/bootstrap"),
+  case: (r: Role, id: string) =>
+    request<CompanyCaseView | OfficerCaseView>(
+      r,
+      `/cases/${encodeURIComponent(id)}`,
+    ),
+  queue: () => request<QueuePage>("OFFICER", "/officer/queue"),
+  history: (r: Role, id: string) =>
+    request<HistoryView>(r, `/cases/${encodeURIComponent(id)}/history`),
+  post: <T>(
+    r: Role,
+    path: string,
+    payload: object,
+    key = crypto.randomUUID(),
+  ) =>
+    request<T>(r, path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify(payload),
+    }),
+  upload: (
+    r: Role,
+    id: string,
+    file: File,
+    expected_version: number,
+    key = crypto.randomUUID(),
+  ) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("expected_version", String(expected_version));
+    return request<DocumentView>(
+      r,
+      `/cases/${encodeURIComponent(id)}/documents`,
+      { method: "POST", headers: { "Idempotency-Key": key }, body: form },
+    );
+  },
+  context: (id: string, version: number, context: object) =>
+    api.post<CompanyCaseView>("COMPANY", `/cases/${id}/context`, {
+      expected_version: version,
+      context,
+    }),
+  prepare: (id: string, version: number) =>
+    api.post<ClarificationDraft>(
+      "OFFICER",
+      `/cases/${id}/clarifications/prepare`,
+      { expected_version: version },
+    ),
+  publish: (id: string, draft: string, version: number) =>
+    api.post<RequestView>(
+      "OFFICER",
+      `/cases/${id}/clarifications/${draft}/publish`,
+      { expected_version: version },
+    ),
+  respond: (id: string, req: string, version: number, response: object) =>
+    api.post<ResponseView>("COMPANY", `/cases/${id}/responses/${req}`, {
+      expected_version: version,
+      response,
+    }),
+  decide: (
+    id: string,
+    proposal: string,
+    version: number,
+    action: "accept" | "reject",
+  ) =>
+    api.post<RevisionResult>(
+      "OFFICER",
+      `/cases/${id}/proposals/${proposal}/${action}`,
+      {
+        expected_version: version,
+        reason:
+          action === "reject" ? "Pièce non retenue dans ce dossier" : undefined,
+      },
+    ),
+};
