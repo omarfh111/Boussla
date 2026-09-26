@@ -1365,6 +1365,10 @@ function QuantityStory({ c }: { c: OfficerCaseView }) {
   )?.lines[0];
   const ref = c.quantity_references[0];
   const gap = c.findings.find((f) => f.family === "QUANTITY");
+  const allocations = c.allocations.filter(
+    (allocation) =>
+      allocation.status === "ACCEPTED" && allocation.line_id === line?.line_id,
+  );
   return (
     <Panel eyebrow="RAPPROCHEMENT" title="Quantités documentées">
       <div className="quantity-compare">
@@ -1386,6 +1390,19 @@ function QuantityStory({ c }: { c: OfficerCaseView }) {
           {format(gap?.quantity_difference)} {gap?.unit || ""}
         </strong>
       </div>
+      {allocations.length > 0 && (
+        <div className="allocation-summary">
+          <span>Répartition enregistrée dans ce dossier</span>
+          <div>
+            {allocations.map((allocation) => (
+              <span className="badge" key={allocation.allocation_id}>
+                {allocation.target_project_id || "Autre"} ·{" "}
+                {allocation.quantity} {allocation.unit}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="footnote">
         Les valeurs et le constat proviennent du dossier et des contrôles du
         service.
