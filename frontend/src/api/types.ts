@@ -42,6 +42,7 @@ export interface Allocation {
   unit: string;
   status: string;
 }
+export type Horizon = "SHORT_HORIZON" | "LONGER_HORIZON" | "UNKNOWN";
 export interface ContextClaim {
   claim_id: string;
   purpose_category: string;
@@ -51,10 +52,31 @@ export interface ContextClaim {
   planned_end: string | null;
   stage: string | null;
   submitted_at: string;
+  declared_horizon: Horizon;
+  supersedes_claim_id: string | null;
+}
+/** Mirrors boussla.contracts.ContextAssessmentView (clarification aid, never a score). */
+export interface ContextAssessmentView {
+  claim_id: string;
+  declared_horizon: Horizon;
+  interpreted_horizon: Horizon;
+  calculated_horizon: Horizon;
+  declared_purpose_category: string;
+  interpreted_purpose_category: string;
+  duration_days: number | null;
+  consistency_status: "CONSISTENT" | "NEEDS_CLARIFICATION" | "INSUFFICIENT";
+  reason_codes: string[];
+  recommended_question_ids: string[];
+  supporting_spans: string[];
+  corroboration_status: "NOT_ASSESSED";
+  interpretation_mode: Mode;
+  horizon_convention_fr: string;
 }
 export interface Question {
   question_id: string;
   text_fr: string;
+  answer_kind: string;
+  choices: string[];
 }
 export interface RequestView {
   request: {
@@ -88,6 +110,7 @@ export interface BaseCase {
   projects: { project_id: string; label: string }[];
   context_claims: ContextClaim[];
   allocations: Allocation[];
+  context_assessment: ContextAssessmentView | null;
   mode: Mode;
   banner_fr: string;
 }
@@ -160,6 +183,8 @@ export interface GroundedNoteView {
   summary_fr: string;
   candidate_rule_ids: string[];
   applicability_questions: string[];
+  limitations: string[];
+  provider_model: string | null;
   generation_mode: Mode;
   disclaimer_fr: string;
 }

@@ -1,4 +1,4 @@
-﻿import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import {
   cleanup,
   fireEvent,
@@ -23,6 +23,7 @@ const shared = {
   ],
   context_claims: [],
   allocations: [],
+  context_assessment: null,
   mode: "LIVE" as const,
   banner_fr: "Simulation locale de rôles",
 };
@@ -69,7 +70,10 @@ const officer: OfficerCaseView = {
   quantity_references: [],
 };
 
-function mockApi(officerView: OfficerCaseView = officer) {
+function mockApi(
+  officerView: OfficerCaseView = officer,
+  companyView: CompanyCaseView = company,
+) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input);
@@ -96,7 +100,7 @@ function mockApi(officerView: OfficerCaseView = officer) {
               mode: "LIVE",
             }
           : role === "COMPANY"
-            ? company
+            ? companyView
             : officerView;
       return new Response(JSON.stringify(payload), {
         status: 200,
@@ -175,6 +179,8 @@ it("shows officer citations and disables acceptance without a source document", 
       summary_fr: "Synthèse citée.",
       candidate_rule_ids: ["TN-REF-1"],
       applicability_questions: ["Quelle période ?"],
+      limitations: [],
+      provider_model: null,
       generation_mode: "LIVE",
       disclaimer_fr: "Synthèse indicative.",
     },
@@ -255,4 +261,166 @@ it("refetches after a stale revision without retrying the write", async () => {
       ),
     ).toHaveLength(1),
   );
+});
+
+const mismatch = {
+  claim_id: "CLAIM-2",
+  declared_horizon: "SHORT_HORIZON" as const,
+  interpreted_horizon: "LONGER_HORIZON" as const,
+  calculated_horizon: "LONGER_HORIZON" as const,
+  declared_purpose_category: "CONSTRUCTION_PROJECT",
+  interpreted_purpose_category: "CONSTRUCTION_PROJECT",
+  duration_days: 546,
+  consistency_status: "NEEDS_CLARIFICATION" as const,
+  reason_codes: [
+    "DECLARED_HORIZON_DATE_CONFLICT",
+    "LONG_HORIZON_STAGE_MISSING",
+  ],
+  recommended_question_ids: ["Q-HORIZON-CONFIRM", "Q-PROJECT-STAGE"],
+  supporting_spans: ["environ dix-huit mois"],
+  corroboration_status: "NOT_ASSESSED" as const,
+  interpretation_mode: "LIVE" as const,
+  horizon_convention_fr: "Convention de démonstration BOUSSLA.",
+};
+
+function postBodies(fetchMock: ReturnType<typeof mockApi>, fragment: string) {
+  return fetchMock.mock.calls
+    .filter(
+      ([input, init]) =>
+        String(input).includes(fragment) && init?.method === "POST",
+    )
+    .map(([, init]) => JSON.parse(String(init?.body)));
+}
+
+it("renders declared / interpreted / calculated context with neutral labels", async () => {
+  const fetchMock = mockApi(officer, {
+    ...company,
+    context_assessment: mismatch,
+  });
+  mount();
+  await screen.findByText("File de revue", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Contexte" }));
+  expect(await screen.findByText("Horizon court")).toBeInTheDocument();
+  expect(screen.getByText("546 jours · Horizon plus long")).toBeInTheDocument();
+  expect(screen.getByText("Clarification nécessaire")).toBeInTheDocument();
+  expect(
+    screen.getByText(/La période déclarée diffère de celle calculée/),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(/n’affecte pas automatiquement la priorité/),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText("DECLARED_HORIZON_DATE_CONFLICT"),
+  ).not.toBeInTheDocument();
+  expect(document.body.textContent).not.toMatch(/risque|fraude|risk|fraud/i);
+  const select = screen.getByLabelText(
+    /Horizon du projet/,
+  ) as HTMLSelectElement;
+  expect([...select.options].map((o) => o.value)).toEqual([
+    "",
+    "SHORT_HORIZON",
+    "LONGER_HORIZON",
+  ]);
+  fireEvent.change(select, { target: { value: "SHORT_HORIZON" } });
+  fireEvent.change(screen.getByLabelText(/Usage prévu/), {
+    target: { value: "Dépôt" },
+  });
+  fireEvent.change(screen.getByLabelText(/Bénéficiaire/), {
+    target: { value: "P1" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Enregistrer la déclaration/ }),
+  );
+  await waitFor(() =>
+    expect(postBodies(fetchMock, "/context")).toHaveLength(1),
+  );
+  expect(postBodies(fetchMock, "/context")[0].context.declared_horizon).toBe(
+    "SHORT_HORIZON",
+  );
+});
+
+it("answers a CHOICE question with the backend enum, not the display label", async () => {
+  const inbox = [
+    {
+      request: {
+        request_id: "REQ-1",
+        status: "PUBLISHED_IN_DEMO",
+        published_at: null,
+        allowed_document_types: [],
+      },
+      questions: [
+        {
+          question_id: "Q-HORIZON-CONFIRM",
+          text_fr: "Pouvez-vous confirmer la période prévue ?",
+          answer_kind: "CHOICE",
+          choices: ["SHORT_HORIZON", "LONGER_HORIZON"],
+        },
+      ],
+      text_fr: "Demande",
+      mode: "TEMPLATE" as const,
+    },
+  ];
+  const fetchMock = mockApi(officer, { ...company, inbox });
+  mount();
+  await screen.findByText("File de revue", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Demandes" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /Répondre à la demande/ }),
+  );
+  const select = (await screen.findByLabelText(
+    /confirmer la période/,
+  )) as HTMLSelectElement;
+  expect([...select.options].map((o) => o.textContent)).toContain(
+    "Projet à horizon plus long",
+  );
+  fireEvent.change(select, { target: { value: "LONGER_HORIZON" } });
+  fireEvent.click(
+    screen.getByRole("button", { name: /Transmettre la réponse/ }),
+  );
+  await waitFor(() =>
+    expect(postBodies(fetchMock, "/responses/")).toHaveLength(1),
+  );
+  expect(postBodies(fetchMock, "/responses/")[0].response.answers).toEqual({
+    "Q-HORIZON-CONFIRM": "LONGER_HORIZON",
+  });
+});
+
+it("leaves no officer reference note or passages visible after switching to the company", async () => {
+  mockApi({
+    ...officer,
+    candidate_passages: [
+      {
+        rule_id: "TN-REF-1",
+        document_title: "Référence publique",
+        text: "Passage officiel.",
+        source_url: "https://www.finances.gov.tn/fr/node/952",
+        page: null,
+        article: null,
+        mode: "LIVE",
+      },
+    ],
+    reference_note: {
+      summary_fr: "Synthèse réservée à l’agent.",
+      candidate_rule_ids: ["TN-REF-1"],
+      applicability_questions: [],
+      limitations: [],
+      provider_model: "gpt-test",
+      generation_mode: "LIVE",
+      disclaimer_fr: "Synthèse indicative.",
+    },
+  });
+  mount();
+  await screen.findByText("File de revue", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Références" }));
+  expect(
+    await screen.findByText("Synthèse réservée à l’agent."),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  await screen.findByText("Votre dossier, en un regard");
+  expect(
+    screen.queryByText("Synthèse réservée à l’agent."),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("Passage officiel.")).not.toBeInTheDocument();
 });

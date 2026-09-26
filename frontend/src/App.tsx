@@ -36,6 +36,7 @@ import type {
   RequestView,
   ClarificationDraft,
   DocumentView,
+  ContextAssessmentView,
 } from "./api/types";
 
 type Tab =
@@ -102,6 +103,55 @@ const familyLabel: Record<string, string> = {
   SETTLEMENT: "Règlement observé",
   QUANTITY: "Affectation des quantités",
 };
+const horizonLabel: Record<string, string> = {
+  SHORT_HORIZON: "Horizon court",
+  LONGER_HORIZON: "Horizon plus long",
+  UNKNOWN: "Non précisé",
+};
+const consistencyLabel: Record<string, string> = {
+  CONSISTENT: "Cohérent",
+  NEEDS_CLARIFICATION: "Clarification nécessaire",
+  INSUFFICIENT: "Informations insuffisantes",
+};
+const purposeLabel: Record<string, string> = {
+  CONSTRUCTION_PROJECT: "Projet de construction",
+  RESALE: "Revente",
+  OPERATING_USE: "Usage d’exploitation",
+  LONG_LIVED_ASSET: "Actif durable",
+  OTHER_OR_UNKNOWN: "Autre / à préciser",
+};
+const contextReasonLabel: Record<string, string> = {
+  DECLARED_HORIZON_DATE_CONFLICT:
+    "La période déclarée diffère de celle calculée depuis les dates.",
+  DECLARED_HORIZON_TEXT_CONFLICT:
+    "La période déclarée diffère de celle décrite dans le texte.",
+  INTERPRETED_HORIZON_DATE_CONFLICT:
+    "La période décrite dans le texte diffère de celle calculée depuis les dates.",
+  PURPOSE_CATEGORY_TEXT_CONFLICT:
+    "La catégorie d’usage déclarée diffère de celle suggérée par le texte.",
+  PROJECT_DATES_MISSING: "Dates de début et de fin non renseignées.",
+  INVALID_PROJECT_DATE_ORDER: "La date de fin précède la date de début.",
+  LONG_HORIZON_STAGE_MISSING: "Phase du projet non précisée.",
+  LONG_HORIZON_BENEFICIARY_MISSING: "Bénéficiaire du projet non précisé.",
+  LONG_HORIZON_REFERENCE_MISSING: "Pièce de référence non fournie.",
+  CONTEXT_AMBIGUOUS: "Description de l’usage à préciser.",
+};
+const questionLabel: Record<string, string> = {
+  "Q-HORIZON-CONFIRM": "Confirmation de la période prévue",
+  "Q-PROJECT-STAGE": "Phase du projet",
+  "Q-PROJECT-BENEFICIARY": "Projet, lot ou bénéficiaire",
+  "Q-PROJECT-REFERENCE": "Pièce de référence",
+  "Q-PROJECT-DATES": "Dates du projet",
+  "Q-PURPOSE": "Usage prévu",
+};
+/** Display labels for server-provided CHOICE values; the value sent is always the enum. */
+const choiceLabel: Record<string, string> = {
+  SHORT_HORIZON: "Projet à horizon court (90 jours ou moins)",
+  LONGER_HORIZON: "Projet à horizon plus long",
+  ...purposeLabel,
+};
+const HORIZON_CONVENTION_FR =
+  "Cette catégorie est une convention de démonstration BOUSSLA ; elle ne constitue pas une classification fiscale, comptable ou juridique.";
 const scenarioLabel: Record<string, string> = {
   status: "Statut",
   residual_units: "Unités résiduelles",
@@ -312,6 +362,7 @@ function AppInner() {
     setRevision(null);
     query.removeQueries({ queryKey: ["case"] });
     query.removeQueries({ queryKey: ["history"] });
+    query.removeQueries({ queryKey: ["queue"] });
   };
   const refresh = async () => {
     await query.invalidateQueries();
@@ -545,6 +596,7 @@ function Company({
           title="Contexte de l’opération"
           detail="Contexte déclaré par l’entreprise — il ne constitue pas à lui seul une preuve."
         />
+        <ContextAssessment ctx={c.context_assessment} />
         <ContextForm c={c} act={act} />
       </>
     );
@@ -621,6 +673,97 @@ function Operations({
   );
 }
 
+function ContextAssessment({ ctx }: { ctx: ContextAssessmentView | null }) {
+  if (!ctx)
+    return (
+      <Panel
+        eyebrow="COHÉRENCE DU CONTEXTE"
+        title="Déclaré · Interprété · Calculé"
+      >
+        <Empty>Aucune déclaration de contexte à comparer.</Empty>
+      </Panel>
+    );
+  const interpreted =
+    ctx.interpretation_mode === "LIVE"
+      ? horizonLabel[ctx.interpreted_horizon]
+      : "Non disponible";
+  return (
+    <Panel
+      eyebrow="COHÉRENCE DU CONTEXTE"
+      title="Déclaré · Interprété · Calculé"
+    >
+      <div className="metric-grid four context-grid">
+        <div className="metric">
+          <span>Déclaré</span>
+          <strong className="small">
+            {horizonLabel[ctx.declared_horizon]}
+          </strong>
+          <small>
+            {purposeLabel[ctx.declared_purpose_category] ||
+              ctx.declared_purpose_category}
+          </small>
+        </div>
+        <div className="metric">
+          <span>Interprété par IA</span>
+          <strong className="small">{interpreted}</strong>
+          <small>
+            {ctx.interpretation_mode === "LIVE"
+              ? purposeLabel[ctx.interpreted_purpose_category] ||
+                ctx.interpreted_purpose_category
+              : status[ctx.interpretation_mode] || ctx.interpretation_mode}
+          </small>
+        </div>
+        <div className="metric">
+          <span>Calculé depuis les dates</span>
+          <strong className="small">
+            {ctx.duration_days === null
+              ? "Dates non renseignées"
+              : `${ctx.duration_days} jours · ${horizonLabel[ctx.calculated_horizon]}`}
+          </strong>
+          <small>Calcul déterministe</small>
+        </div>
+        <div className="metric">
+          <span>Cohérence</span>
+          <strong className="small">
+            {consistencyLabel[ctx.consistency_status]}
+          </strong>
+          <small>Corroboration : non évaluée</small>
+        </div>
+      </div>
+      {ctx.reason_codes.length > 0 && (
+        <ul className="context-reasons">
+          {ctx.reason_codes.map((code) => (
+            <li key={code}>
+              {contextReasonLabel[code] || "Élément à préciser."}
+            </li>
+          ))}
+        </ul>
+      )}
+      {ctx.supporting_spans.length > 0 && (
+        <div className="tags">
+          {ctx.supporting_spans.map((span) => (
+            <span className="badge" key={span}>
+              « {span} »
+            </span>
+          ))}
+        </div>
+      )}
+      {ctx.recommended_question_ids.length > 0 && (
+        <p className="muted">
+          Précisions utiles :{" "}
+          {ctx.recommended_question_ids
+            .map((id) => questionLabel[id] || id)
+            .join(" · ")}
+        </p>
+      )}
+      <p className="footnote">
+        Cette comparaison contextuelle n’affecte pas automatiquement la priorité
+        de revue. {ctx.horizon_convention_fr}
+      </p>
+    </Panel>
+  );
+}
+
 function ContextForm({
   c,
   act,
@@ -675,6 +818,15 @@ function ContextForm({
               <option value="LONG_LIVED_ASSET">Actif durable</option>
               <option value="OTHER_OR_UNKNOWN">Autre / à préciser</option>
             </select>
+          </label>
+          <label>
+            Horizon du projet (déclaré)
+            <select name="declared_horizon" defaultValue="">
+              <option value="">Non précisé</option>
+              <option value="SHORT_HORIZON">Projet à horizon court</option>
+              <option value="LONGER_HORIZON">Projet à horizon plus long</option>
+            </select>
+            <small className="field-help">{HORIZON_CONVENTION_FR}</small>
           </label>
           <label className="wide">
             Usage prévu
@@ -1025,14 +1177,31 @@ function ResponseComposer({
       {request.questions.map((q, i) => (
         <label key={q.question_id}>
           {q.text_fr}
-          <textarea
-            rows={3}
-            required={i === 0}
-            value={answers[q.question_id] || ""}
-            onChange={(e) =>
-              setAnswers({ ...answers, [q.question_id]: e.target.value })
-            }
-          />
+          {q.answer_kind === "CHOICE" && q.choices?.length ? (
+            <select
+              required={i === 0}
+              value={answers[q.question_id] || ""}
+              onChange={(e) =>
+                setAnswers({ ...answers, [q.question_id]: e.target.value })
+              }
+            >
+              <option value="">Choisir…</option>
+              {q.choices.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choiceLabel[choice] || choice}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <textarea
+              rows={3}
+              required={i === 0}
+              value={answers[q.question_id] || ""}
+              onChange={(e) =>
+                setAnswers({ ...answers, [q.question_id]: e.target.value })
+              }
+            />
+          )}
         </label>
       ))}
       <label>
@@ -1275,6 +1444,7 @@ function Officer({
           )}
         </Panel>
       </div>
+      <ContextAssessment ctx={c.context_assessment} />
       <Panel eyebrow="SIMULATION HYPOTHÉTIQUE" title="Scénarios de sensibilité">
         <p className="footnote">
           Ces scénarios n’altèrent pas l’état canonique du dossier.
