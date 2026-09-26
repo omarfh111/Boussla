@@ -36,3 +36,38 @@ without altering findings or review index. Only allowlisted reason codes produce
 queries. No invoice text, tax ID, company name, payment data, or arbitrary user
 text enters retrieval. Display under **« Passages de référence candidats à examiner »**;
 these are candidates, not automatic legal conclusions.
+
+`ReferenceAssistant.for_findings(findings, as_of=trusted_case_date,
+audience=Audience.OFFICER)` is the narrow C-owned RAG entry point. It strips
+findings to allowlisted `(family, reason_code)` pairs, retrieves at most five
+official candidate passages, then optionally uses the existing configured
+OpenAI general model to draft a citation-checked note. The model receives only
+those pairs and public passage IDs/text. Every generated observation has a
+retrieved rule ID; invented citations, definitive applicability wording,
+provider errors and absent passages yield no note while passages remain. The
+assistant never accepts or returns a score, finding update or evidence decision.
+
+For Lane A, after deterministic scoring and officer view construction:
+
+```python
+from boussla.retrieval.grounded_rag import public_reference_assistant
+
+result = public_reference_assistant().for_findings(
+    officer_view.findings, as_of=trusted_case_date, audience=Audience.OFFICER,
+)
+officer_view = officer_view.model_copy(update={
+    "candidate_passages": result.candidate_passages,
+    "mode_by_node": {**officer_view.mode_by_node, "retrieval": result.retrieval_mode},
+})
+# Keep result.grounded_note in an officer-only rendering path; the shared
+# OfficerCaseView contract currently has no note field. Lane A owns any contract
+# extension or service wiring. Do not put this note in company views.
+```
+
+Lane D/A display contract: **« Passages de référence candidats à examiner »**,
+then optionally **« Synthèse assistée à partir des passages retrouvés »** with
+visible `result.cited_rule_ids` and **« Synthèse indicative — l'applicabilité
+doit être vérifiée par l'agent. »**. The candidate list and optional note are
+never an automatic legal opinion. The fixed synthetic retrieval evaluation is
+`python -m scripts.evaluate_reference_retrieval`; its top-1/top-3 numbers
+measure retrieval on those queries only, not legal accuracy.
