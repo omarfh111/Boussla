@@ -1,6 +1,6 @@
 # Shared contracts — freeze before parallel development
 
-Version `boussla-context-1`. A owns Python/Pydantic definitions. All other lanes consume them. This is the authoritative proposed interface; example JSON is not proof of actual records.
+Version `boussla-automation-1` (additive over `boussla-context-1`, see CR-004). A owns Python/Pydantic definitions. All other lanes consume them. This is the authoritative proposed interface; example JSON is not proof of actual records.
 
 ## 1. Scalar conventions
 
@@ -142,7 +142,8 @@ ClarificationRequest(request_id, case_id, company_id, case_version,
                      fact_ids[], question_ids[], allowed_document_types[],
                      target_response_at?, target_kind=DEMO_SERVICE_TARGET,
                      status: DRAFT|PUBLISHED_IN_DEMO|RESPONDED|EXTENDED|CLOSED,
-                     approved_by?, published_at?, available_in_inbox_at?)
+                     approved_by?, published_at?, available_in_inbox_at?,
+                     origin: OFFICER|AUTOMATIC = OFFICER)
 ClarificationResponse(response_id, request_id, author_actor_id, claim_ids[],
                       document_ids[], submitted_at)
 EvidenceAcceptance(proposal_id, case_id, expected_version, scoped_changes[],
@@ -153,6 +154,31 @@ ActionReceipt(idempotency_key, action, case_id, input_hash, resulting_version, r
 ```
 
 Officer publication changes the local demo inbox only, not an external channel. Responses are proposals; arrival does not automatically clear a finding. Accept/reject is scoped and revision-bound. No destructive edits to prior claims or documents.
+
+**Evidence rule:** acceptance requires a supporting document stored in the case, for the company, and attached to the proposal's response. A documentless declaration can be rejected but never accepted (`INSUFFICIENT_INFORMATION`, reason `SUPPORTING_DOCUMENT_REQUIRED`).
+
+**Automatic clarification (`origin=AUTOMATIC`):** after a company `submit_context`, `upload_document` or `submit_response`, the service evaluates the prospective version (deterministic checks + context consistency), plans questions with the same global merge policy, and — only if clarification is needed, no request is pending, no proposal awaits the officer, the configured round budget (`MAX_QUESTION_ROUNDS`) is not exhausted and at least one not-yet-asked allowlisted question remains — publishes one neutral request (≤ 3 catalogue questions, demo target +7 days, `approved_by=None`) in the SAME transaction and revision as the submission. Event `AUTO_CLARIFICATION_PUBLISHED` (actor `SYSTEM-AUTO-CLARIFICATION`). Never automatic: evidence acceptance/rejection, canonical changes, dossier decisions.
+
+### Triage, deadlines and cross-lane signals (officer-only, read-time)
+
+```text
+ClarificationDeadlineView(request_id, origin, status, target_response_at?,
+                          target_kind=DEMO_SERVICE_TARGET, overdue, overdue_days, note_fr)
+TriageAssessment(case_id, case_version, triage_priority 0..100, review_index (echo),
+                 reason_codes[], components{}, formula_version, as_of,
+                 not_fraud_probability=true, note_fr)
+QueueItem += triage_priority?, triage_reason_codes[]   (queue sorted by triage, then review_index)
+OfficerCaseView += triage?, clarification_deadlines[], history_signals[], investigator_brief?
+CompanyHistorySignal(signal_id, company_id, kind: ACTIVITY_GAP|HISTORICAL_DATA_GAP|TRANSACTION_INCONSISTENCY,
+                     reason_code, as_of, summary_fr, source_record_ids[], mode, affects_review_index=false)
+CompanyHistorySignalProvider.signals(company_id, as_of) -> list[CompanyHistorySignal]      # lane B
+InvestigatorBrief(brief_id, case_id, case_version, points[text_fr, cited_finding_ids[], cited_rule_ids[],
+                  cited_fact_ids[]], suggested_question_ids[], limitations[], model_id?, mode,
+                  authoritative=false, disclaimer_fr)
+InvestigatorBriefProvider.brief(OfficerCaseView) -> InvestigatorBrief | None                 # lane C
+```
+
+`review_index` keeps its meaning (deterministic documentary review priority, not a fraud probability) and is never modified by triage. `triage_priority = min(100, review_index + points)` with demo points (`boussla/triage.py`, formula `triage-demo-1`): CLARIFICATION_PENDING +10, CLARIFICATION_OVERDUE +10, REPEATED_UNANSWERED_CLARIFICATION +10, EVIDENCE_AWAITING_OFFICER_DECISION +10, one +10 per lane B signal kind; REVIEW_FINDING_PRESENT explains the base (+0). An unanswered or overdue request never creates a finding. Overdue requests set `clarification_status=FOLLOW_UP_DUE` (administrative). Provider failures are nonfatal (`mode_by_node.history`/`investigator` = ERROR); a brief not matching the case version, existing finding IDs, retrieved rule IDs and allowlisted questions is dropped. `CompanyCaseView` has none of these fields.
 
 ## 3. Service methods (Python contract, not HTTP requirement)
 
@@ -178,7 +204,7 @@ A supplies a service fake with this shape by minute 30. B/C implementations plug
 
 ## 4. Errors
 
-`FORBIDDEN`, `CROSS_COMPANY`, `STALE_REVISION`, `IDEMPOTENCY_CONFLICT`, `UNSUPPORTED_FILE`, `LIMIT_EXCEEDED`, `UNSUPPORTED_LAYOUT`, `UNKNOWN_IDENTITY_MAPPING`, `INCOMPATIBLE_BASIS`, `INCOMPATIBLE_UNIT`, `INSUFFICIENT_INFORMATION`, `ALLOCATION_OVERFLOW`, `DUPLICATE_ACCEPTANCE`, `MODEL_UNAVAILABLE`, `RETRIEVAL_UNAVAILABLE`, `INVALID_EVIDENCE_REFERENCE`.
+`FORBIDDEN`, `CROSS_COMPANY`, `STALE_REVISION`, `IDEMPOTENCY_CONFLICT`, `UNSUPPORTED_FILE`, `LIMIT_EXCEEDED`, `UNSUPPORTED_LAYOUT`, `UNKNOWN_IDENTITY_MAPPING`, `INCOMPATIBLE_BASIS`, `INCOMPATIBLE_UNIT`, `INSUFFICIENT_INFORMATION`, `ALLOCATION_OVERFLOW`, `DUPLICATE_ACCEPTANCE`, `MODEL_UNAVAILABLE`, `RETRIEVAL_UNAVAILABLE`, `INVALID_EVIDENCE_REFERENCE`, `NOT_FOUND`, `INVALID_STATE`, `INVALID_INPUT` (a property outside the input contract — context, response and allocation payloads are strict; `currency` on a quantity allocation or a unit different from the invoice line is `INCOMPATIBLE_UNIT`; quantities must be plain non-negative decimals with ≤ 12 integer and ≤ 6 fractional digits, else `INSUFFICIENT_INFORMATION`).
 
 A provider failure is not a financial discrepancy. A manual fallback cannot bypass an authorization or allocation failure.
 
