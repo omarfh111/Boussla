@@ -176,8 +176,12 @@ export interface OfficerCaseView extends BaseCase {
   reference_note: GroundedNoteView | null;
   mode_by_node: Record<string, Mode>;
   invoice_observations: {
+    document_id: string;
     perspective: string;
+    issuer_company_id: string | null;
+    buyer_company_id: string | null;
     invoice_number: string;
+    issued_on: string;
     gross_millimes: number;
     origin_group_id: string;
     lines: { line_id: string; quantity: string; unit: string }[];

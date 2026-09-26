@@ -93,6 +93,9 @@ const status: Record<string, string> = {
   DELIVERY_RECORD: "Bon de livraison",
   PAYMENT_RECORD: "Preuve de règlement",
   OTHER_OR_UNKNOWN: "Autre / inconnu",
+  BUYER_RECEIVED: "Copie reçue par l’acheteur",
+  SELLER_ISSUED: "Émission du vendeur",
+  INTERNAL_PURCHASE_ENTRY: "Écriture d’achat interne",
 };
 const familyLabel: Record<string, string> = {
   COUNTERPARTY: "Concordance des observations",
@@ -1255,6 +1258,14 @@ function Officer({
                 <div>
                   <strong>{h.hypothesis_id}</strong>
                   <small>{h.scope}</small>
+                  <small>
+                    Pièces attendues :{" "}
+                    {h.missing_evidence_types.length
+                      ? h.missing_evidence_types
+                          .map((kind) => status[kind] || kind)
+                          .join(", ")
+                      : "aucune indiquée"}
+                  </small>
                 </div>
                 {badge(h.status)}
               </div>
@@ -1448,13 +1459,29 @@ function Observations({ c }: { c: OfficerCaseView }) {
         {c.invoice_observations.map((o, i) => (
           <article className="observation" key={i}>
             <span className="eyebrow">
-              {o.perspective.replaceAll("_", " ")}
+              {status[o.perspective] || o.perspective}
             </span>
             <strong className="mono">{o.invoice_number}</strong>
             <dl>
               <div>
+                <dt>Émetteur</dt>
+                <dd>{format(o.issuer_company_id)}</dd>
+              </div>
+              <div>
+                <dt>Acheteur</dt>
+                <dd>{format(o.buyer_company_id)}</dd>
+              </div>
+              <div>
+                <dt>Date</dt>
+                <dd>{date(o.issued_on)}</dd>
+              </div>
+              <div>
                 <dt>Montant brut</dt>
                 <dd>{money(o.gross_millimes)}</dd>
+              </div>
+              <div>
+                <dt>Document</dt>
+                <dd className="mono">{o.document_id}</dd>
               </div>
               <div>
                 <dt>Origine</dt>
