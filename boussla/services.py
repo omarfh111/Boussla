@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -35,6 +36,7 @@ from boussla.contracts import (
 )
 from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
+    merge_question_plan,
     ALLOWED_RESPONSE_DOCUMENTS, MAX_QUESTIONS_PER_ROUND, QUESTIONS, REQUEST_TEXT_FR, deterministic_plan,
 )
 from boussla.security import DEMO_BANNER_FR, ActorRegistry, authorize
@@ -76,6 +78,24 @@ class _GuardedNoteGenerator:
             return None
 
 
+class _GuardedInterpreter:
+    """Any interpreter error becomes an UNKNOWN/TEMPLATE interpretation, so the
+    deterministic date comparison still runs when the provider fails."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def interpret(self, context):
+        try:
+            return self._inner.interpret(context)
+        except Exception:  # noqa: BLE001 - provider/client failure is never fatal or a finding
+            from boussla.context.models import unknown_interpretation
+            return unknown_interpretation(Mode.TEMPLATE, "MODEL_RESPONSE_UNUSABLE")
+
+
 @dataclass(frozen=True)
 class Evaluation:
     """Deterministic analysis of one case version (derived, never stored as fact)."""
@@ -92,7 +112,8 @@ class BousslaAppService:
 
     def __init__(self, store: CaseStore, registry: ActorRegistry | None = None, checks=None,
                  settings: Settings | None = None, field_extractor=None, text_extractor=None,
-                 integrity_inspector=None, document_router=None, reference_assistant=None) -> None:
+                 integrity_inspector=None, document_router=None, reference_assistant=None,
+                 context_assistant=None) -> None:
         self.store = store
         self.registry = registry or ActorRegistry.demo()
         self.checks = checks or get_checks_engine()
@@ -112,6 +133,12 @@ class BousslaAppService:
         if generator is not None and not isinstance(generator, _GuardedNoteGenerator):
             reference_assistant.generator = _GuardedNoteGenerator(generator)
         self._reference_cache: dict[tuple, tuple] = {}
+        # Lane C project-context consistency (auxiliary; clarification only, never scoring).
+        self.context_assistant = context_assistant
+        interpreter = getattr(context_assistant, "interpreter", None)
+        if interpreter is not None and not isinstance(interpreter, _GuardedInterpreter):
+            context_assistant.interpreter = _GuardedInterpreter(interpreter)
+        self._context_cache: dict[tuple, tuple] = {}
 
     # ================================================================ helpers
     def _open(self, actor: Actor, case_id: str, action: str) -> tuple[Actor, dict]:
@@ -271,6 +298,7 @@ class BousslaAppService:
                 pending_transcriptions=tuple(e for e in facts["extraction"] if e.status == "PROPOSED"),
                 open_questions=open_q, inbox=published,
                 responses=tuple(r for r in facts["response"] if r.author_actor_id == actor.actor_id),
+                context_assessment=self._context_assessment(case_id, company, v, facts)[0],
                 mode=Mode.LIVE, banner_fr=DEMO_BANNER_FR)
         ev = self._evaluate(case_id, company, v, facts)
         view = OfficerCaseView(
@@ -284,7 +312,55 @@ class BousslaAppService:
             mode=Mode.LIVE, mode_by_node={"checks": Mode.LIVE, "retrieval": self._retrieval_mode(),
                                           "router": self._router_mode(facts)},
             banner_fr=DEMO_BANNER_FR)
+        context_view, _, context_mode = self._context_assessment(case_id, company, v, facts)
+        view = view.model_copy(update={"context_assessment": context_view,
+                                       "mode_by_node": {**view.mode_by_node, "context": context_mode}})
         return self._enrich_with_references(view, as_of=ev.score.cutoff.date())
+
+    # ------------------------------------------------------- context consistency
+    @staticmethod
+    def _context_base_claim(company_id: str, facts: dict[str, list]):
+        """Latest company-confirmed context declaration (answers to Q-* are separate claims)."""
+        claims = [c for c in facts["context_claim"]
+                  if c.company_id == company_id and not c.purpose_text.startswith("[Q-")]
+        return max(claims, key=lambda c: (c.submitted_at, c.claim_id)) if claims else None
+
+    def _context_assessment(self, case_id: str, company_id: str, version: int, facts: dict[str, list]):
+        """(ContextAssessmentView | None, reason codes, interpretation mode). Auxiliary only:
+        computed from the company's own declaration, never fed to checks or scores."""
+        claim = self._context_base_claim(company_id, facts)
+        if self.context_assistant is None or claim is None:
+            return None, (), Mode.NOT_RUN
+        answered = frozenset(self._answered_question_ids(facts))
+        key = (case_id, version, claim.claim_id, answered)
+        cached = self._context_cache.get(key)
+        if cached is None:
+            from boussla.contracts import ContextAssessmentView
+            from boussla.context.models import ContextInput
+            try:
+                # reference_expected stays False: no trusted fact currently establishes that a
+                # project/allocation reference is required for this declaration.
+                context = ContextInput.from_claim(claim, declared_horizon=claim.declared_horizon,
+                                                  project_reference=None, reference_expected=False)
+                assessment = self.context_assistant.assess(context, answered_question_ids=answered)
+            except Exception:  # noqa: BLE001 - auxiliary layer never blocks the case
+                return None, (), Mode.ERROR
+            c, i = assessment.consistency, assessment.interpretation
+            view = ContextAssessmentView(
+                claim_id=claim.claim_id, declared_horizon=c.declared_horizon,
+                interpreted_horizon=c.interpreted_horizon, calculated_horizon=c.calculated_horizon,
+                declared_purpose_category=c.declared_purpose_category,
+                interpreted_purpose_category=c.interpreted_purpose_category,
+                duration_days=c.duration_days, consistency_status=c.status.value,
+                reason_codes=tuple(r.value for r in c.reason_codes),
+                recommended_question_ids=tuple(assessment.recommended_question_ids),
+                supporting_spans=tuple(sp for sp in i.supporting_spans if sp in claim.purpose_text),
+                interpretation_mode=assessment.mode)
+            cached = (view, view.reason_codes, assessment.mode)
+            if len(self._context_cache) > 128:
+                self._context_cache.clear()
+            self._context_cache[key] = cached
+        return cached
 
     # ------------------------------------------------------- reference enrichment
     def _retrieval_mode(self) -> Mode:
@@ -542,7 +618,8 @@ class BousslaAppService:
                     planned_start=payload.get("planned_start"), planned_end=payload.get("planned_end"),
                     stage=payload.get("stage"), reported_stock_qty=payload.get("reported_stock_qty"),
                     author_actor_id=actor.actor_id, submitted_at=utcnow(),
-                    supersedes_claim_id=payload.get("supersedes_claim_id"))
+                    supersedes_claim_id=payload.get("supersedes_claim_id"),
+                    **({"declared_horizon": payload["declared_horizon"]} if payload.get("declared_horizon") else {}))
                 tx.put("context_claim", claim.claim_id, claim)
                 v = tx.commit_version("Contexte déclaré par l'entreprise (affirmation attribuée)")
                 tx.event("CONTEXT", actor.actor_id, "Déclaration de contexte enregistrée (non vérifiée)", (claim.claim_id,))
@@ -563,8 +640,10 @@ class BousslaAppService:
         modes = {"checks": Mode.LIVE, "retrieval": self._retrieval_mode(), "router": self._router_mode(facts),
                  "extractor": Mode.LIVE if facts["extraction"] else Mode.NOT_RUN}
         answered = self._answered_question_ids(facts)
-        rounds = len({c.claim_id for c in facts["context_claim"] if c.purpose_text.startswith("[Q-")})
-        question_ids, modes["planner"] = self._plan(ev, facts, answered, planner)
+        rounds = sum(1 for e in self.store.events(case_id) if e.kind == "ANSWERS")  # one per answer batch
+        planner_ids, modes["planner"] = self._plan(ev, facts, answered, planner)
+        _, context_codes, modes["context"] = self._context_assessment(case_id, meta["company_id"], meta["version"], facts)
+        question_ids = merge_question_plan(context_codes, planner_ids, answered)
         status = AnalysisStatus.COMPLETED
         if not officer:
             if rounds >= self.settings.max_question_rounds or not question_ids:
@@ -620,12 +699,44 @@ class BousslaAppService:
                         submitted_at=utcnow())
                     tx.put("context_claim", claim.claim_id, claim)
                     ids.append(claim.claim_id)
+                superseding = self._superseding_context_claim(actor, meta["company_id"], case_id, answers, ihash)
+                if superseding is not None:
+                    tx.put("context_claim", superseding.claim_id, superseding)
+                    ids.append(superseding.claim_id)
                 v = tx.commit_version("Réponses de l'entreprise (affirmations attribuées)")
                 tx.event("ANSWERS", actor.actor_id, "Réponses enregistrées comme affirmations de l'entreprise", tuple(ids))
                 tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="answer_questions", case_id=case_id,
                                               actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
                                               result_hash=ihash), ReceiptNote(note="ANSWERED", fact_ids=tuple(ids)))
         return self.start_analysis(actor, case_id, self.store.case_meta(case_id)["version"])
+
+    def _superseding_context_claim(self, actor: Actor, company_id: str, case_id: str,
+                                   answers: dict[str, str], ihash: str):
+        """Company answers to structured context questions become a NEW declaration that
+        supersedes the latest one (prior claims stay immutable). Never model-written."""
+        updates: dict = {}
+        if "Q-HORIZON-CONFIRM" in answers:
+            value = answers["Q-HORIZON-CONFIRM"].strip().upper()
+            if value not in {"SHORT_HORIZON", "LONGER_HORIZON"}:
+                raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION,
+                                   "Réponse attendue : SHORT_HORIZON ou LONGER_HORIZON", fields=["Q-HORIZON-CONFIRM"])
+            updates["declared_horizon"] = value
+        if answers.get("Q-PROJECT-STAGE", "").strip():
+            updates["stage"] = answers["Q-PROJECT-STAGE"].strip()[:200]
+        if answers.get("Q-PROJECT-BENEFICIARY", "").strip():
+            updates["beneficiary_type"] = answers["Q-PROJECT-BENEFICIARY"].strip()[:200]
+        if answers.get("Q-PURPOSE", "").strip() in PurposeCategory.__members__:
+            updates["purpose_category"] = answers["Q-PURPOSE"].strip()
+        dates = re.findall(r"\d{4}-\d{2}-\d{2}", answers.get("Q-PROJECT-DATES", ""))
+        if len(dates) == 2:
+            updates["planned_start"], updates["planned_end"] = dates
+        base = self._context_base_claim(company_id, {"context_claim": self.store.facts(case_id, "context_claim",
+                                                                                      ContextClaim)})
+        if not updates or base is None:
+            return None
+        data = {**base.model_dump(), **updates, "claim_id": f"CLAIM-{stable_hash([ihash, 'context'])[:8].upper()}",
+                "supersedes_claim_id": base.claim_id, "author_actor_id": actor.actor_id, "submitted_at": utcnow()}
+        return _validated(ContextClaim, **data)
 
     # ------------------------------------------------------- clarification
     def prepare_clarification(self, actor: Actor, case_id: str, expected_version: int) -> ClarificationDraft:
@@ -917,6 +1028,16 @@ def _discover_document_adapters(settings: Settings) -> dict:
     return found
 
 
+def _discover_context_assistant():
+    """Lane C context-consistency assistant, built once per service/process. Without an
+    OpenAI key the interpreter is NOT_RUN and date calculation still runs."""
+    try:
+        from boussla.context.assistant import context_consistency_assistant
+        return context_consistency_assistant()
+    except Exception:  # noqa: BLE001 - optional auxiliary layer
+        return None
+
+
 def _discover_reference_assistant():
     """Lane C officer reference assistant: Qdrant Cloud when QDRANT_URL/QDRANT_API_KEY are
     set (else labelled lexical), plus the OpenAI note generator when configured. Any
@@ -937,4 +1058,5 @@ def build_service(settings: Settings | None = None, seed: bool = True) -> Boussl
     if seed:
         seed_demo_case(store)
     return BousslaAppService(store, settings=settings, reference_assistant=_discover_reference_assistant(),
+                             context_assistant=_discover_context_assistant(),
                              **_discover_document_adapters(settings))

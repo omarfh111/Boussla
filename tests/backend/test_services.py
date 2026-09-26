@@ -320,3 +320,13 @@ def test_queue_pagination(svc, actors):
     page = svc.list_queue(actors[1], None, 10, "0")
     assert len(page.items) == 1 and page.next_cursor is None
     assert svc.list_queue(actors[1], None, 10, "5").items == ()
+
+
+def test_question_rounds_count_answer_batches_not_answered_questions(svc, actors):
+    """Answering three questions in ONE round is one round, not three (max rounds = 2)."""
+    co = actors[0]
+    first = svc.start_analysis(co, CASE, ver(svc))
+    assert len(first.questions) == 3 and first.question_round == 0
+    after = svc.answer_questions(co, CASE, first.analysis_id, {q.question_id: "réponse" for q in first.questions},
+                                 ver(svc), "round-1")
+    assert after.question_round == 1
