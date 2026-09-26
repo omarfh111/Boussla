@@ -24,7 +24,9 @@ _FORBIDDEN = re.compile(
     r"violat(?:e|es|ed|ion)|viole(?:nt|r)?|"
     r"ill[eé]gal(?:e|es|s)?|illegal|unlawful|"
     r"non[-\s]?compliant|non[-\s]?conforme(?:s)?|non[-\s]?conformit[eé]|"
-    r"doit être sanctionn|constitue une fraude|dans ce dossier|ce contribuable)\b", re.I,
+    r"doit être sanctionn|constitue une fraude|dans ce dossier|ce contribuable|"
+    r"(?:this|the)\s+(?:company|transaction|taxpayer|case)|"
+    r"(?:la|cette)\s+(?:soci[eé]t[eé]|entreprise|op[eé]ration)|le\s+contribuable)\b", re.I,
 )
 _RULE_ID = re.compile(r"\bTN-[A-Z0-9-]+\b")
 _SCHEMA = {

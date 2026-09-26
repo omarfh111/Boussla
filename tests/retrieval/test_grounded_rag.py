@@ -112,6 +112,10 @@ def test_definitive_applicability_statement_is_rejected():
     "Cette société viole la loi.",
     "Cette opération est illégale.",
     "Cette entreprise est non conforme.",
+    "The company breached its obligations.",
+    "This transaction is governed by the cited law.",
+    "La société contrevient aux exigences.",
+    "Cette opération est soumise à cette règle.",
 ])
 def test_definitive_legal_conclusion_drops_note_not_passages(claim):
     rule_id = _passages()[0].rule_id
