@@ -210,3 +210,41 @@ def test_http_roles_admin_and_forged_outputs(svc):
         r = client.post(f"/api/cases/{BRICKS}/context", headers={**co, "Idempotency-Key": "f"},
                         json={"expected_version": v, "context": {"purpose_text": "x", **forged}})
         assert r.status_code == 403
+
+
+# ---------------------------------------------------------------- JUDGE-054 through the service
+@pytest.mark.parametrize("claim", ["This law definitely applies to this company.",
+                                   "Cette règle s’applique au dossier."])
+def test_definitive_applicability_note_is_dropped_but_passages_kept(tmp_path, claim):
+    import json as _json
+
+    import httpx
+
+    from boussla.config import Settings
+    from boussla.retrieval.corpus import load_public_references
+    from boussla.retrieval.grounded_rag import OpenAIReferenceNoteGenerator, ReferenceAssistant
+    from boussla.retrieval.lexical import LexicalReferenceRetriever
+    from boussla.security import ActorRegistry
+    from boussla.services import BousslaAppService
+    from boussla.store import CaseStore
+    from tests.integration.test_reference_service import CPTY, seed_counterparty_case
+
+    def handler(request):
+        refs = _json.loads(_json.loads(request.content)["input"][1]["content"])["references"]
+        content = {"claims": [{"text_fr": claim, "rule_ids": [refs[0]["rule_id"]]}],
+                   "applicability_questions": ["La version de la source est-elle applicable ?"]}
+        return httpx.Response(200, json={"status": "completed", "model": "m", "output": [
+            {"content": [{"type": "output_text", "text": _json.dumps(content)}]}]})
+
+    settings = Settings(case_db_path=tmp_path / "c.sqlite", upload_dir=tmp_path / "u")
+    store = CaseStore(settings.case_db_path, settings.upload_dir)
+    seed_counterparty_case(store)
+    generator = OpenAIReferenceNoteGenerator(api_key="test-only", model="m",
+                                             client=httpx.Client(transport=httpx.MockTransport(handler)))
+    svc = BousslaAppService(store, ActorRegistry.demo(), settings=settings, reference_assistant=ReferenceAssistant(
+        LexicalReferenceRetriever(load_public_references()), generator))
+    svc.registry.assign("DEMO-OFFICER", CPTY)
+    view = svc.get_case(svc.registry.actors["DEMO-OFFICER"], CPTY)
+    assert view.candidate_passages and view.reference_note is None
+    assert view.score.review_index == svc.evaluate(CPTY).score.review_index
+    assert "candidate_passages" not in svc.get_case(svc.registry.actors["DEMO-COMPANY-BAT"], CPTY).model_dump()
