@@ -53,6 +53,14 @@ def test_rejects_non_pdf_content():
     assert "UNSUPPORTED_FILE" in result.limitations
 
 
+def test_malformed_pdf_with_header_has_explicit_limitation():
+    result = NativePdfExtractor().extract_text(document(), b"%PDF-1.7\nnot a valid PDF body")
+
+    assert result.status == "UNSUPPORTED"
+    assert result.pages == ()
+    assert result.limitations == ("UNREADABLE_PDF",)
+
+
 def test_page_limit_is_explicit():
     writer = PdfWriter()
     writer.add_blank_page(width=100, height=100)
