@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 440" width="1280" height="440" role="img" aria-labelledby="t d">
+  <title id="t">BOUSSLA — instruction fiscale fondée sur les preuves</title>
+  <desc id="d">Le logo BOUSSLA se dessine, puis les trois gestes Rapprocher, Clarifier, Décider apparaissent ; une carte de preuves coche les observations et l'indice de revue passe de 40 à 0.</desc>
+  <defs>
+    <radialGradient id="bg" cx="30%" cy="35%" r="85%">
+      <stop offset="0%" stop-color="#103357"/>
+      <stop offset="55%" stop-color="#0a1c31"/>
+      <stop offset="100%" stop-color="#060f1b"/>
+    </radialGradient>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#126BDB"/><stop offset="55%" stop-color="#16C6E3"/><stop offset="100%" stop-color="#20D6B5"/>
+    </linearGradient>
+    <linearGradient id="n" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B2F63"/><stop offset="100%" stop-color="#16C6E3"/>
+    </linearGradient>
+    <linearGradient id="word" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#f1f9ff"/><stop offset="100%" stop-color="#9ff0f5"/>
+    </linearGradient>
+    <linearGradient id="rule" gradientUnits="userSpaceOnUse" x1="424" y1="0" x2="844" y2="0">
+      <stop offset="0%" stop-color="#126BDB"/><stop offset="60%" stop-color="#16C6E3"/><stop offset="100%" stop-color="#20D6B5" stop-opacity="0"/>
+    </linearGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.1" fill="#2a4a68" opacity=".55"/>
+    </pattern>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <clipPath id="frame"><rect width="1280" height="440" rx="28"/></clipPath>
+  </defs>
+  <style>
+    text { font-family: "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif; }
+    .fade { opacity: 0; animation: fadeUp .7s cubic-bezier(.2,.8,.2,1) forwards; }
+    .arc { stroke-dasharray: 420 175; stroke-dashoffset: 595; animation: arc .9s .15s ease-out forwards; }
+    .inner { opacity: 0; animation: innerIn .6s .6s ease-out forwards; }
+    .north { opacity: 0; transform: translateY(-18px); animation: drop .6s .85s cubic-bezier(.2,.8,.2,1) forwards; }
+    .south { opacity: 0; animation: show .5s 1s ease-out forwards; }
+    .check { stroke-dasharray: 190; stroke-dashoffset: 190; animation: draw .7s 1.15s ease-in-out forwards; }
+    .node { opacity: 0; transform-box: fill-box; transform-origin: center; transform: scale(.2); animation: pop .35s cubic-bezier(.3,1.6,.5,1) forwards; }
+    .n1 { animation-delay: 1.55s; } .n2 { animation-delay: 1.68s; } .n3 { animation-delay: 1.81s; }
+    .halo { opacity: 0; animation: halo 1.6s 1.6s ease-out forwards; }
+    .rule { stroke-dasharray: 420; stroke-dashoffset: 420; animation: draw .9s 1.9s ease-out forwards; }
+    .tick { stroke-dasharray: 32; stroke-dashoffset: 32; opacity: 0; animation: tick .4s ease-out forwards; }
+    @keyframes tick { from { opacity: 1; stroke-dashoffset: 32; } to { opacity: 1; stroke-dashoffset: 0; } }
+    .from { animation: fadeOut .45s 4.1s ease-in forwards; }
+    .to { opacity: 0; animation: fadeUp .5s 4.3s ease-out forwards; }
+    .bar { transform-box: fill-box; transform-origin: left; transform: scaleX(1); animation: shrink .9s 3.9s cubic-bezier(.4,0,.2,1) forwards; }
+    .flow { stroke-dasharray: 5 9; animation: flow 1.6s linear infinite; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @keyframes fadeOut { to { opacity: 0; transform: translateY(-8px); } }
+    @keyframes arc { to { stroke-dashoffset: 0; } }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes innerIn { to { opacity: .26; } }
+    @keyframes show { to { opacity: 1; } }
+    @keyframes drop { to { opacity: 1; transform: none; } }
+    @keyframes pop { 60% { opacity: 1; transform: scale(1.3); } to { opacity: 1; transform: scale(1); } }
+    @keyframes halo { 40% { opacity: .55; } to { opacity: .22; } }
+    @keyframes shrink { to { transform: scaleX(.035); } }
+    @keyframes flow { to { stroke-dashoffset: -28; } }
+    @media (prefers-reduced-motion: reduce) {
+      .fade, .inner, .north, .south, .node, .halo, .to { animation: none; opacity: 1; transform: none; }
+      .inner { opacity: .26; } .halo { opacity: .22; }
+      .arc, .check, .rule, .tick { animation: none; stroke-dashoffset: 0; opacity: 1; }
+      .from { animation: none; opacity: 0; } .bar { animation: none; transform: scaleX(.035); } .flow { animation: none; }
+    }
+  </style>
+
+  <g clip-path="url(#frame)">
+    <rect width="1280" height="440" fill="url(#bg)"/>
+    <rect width="1280" height="440" fill="url(#dots)"/>
+    <ellipse class="halo" cx="232" cy="222" rx="170" ry="150" fill="#16C6E3" filter="url(#glow)"/>
+
+    <!-- Frozen BOUSSLA mark, drawn step by step -->
+    <g transform="translate(92 82) scale(1.09)">
+      <circle class="arc" cx="128" cy="128" r="94" fill="none" stroke="#126BDB" stroke-width="10" stroke-linecap="round" transform="rotate(-34 128 128)"/>
+      <circle class="inner" cx="128" cy="128" r="72" fill="none" stroke="#16C6E3" stroke-width="2"/>
+      <path class="north" d="M128 12 L151 78 L128 65 L105 78 Z" fill="url(#g)"/>
+      <path class="south" d="M128 244 L114 204 L128 212 L142 204 Z" fill="#9fc3dc"/>
+      <path class="check" d="M71 133 L113 175 L190 87" fill="none" stroke="url(#n)" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle class="node n1" cx="113" cy="175" r="8" fill="#20D6B5"/>
+      <circle class="node n2" cx="58" cy="96" r="5" fill="#126BDB"/>
+      <circle class="node n3" cx="198" cy="163" r="5" fill="#16C6E3"/>
+    </g>
+
+    <!-- Wordmark and promise -->
+    <text class="fade" style="animation-delay:1.45s" x="420" y="178" font-size="70" font-weight="800" letter-spacing="17" fill="url(#word)">BOUSSLA</text>
+    <line class="rule" x1="424" y1="204" x2="844" y2="204" stroke="url(#rule)" stroke-width="3" stroke-linecap="round"/>
+    <text class="fade" style="animation-delay:1.75s" x="422" y="246" font-size="25" font-weight="600" fill="#cfe6f6">Instruction fiscale fondée sur les preuves</text>
+    <text class="fade" style="animation-delay:1.95s" x="422" y="278" font-size="16.5" fill="#8fb0c6">Pièces rapprochées · questions ciblées · décision humaine</text>
+
+    <!-- The three gestures -->
+    <g class="fade" style="animation-delay:2.2s">
+      <rect x="422" y="306" width="138" height="40" rx="20" fill="#0f2c46" stroke="#1f6fa8"/>
+      <circle cx="444" cy="326" r="5" fill="#126BDB"/>
+      <text x="458" y="332" font-size="16" font-weight="700" fill="#d9f2ff">Rapprocher</text>
+    </g>
+    <g class="fade" style="animation-delay:2.4s">
+      <rect x="572" y="306" width="122" height="40" rx="20" fill="#0f2c46" stroke="#1996b8"/>
+      <circle cx="594" cy="326" r="5" fill="#16C6E3"/>
+      <text x="608" y="332" font-size="16" font-weight="700" fill="#d9f2ff">Clarifier</text>
+    </g>
+    <g class="fade" style="animation-delay:2.6s">
+      <rect x="706" y="306" width="118" height="40" rx="20" fill="#2a2412" stroke="#c9913a"/>
+      <circle cx="728" cy="326" r="5" fill="#f0a13a"/>
+      <text x="742" y="332" font-size="16" font-weight="700" fill="#ffe7c2">Décider</text>
+    </g>
+    <text class="fade" style="animation-delay:2.85s" x="424" y="386" font-size="12.5" font-weight="700" letter-spacing="3" fill="#53afc6">IA ENCADRÉE · CALCUL DÉTERMINISTE · DÉCISION HUMAINE · DONNÉES SYNTHÉTIQUES</text>
+
+    <!-- Evidence card: observations tick, then the review index resolves 40 -> 0 -->
+    <g class="fade" style="animation-delay:2.9s"><path class="flow" d="M852 204 C 890 204, 896 150, 934 150" fill="none" stroke="#2a86c0" stroke-width="2"/></g>
+    <g class="fade" style="animation-delay:2.9s">
+      <rect x="934" y="70" width="306" height="300" rx="20" fill="#0d2236" stroke="#23506e"/>
+      <text x="958" y="104" font-size="12" font-weight="700" letter-spacing="2.5" fill="#53afc6">DOSSIER · CASE-BRICKS-001</text>
+      <g font-size="15" fill="#d6ebf8">
+        <text x="984" y="142">Facture reçue par l'acheteur</text>
+        <text x="984" y="174">Facture émise par le vendeur</text>
+        <text x="984" y="206">Règlement observé</text>
+      </g>
+    </g>
+    <g fill="none" stroke="#20D6B5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+      <path class="tick" style="animation-delay:3.2s" d="M960 137 l6 6 l11 -12"/>
+      <path class="tick" style="animation-delay:3.4s" d="M960 169 l6 6 l11 -12"/>
+      <path class="tick" style="animation-delay:3.6s" d="M960 201 l6 6 l11 -12"/>
+    </g>
+    <g class="fade" style="animation-delay:3.0s">
+      <line x1="958" y1="228" x2="1216" y2="228" stroke="#23506e"/>
+      <text x="958" y="258" font-size="13" font-weight="700" fill="#8fb0c6">Priorité de revue (déterministe)</text>
+      <rect x="958" y="330" width="258" height="8" rx="4" fill="#15324b"/>
+      <rect class="bar" x="958" y="330" width="258" height="8" rx="4" fill="url(#g)"/>
+    </g>
+    <g class="fade" style="animation-delay:3.0s">
+      <text class="from" x="958" y="312" font-size="46" font-weight="800" fill="#7ce3ed">40</text>
+    </g>
+    <text class="to" x="958" y="312" font-size="46" font-weight="800" fill="#20D6B5">0</text>
+    <text class="to" x="1010" y="300" font-size="12" fill="#9fc3dc">écart expliqué · pièce acceptée par l'agent</text>
+    <text class="to" x="1010" y="318" font-size="11.5" fill="#6f8ea6">v6 → v7 · version précédente conservée</text>
+  </g>
+  <rect x=".5" y=".5" width="1279" height="439" rx="28" fill="none" stroke="#1d3d5a"/>
+</svg>
