@@ -27,9 +27,11 @@ test("real company-to-officer review creates a 40 to 0 revision", async ({
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "File de revue" }),
+    page.getByRole("heading", { name: "Portefeuille des entreprises" }),
   ).toBeVisible();
-  await expect(page.locator(".queue-item .priority-number")).toHaveText("40");
+  await expect(
+    page.locator(".portfolio-card-item .portfolio-index"),
+  ).toHaveText("40");
   await capture(page, "04_officer_queue.png");
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await expect(

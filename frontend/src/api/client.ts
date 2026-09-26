@@ -65,7 +65,11 @@ export const api = {
       r,
       `/cases/${encodeURIComponent(id)}`,
     ),
-  queue: () => request<QueuePage>("OFFICER", "/officer/queue"),
+  queue: (cursor?: string) =>
+    request<QueuePage>(
+      "OFFICER",
+      `/officer/queue${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
   history: (r: Role, id: string) =>
     request<HistoryView>(r, `/cases/${encodeURIComponent(id)}/history`),
   post: <T>(

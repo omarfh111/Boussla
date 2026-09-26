@@ -39,7 +39,7 @@ test("context mismatch asks for clarification, correction becomes consistent, pr
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "File de revue" }),
+    page.getByRole("heading", { name: "Portefeuille des entreprises" }),
   ).toBeVisible();
   const before = await officerPriority(page);
 

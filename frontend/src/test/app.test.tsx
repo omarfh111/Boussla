@@ -131,12 +131,14 @@ it("switches scoped views and never shows officer priority to the company", asyn
   mockApi();
   mount();
   expect(
-    await screen.findByText("File de revue", { selector: "h1" }),
+    await screen.findByText("Portefeuille des entreprises", { selector: "h1" }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
   fireEvent.click(
-    await screen.findByRole("button", { name: /Bâtiments Démo/ }),
+    await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
+  expect(await screen.findByText("Entreprise 360")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
   expect(
     await screen.findByText("40", { selector: ".priority-ring strong" }),
   ).toBeInTheDocument();
@@ -151,7 +153,7 @@ it("switches scoped views and never shows officer priority to the company", asyn
 it("shows an empty reference state and only officer-side synthesis", async () => {
   mockApi();
   mount();
-  await screen.findByText("File de revue", { selector: "h1" });
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: "Références" }));
   expect(
     await screen.findByText("Aucun passage candidat retourné"),
@@ -198,7 +200,7 @@ it("shows officer citations and disables acceptance without a source document", 
   };
   mockApi(view);
   mount();
-  await screen.findByText("File de revue", { selector: "h1" });
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: "Références" }));
   expect(await screen.findByText("Synthèse citée.")).toBeInTheDocument();
   expect(screen.getByText("Passage candidat.")).toBeInTheDocument();
@@ -234,7 +236,7 @@ it("refetches after a stale revision without retrying the write", async () => {
     return new Response(JSON.stringify(payload), { status: 200 });
   });
   mount();
-  await screen.findByText("File de revue", { selector: "h1" });
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   await screen.findByText("Votre dossier, en un regard");
   fireEvent.click(screen.getByRole("button", { name: "Contexte" }));
@@ -298,7 +300,7 @@ it("renders declared / interpreted / calculated context with neutral labels", as
     context_assessment: mismatch,
   });
   mount();
-  await screen.findByText("File de revue", { selector: "h1" });
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Contexte" }));
   expect(await screen.findByText("Horizon court")).toBeInTheDocument();
@@ -363,7 +365,7 @@ it("answers a CHOICE question with the backend enum, not the display label", asy
   ];
   const fetchMock = mockApi(officer, { ...company, inbox });
   mount();
-  await screen.findByText("File de revue", { selector: "h1" });
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Demandes" }));
   fireEvent.click(
@@ -412,7 +414,7 @@ it("leaves no officer reference note or passages visible after switching to the 
     },
   });
   mount();
-  await screen.findByText("File de revue", { selector: "h1" });
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: "Références" }));
   expect(
     await screen.findByText("Synthèse réservée à l’agent."),
@@ -423,4 +425,90 @@ it("leaves no officer reference note or passages visible after switching to the 
     screen.queryByText("Synthèse réservée à l’agent."),
   ).not.toBeInTheDocument();
   expect(screen.queryByText("Passage officiel.")).not.toBeInTheDocument();
+});
+
+it("shows a bounded automatic request in the company inbox without an officer draft", async () => {
+  mockApi(officer, {
+    ...company,
+    inbox: [
+      {
+        request: {
+          request_id: "REQ-AUTO-1",
+          status: "PUBLISHED_IN_DEMO",
+          published_at: "2026-09-26T10:00:00Z",
+          allowed_document_types: ["PAYMENT_RECORD"],
+          origin: "AUTOMATIC",
+          reason_text_fr: "Règlement à préciser.",
+          target_response_at: "2026-10-03T10:00:00Z",
+          target_kind: "DEMO_SERVICE_TARGET",
+          overdue_state: "ON_TIME",
+        },
+        questions: [
+          {
+            question_id: "Q-PAY",
+            text_fr: "Quelle pièce documente le règlement ?",
+            answer_kind: "TEXT",
+            choices: [],
+          },
+        ],
+        text_fr: "Merci de préciser le règlement observé.",
+        mode: "LIVE",
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Demandes" }));
+  expect(
+    await screen.findByText("BOUSSLA a demandé automatiquement des précisions"),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Règlement à préciser/)).toBeInTheDocument();
+  expect(
+    screen.getByText(/Date cible de réponse \(démonstration\)/),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Quelle pièce documente le règlement ?"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("button", { name: /Répondre à la demande/ }),
+  ).toBeEnabled();
+  expect(document.body.textContent).not.toMatch(
+    /probabilit[ée] de fraude|fraud probability/i,
+  );
+});
+
+it("only offers general company use when the server capability permits a null project", async () => {
+  const fetchMock = mockApi(officer, {
+    ...company,
+    capabilities: { supports_null_project_id: true },
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  fireEvent.click(await screen.findByRole("button", { name: "Contexte" }));
+  expect(
+    await screen.findByRole("option", {
+      name: "Aucun projet / usage général de l’entreprise",
+    }),
+  ).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Projet concerné"), {
+    target: { value: "__GENERAL__" },
+  });
+  fireEvent.change(
+    screen.getByPlaceholderText("Décrivez l’affectation prévue…"),
+    {
+      target: { value: "Usage général déclaré" },
+    },
+  );
+  fireEvent.change(screen.getByPlaceholderText("Ex. projet P1"), {
+    target: { value: "Entreprise" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Enregistrer la déclaration" }),
+  );
+  await waitFor(() =>
+    expect(postBodies(fetchMock, "/context")).toHaveLength(1),
+  );
+  expect(postBodies(fetchMock, "/context")[0].context.project_id).toBeNull();
 });

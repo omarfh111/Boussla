@@ -1,5 +1,7 @@
 # BOUSSLA React interface
 
+Final portfolio UI contract assumptions and integration fields: [PORTFOLIO_INTEGRATION.md](PORTFOLIO_INTEGRATION.md).
+
 The React application displays the existing `BousslaAppService` views. All case facts, checks, scores, permissions, and revisions remain in Python. The role switch is a **local simulation**, not production authentication.
 
 ## Local development
