@@ -44,7 +44,10 @@ else:
     st.info("Données synthétiques · simulation de rôles locale, sans authentification · service réel "
             "(base locale SQLite). Constats et indice calculés par les contrôles déterministes ; "
             "indice de priorité de revue, pas une probabilité de fraude.")
-role = st.selectbox("Simulation de rôles", ["Entreprise", "Agent"], key="demo_role")
+query_role = st.query_params.get("role")
+role_options = ["Entreprise", "Agent"]
+default_role_idx = role_options.index(query_role) if query_role in role_options else 0
+role = st.selectbox("Simulation de rôles", role_options, index=default_role_idx, key="demo_role")
 actor = actors[COMPANY_ACTOR_ID if role == "Entreprise" else OFFICER_ACTOR_ID]
 case = service.get_case(actor, CASE_ID)
 
