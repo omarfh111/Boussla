@@ -69,7 +69,12 @@ def _input(company_id: str, month: int, unit_price: int, *,
         **invoice, "observation_id": f"{tx_id}-SELLER-VIEW",
         "document_id": seller_doc, "perspective": "SELLER_ISSUED",
         "origin_group_id": f"{tx_id}-SELLER-ORIGIN",
+        "net_millimes": net + net // 4 if conflict else net,
+        "tax_millimes": tax + tax // 4 if conflict else tax,
         "gross_millimes": gross + gross // 4 if conflict else gross,
+        "lines": [{**line,
+                   "unit_price_millimes": unit_price + unit_price // 4 if conflict else unit_price,
+                   "line_net_millimes": net + net // 4 if conflict else net}],
     }
     observations = [invoice, seller] if counterpart else [invoice]
     documents = [_document(buyer_doc, company_id, case_id, day + timedelta(days=2),

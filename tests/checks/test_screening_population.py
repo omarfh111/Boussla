@@ -44,6 +44,12 @@ def test_source_links_and_reallocation_history():
                        for a in inputs.payment_allocations)
             assert all(a.line_id == inputs.invoice_observations[0].lines[0].line_id
                        for a in inputs.allocations)
+            for observation in inputs.invoice_observations:
+                assert observation.gross_millimes == (observation.net_millimes
+                                                      + observation.tax_millimes)
+                assert observation.lines[0].line_net_millimes == observation.net_millimes
+                assert (int(observation.lines[0].quantity)
+                        * observation.lines[0].unit_price_millimes == observation.net_millimes)
     assert all(c["data_kind"] == "SYNTHETIC" for c in population["companies"])
     by_transaction = {row["transaction_id"]: row["revisions"][-1]
                       for row in population["transactions"]}
