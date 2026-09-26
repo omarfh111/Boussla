@@ -3,6 +3,7 @@ from datetime import date
 from types import SimpleNamespace
 
 import httpx
+import pytest
 
 from boussla.contracts import Audience, FindingFamily, Mode
 from boussla.retrieval.corpus import load_public_references
@@ -96,6 +97,41 @@ def test_definitive_applicability_statement_is_rejected():
     rule_id = _passages()[0].rule_id
     generator = _generator(lambda request: httpx.Response(200, json=_response(
         rule_id, claim="Cette règle s'applique au cas."
+    )))
+    result = ReferenceAssistant(LexicalReferenceRetriever(load_public_references()), generator).for_findings(
+        [FINDING], as_of=AS_OF,
+    )
+    assert result.candidate_passages and result.grounded_note is None
+
+
+@pytest.mark.parametrize("claim", [
+    "This law applies to the company.",
+    "The company violates this law.",
+    "The transaction is illegal.",
+    "The company is non-compliant.",
+    "Cette société viole la loi.",
+    "Cette opération est illégale.",
+    "Cette entreprise est non conforme.",
+    "The company breached its obligations.",
+    "This transaction is governed by the cited law.",
+    "La société contrevient aux exigences.",
+    "Cette opération est soumise à cette règle.",
+])
+def test_definitive_legal_conclusion_drops_note_not_passages(claim):
+    rule_id = _passages()[0].rule_id
+    generator = _generator(lambda request: httpx.Response(200, json=_response(rule_id, claim=claim)))
+    result = ReferenceAssistant(LexicalReferenceRetriever(load_public_references()), generator).for_findings(
+        [FINDING], as_of=AS_OF,
+    )
+    assert result.candidate_passages
+    assert result.grounded_note is None
+    assert result.cited_rule_ids == () and result.generation_mode is Mode.NOT_RUN
+
+
+def test_definitive_legal_conclusion_in_question_drops_note_not_passages():
+    rule_id = _passages()[0].rule_id
+    generator = _generator(lambda request: httpx.Response(200, json=_response(
+        rule_id, questions=["The company violates this law, correct?"],
     )))
     result = ReferenceAssistant(LexicalReferenceRetriever(load_public_references()), generator).for_findings(
         [FINDING], as_of=AS_OF,
