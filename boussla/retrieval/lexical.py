@@ -41,13 +41,13 @@ def _tokens(value: str) -> set[str]:
 class LexicalReferenceRetriever:
     """Searches public references only; no company or financial index exists here."""
 
-    backend_mode = "LEXICAL"
-
     def __init__(self, records: Iterable[ReferenceRecord]) -> None:
         self.records = tuple(records)
         if len({item.rule_id for item in self.records}) != len(self.records):
             raise ValueError("duplicate reference ID")
         self.status = "READY" if self.records else "NOT_SUPPLIED"
+        self.backend_mode = "LEXICAL" if self.records else "NOT_SUPPLIED"
+        self.fallback_reason: str | None = None
 
     def search(
         self, query: str, *, as_of: date, jurisdiction: str,
@@ -59,15 +59,7 @@ class LexicalReferenceRetriever:
             return []
         ranked: list[tuple[int, ReferenceRecord]] = []
         for item in self.records:
-            if item.jurisdiction != jurisdiction:
-                continue
-            if item.effective_from and as_of < item.effective_from:
-                continue
-            if item.effective_to and as_of > item.effective_to:
-                continue
-            if audience is Audience.COMPANY and (
-                item.review_status != "REVIEWED" or item.effective_from is None
-            ):
+            if not reference_is_eligible(item, as_of=as_of, jurisdiction=jurisdiction, audience=audience):
                 continue
             overlap = len(terms & _tokens(item.text))
             if overlap:
@@ -83,3 +75,16 @@ class LexicalReferenceRetriever:
             )
             for overlap, item in ranked[:min(limit, 5)]
         ]
+
+
+def reference_is_eligible(item: ReferenceRecord, *, as_of: date, jurisdiction: str, audience: Audience) -> bool:
+    """Shared post-retrieval applicability bounds; relevance is never a legal decision."""
+    if item.jurisdiction != jurisdiction:
+        return False
+    if item.effective_from and as_of < item.effective_from:
+        return False
+    if item.effective_to and as_of > item.effective_to:
+        return False
+    if audience is Audience.COMPANY and (item.review_status != "REVIEWED" or item.effective_from is None):
+        return False
+    return True

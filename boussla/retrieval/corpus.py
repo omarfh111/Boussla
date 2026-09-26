@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from datetime import date
+from functools import lru_cache
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlparse
 
+from boussla.contracts import ReferenceRetriever
 from boussla.retrieval.lexical import LexicalReferenceRetriever, ReferenceRecord
 
 
@@ -45,5 +48,30 @@ def load_public_references(path: str | Path = DEFAULT_CORPUS) -> tuple[Reference
         raise ValueError("public reference corpus is unreadable or malformed") from exc
 
 
-def public_reference_retriever(path: str | Path = DEFAULT_CORPUS) -> LexicalReferenceRetriever:
-    return LexicalReferenceRetriever(load_public_references(path))
+def public_reference_retriever(
+    path: str | Path = DEFAULT_CORPUS, *, qdrant_url: str | None = None,
+    api_key: str | None = None, collection: str | None = None,
+) -> ReferenceRetriever:
+    """Prefer Cloud vector retrieval; fail closed to labelled local lexical mode."""
+    url = qdrant_url if qdrant_url is not None else os.getenv("QDRANT_URL", "")
+    key = api_key if api_key is not None else os.getenv("QDRANT_API_KEY", "")
+    name = collection if collection is not None else os.getenv("QDRANT_COLLECTION", "boussla_public_references")
+    return _cached_retriever(str(Path(path).resolve()), url, key, name)
+
+
+@lru_cache(maxsize=4)
+def _cached_retriever(path: str, url: str, key: str, name: str) -> ReferenceRetriever:
+    records = load_public_references(path)
+    lexical = LexicalReferenceRetriever(records)
+    if not records:
+        return lexical
+    if not url or not key:
+        lexical.fallback_reason = "QDRANT_NOT_CONFIGURED"
+        return lexical
+    try:
+        from boussla.retrieval.qdrant_cloud import QdrantReferenceRetriever
+
+        return QdrantReferenceRetriever(records, url=url, api_key=key, collection=name)
+    except Exception as exc:  # no credential or document data in the reason
+        lexical.fallback_reason = type(exc).__name__
+        return lexical

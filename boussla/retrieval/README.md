@@ -9,14 +9,29 @@ mean that legal applicability was reviewed. The page gives no publication or
 effective date for these excerpts, so those fields are null. No article or page
 number was assigned to this HTML page.
 
-The only backend is local lexical matching (`backend_mode="LEXICAL"`, result
-`mode=TEMPLATE`). Qdrant and embeddings are `NOT_RUN`. A missing or empty
-corpus returns no passages. The source hash can be rechecked against a fresh
-download; a changed page must be reinspected before updating the corpus.
+`public_reference_retriever()` uses `QDRANT_URL`, `QDRANT_API_KEY` and
+`QDRANT_COLLECTION` from the environment. With a healthy HTTPS Cloud cluster,
+it caches one Qdrant client and one local FastEmbed model per process. The model
+is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions);
+its cache is under ignored `runtime/fastembed/`. Only the eight public passages,
+their metadata and locally generated vectors are sent to Cloud. The four
+allowlisted finding queries are embedded locally; Cloud receives query vectors.
+
+The dedicated collection is created if absent. An existing collection must
+already contain exactly these eight IDs and exact payloads; other contents
+cause lexical fallback instead of being overwritten. `backend_mode="QDRANT"`
+returns `mode=LIVE`. Cloud/model failure switches to `backend_mode="LEXICAL"`
+and `mode=TEMPLATE`, with a sanitized failure type. Missing corpus yields
+`backend_mode="NOT_SUPPLIED"` and no passages. The source hash can be rechecked
+against a fresh download; a changed page must be reinspected before updating
+the corpus. The live smoke is `python -m scripts.smoke_qdrant_references` after
+the three environment variables have been loaded; it prints only host, IDs,
+counts and modes.
 
 Lane A wiring at the officer view boundary:
 
 ```python
+from boussla.contracts import Mode
 from boussla.retrieval.corpus import public_reference_retriever
 from boussla.retrieval.queries import candidate_passages_for_reasons
 
@@ -27,6 +42,8 @@ passages = candidate_passages_for_reasons(
     as_of=case_cutoff_date,
 )
 # Set OfficerCaseView.candidate_passages=passages; keep score inputs unchanged.
+# retrieval_mode = {"QDRANT": Mode.LIVE, "LEXICAL": Mode.TEMPLATE,
+#                   "NOT_SUPPLIED": Mode.NOT_RUN}[retriever.backend_mode]
 ```
 
 Only four allowlisted counterparty reason codes produce fixed queries. No raw
@@ -35,7 +52,9 @@ under the label **« passages de référence candidats à examiner »**. The off
 must verify the source, version, date and applicability before citing a passage.
 Do not show them as an automatic legal conclusion or add them to the review
 index. Because effective dates are unknown, the company audience receives no
-passages from this corpus.
+passages from this corpus. Lane A must place retrieval after deterministic
+checks in the officer view path and set its mode from the retriever's final
+`backend_mode` (a query failure may switch Qdrant to lexical).
 
 `RetrievedPassage` currently carries the source URL, title, text and review
 status but not the stored source hash or source/effective dates. If these must

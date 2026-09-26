@@ -26,7 +26,7 @@ def test_no_supplied_corpus_returns_explicit_not_supplied():
     retriever = LexicalReferenceRetriever(())
 
     assert retriever.status == "NOT_SUPPLIED"
-    assert retriever.backend_mode == "LEXICAL"
+    assert retriever.backend_mode == "NOT_SUPPLIED"
     assert retriever.search("briques", as_of=date(2026, 1, 1), jurisdiction="TN", audience=Audience.OFFICER) == []
 
 
