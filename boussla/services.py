@@ -76,7 +76,7 @@ class BousslaAppService:
 
     def __init__(self, store: CaseStore, registry: ActorRegistry | None = None, checks=None,
                  settings: Settings | None = None, field_extractor=None, text_extractor=None,
-                 integrity_inspector=None, document_router=None) -> None:
+                 integrity_inspector=None, document_router=None, reference_assistant=None) -> None:
         self.store = store
         self.registry = registry or ActorRegistry.demo()
         self.checks = checks or get_checks_engine()
@@ -88,6 +88,11 @@ class BousslaAppService:
         self.field_extractor = field_extractor
         self.integrity_inspector = integrity_inspector
         self.document_router = document_router
+        # Lane C officer reference assistant (retrieval + optional grounded note), built
+        # once per service/process. Enrichment runs AFTER deterministic evaluation and
+        # never feeds findings, hypotheses, scores, acceptance or revisions.
+        self.reference_assistant = reference_assistant
+        self._reference_cache: dict[tuple, tuple] = {}
 
     # ================================================================ helpers
     def _open(self, actor: Actor, case_id: str, action: str) -> tuple[Actor, dict]:
@@ -249,7 +254,7 @@ class BousslaAppService:
                 responses=tuple(r for r in facts["response"] if r.author_actor_id == actor.actor_id),
                 mode=Mode.LIVE, banner_fr=DEMO_BANNER_FR)
         ev = self._evaluate(case_id, company, v, facts)
-        return OfficerCaseView(
+        view = OfficerCaseView(
             case_id=case_id, company_id=company, company_display_name=self._company_name(company), case_version=v,
             documents=self._doc_views(facts, v), transactions=self._summaries(facts),
             invoice_observations=tuple(facts["invoice_observation"]), payments=tuple(facts["payment"]),
@@ -257,9 +262,49 @@ class BousslaAppService:
             quantity_references=tuple(facts["quantity_reference"]), allocations=tuple(facts["allocation"]),
             findings=ev.findings, hypotheses=ev.hypotheses, scenarios=ev.scenarios, score=ev.score,
             requests=tuple(facts["request"]), responses=tuple(facts["response"]), proposals=tuple(facts["proposal"]),
-            mode=Mode.LIVE, mode_by_node={"checks": Mode.LIVE, "retrieval": Mode.NOT_RUN,
+            mode=Mode.LIVE, mode_by_node={"checks": Mode.LIVE, "retrieval": self._retrieval_mode(),
                                           "router": self._router_mode(facts)},
             banner_fr=DEMO_BANNER_FR)
+        return self._enrich_with_references(view, as_of=ev.score.cutoff.date())
+
+    # ------------------------------------------------------- reference enrichment
+    def _retrieval_mode(self) -> Mode:
+        backend = getattr(getattr(self.reference_assistant, "retriever", None), "backend_mode", "NOT_SUPPLIED")
+        return {"QDRANT": Mode.LIVE, "LEXICAL": Mode.TEMPLATE}.get(backend, Mode.NOT_RUN)
+
+    def _enrich_with_references(self, view: OfficerCaseView, *, as_of) -> OfficerCaseView:
+        """Officer-only candidate passages + grounded note, computed from the already
+        final view. ``as_of`` is the server-side evaluation cutoff, never user input.
+        Any failure leaves the deterministic view unchanged (retrieval mode ERROR)."""
+        if self.reference_assistant is None:
+            return view
+        from boussla.contracts import GroundedNoteView
+        key = (view.case_id, view.case_version, as_of,
+               tuple(sorted((f.family.value, f.reason_code or "") for f in view.findings)))
+        cached = self._reference_cache.get(key)
+        if cached is None:
+            try:
+                result = self.reference_assistant.for_findings(view.findings, as_of=as_of, audience=Audience.OFFICER)
+            except Exception:  # noqa: BLE001 - enrichment failure never blocks the dossier
+                return view.model_copy(update={"mode_by_node": {**view.mode_by_node, "retrieval": Mode.ERROR}})
+            passages = tuple(result.candidate_passages)
+            note = None
+            allowed = {p.rule_id for p in passages}
+            if result.grounded_note is not None and set(result.grounded_note.candidate_rule_ids) <= allowed:
+                n = result.grounded_note
+                note = GroundedNoteView(
+                    summary_fr=n.summary_fr, candidate_rule_ids=tuple(n.candidate_rule_ids),
+                    applicability_questions=tuple(n.applicability_questions), limitations=tuple(n.limitations),
+                    provider_model=n.provider_model, generation_mode=result.generation_mode)
+            cached = (passages, note, result.retrieval_mode, note.generation_mode if note else Mode.NOT_RUN)
+            if len(self._reference_cache) > 64:
+                self._reference_cache.clear()
+            self._reference_cache[key] = cached
+        passages, note, retrieval_mode, generation_mode = cached
+        return view.model_copy(update={
+            "candidate_passages": passages, "reference_note": note,
+            "mode_by_node": {**view.mode_by_node, "retrieval": retrieval_mode, "reference_note": generation_mode},
+        })
 
     def list_queue(self, actor: Actor, cutoff, limit: int, cursor: str | None = None) -> QueuePage:
         actor = authorize(self.registry, actor, "list_queue")
@@ -496,7 +541,7 @@ class BousslaAppService:
         facts = self._facts(case_id, meta["version"])
         ev = self._evaluate(case_id, meta["company_id"], meta["version"], facts)
         officer = actor.role is Role.OFFICER
-        modes = {"checks": Mode.LIVE, "retrieval": Mode.NOT_RUN, "router": self._router_mode(facts),
+        modes = {"checks": Mode.LIVE, "retrieval": self._retrieval_mode(), "router": self._router_mode(facts),
                  "extractor": Mode.LIVE if facts["extraction"] else Mode.NOT_RUN}
         answered = self._answered_question_ids(facts)
         rounds = len({c.claim_id for c in facts["context_claim"] if c.purpose_text.startswith("[Q-")})
@@ -853,6 +898,17 @@ def _discover_document_adapters(settings: Settings) -> dict:
     return found
 
 
+def _discover_reference_assistant():
+    """Lane C officer reference assistant: Qdrant Cloud when QDRANT_URL/QDRANT_API_KEY are
+    set (else labelled lexical), plus the OpenAI note generator when configured. Any
+    construction failure disables enrichment (retrieval NOT_RUN) instead of failing startup."""
+    try:
+        from boussla.retrieval.grounded_rag import public_reference_assistant
+        return public_reference_assistant()
+    except Exception:  # noqa: BLE001 - optional enrichment; no secret or reason exposed
+        return None
+
+
 def build_service(settings: Settings | None = None, seed: bool = True) -> BousslaAppService:
     """Default wiring: SQLite at CASE_DB_PATH, demo roster, B's checks (or the
     labelled interim engine) and C's document adapters when present."""
@@ -861,4 +917,5 @@ def build_service(settings: Settings | None = None, seed: bool = True) -> Boussl
     store = CaseStore(settings.case_db_path, settings.upload_dir)
     if seed:
         seed_demo_case(store)
-    return BousslaAppService(store, settings=settings, **_discover_document_adapters(settings))
+    return BousslaAppService(store, settings=settings, reference_assistant=_discover_reference_assistant(),
+                             **_discover_document_adapters(settings))

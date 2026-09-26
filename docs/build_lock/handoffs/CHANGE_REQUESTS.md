@@ -10,3 +10,11 @@ Only A approves and merges changes. Record: requester, proposed change, reason, 
 - **Consumers:** C (router output), D (allowed document types display). Published before any consumer merged code.
 - **Migration:** rename references; no stored data exists yet.
 - **Tests:** `pytest` full suite.
+
+## CR-002 — officer-only grounded reference note (A, applied)
+
+- **Requester / decider:** A, for lane C integration (`integration/reference-retrieval`), 2026-09-26.
+- **Change:** new `GroundedNoteView` (summary_fr, candidate_rule_ids, applicability_questions, limitations, provider_model, generation_mode, disclaimer_fr) and `OfficerCaseView.reference_note: GroundedNoteView | None = None`. `CompanyCaseView` unchanged, with no equivalent field.
+- **Reason:** C's `GroundedReferenceNote` is a dataclass internal to `boussla.retrieval`; D needs a typed, officer-scoped view to render "Synthèse assistée à partir des passages retrouvés".
+- **Consumers:** D (optional rendering). Backward compatible (optional, default None).
+- **Tests:** `tests/integration/test_reference_service.py`.
