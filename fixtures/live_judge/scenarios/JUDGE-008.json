@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-008",
+  "description": "DECLARATION ONLY",
+  "handler": "declaration",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-008",
+  "company_id": "SYN-COMPANY-JUDGE-008",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-008.json",
+  "company_context": {
+    "source": "observed/JUDGE-008.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-008.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-008.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "declaration"
+  ],
+  "provider_requirements": []
+}

@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-002",
+  "description": "COUNTERPARTY AMOUNT CONFLICT",
+  "handler": "core",
+  "variant": "conflict",
+  "case_id": "CASE-JUDGE-002",
+  "company_id": "SYN-COMPANY-JUDGE-002",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-002.json",
+  "company_context": {
+    "source": "observed/JUDGE-002.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-002.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-002.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

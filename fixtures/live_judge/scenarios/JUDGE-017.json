@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-017",
+  "description": "STALE VERSION",
+  "handler": "stale",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-017",
+  "company_id": "SYN-COMPANY-JUDGE-017",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-017.json",
+  "company_context": {
+    "source": "observed/JUDGE-017.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-017.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-017.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "stale"
+  ],
+  "provider_requirements": []
+}

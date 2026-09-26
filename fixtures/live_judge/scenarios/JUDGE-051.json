@@ -1,0 +1,37 @@
+{
+  "scenario_id": "JUDGE-051",
+  "description": "LIVE GROUNDED RAG",
+  "handler": "live",
+  "variant": "rag",
+  "case_id": "CASE-JUDGE-051",
+  "company_id": "SYN-COMPANY-JUDGE-051",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-051.json",
+  "company_context": {
+    "source": "observed/JUDGE-051.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-051.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-051.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "live"
+  ],
+  "provider_requirements": [
+    "rag"
+  ]
+}

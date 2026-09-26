@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-037",
+  "description": "UNEXPECTED JSON PROPERTIES",
+  "handler": "extra_fields",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-037",
+  "company_id": "SYN-COMPANY-JUDGE-037",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-037.json",
+  "company_context": {
+    "source": "observed/JUDGE-037.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-037.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-037.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "extra_fields"
+  ],
+  "provider_requirements": []
+}

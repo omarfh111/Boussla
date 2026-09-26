@@ -1,0 +1,378 @@
+{
+  "invoice_observation": [
+    {
+      "observation_id": "OBS-BUY-001",
+      "document_id": "DOC-BUY-001",
+      "transaction_id": "TX-001",
+      "perspective": "BUYER_RECEIVED",
+      "issuer_company_id": "DEMO-BRI",
+      "issuer_mf_raw": "DEMO-MF-BRI",
+      "buyer_company_id": "SYN-COMPANY-JUDGE-026",
+      "buyer_mf_raw": "DEMO-MF-BAT",
+      "invoice_number": "FAC-DEMO-001",
+      "invoice_version": "1",
+      "issued_on": "2026-09-05",
+      "available_at": "2026-09-08T10:00:00+01:00",
+      "currency": "TND",
+      "net_millimes": 4000000,
+      "tax_millimes": 760000,
+      "gross_millimes": 4760000,
+      "referenced_invoice_id": null,
+      "lines": [
+        {
+          "line_id": "LINE-BUY-001",
+          "item_description": "Brique - référence BRICK-A",
+          "normalized_item_code": "BRICK-A",
+          "quantity": "2000",
+          "unit": "piece",
+          "unit_price_millimes": 2000,
+          "line_net_millimes": 4000000,
+          "tax_rate": "0.19",
+          "project_id": null
+        }
+      ],
+      "transcription_status": "FIXTURE_FIELDS_KNOWN",
+      "origin_group_id": "COMPANY-SYN-COMPANY-JUDGE-026"
+    },
+    {
+      "observation_id": "OBS-SELL-001",
+      "document_id": "DOC-SELL-001",
+      "transaction_id": "TX-001",
+      "perspective": "SELLER_ISSUED",
+      "issuer_company_id": "DEMO-BRI",
+      "issuer_mf_raw": "DEMO-MF-BRI",
+      "buyer_company_id": "SYN-COMPANY-JUDGE-026",
+      "buyer_mf_raw": "DEMO-MF-BAT",
+      "invoice_number": "FAC-DEMO-001",
+      "invoice_version": "1",
+      "issued_on": "2026-09-05",
+      "available_at": "2026-09-08T10:00:00+01:00",
+      "currency": "TND",
+      "net_millimes": 4000000,
+      "tax_millimes": 760000,
+      "gross_millimes": 4760000,
+      "referenced_invoice_id": null,
+      "lines": [
+        {
+          "line_id": "LINE-SELL-001",
+          "item_description": "Brique - référence BRICK-A",
+          "normalized_item_code": "BRICK-A",
+          "quantity": "2000",
+          "unit": "piece",
+          "unit_price_millimes": 2000,
+          "line_net_millimes": 4000000,
+          "tax_rate": "0.19",
+          "project_id": null
+        }
+      ],
+      "transcription_status": "FIXTURE_FIELDS_KNOWN",
+      "origin_group_id": "DEMO-COUNTERPARTY-FEED-BRI"
+    },
+    {
+      "observation_id": "SYN-VERSION-2",
+      "document_id": "DOC-SELL-001",
+      "transaction_id": "TX-001",
+      "perspective": "SELLER_ISSUED",
+      "issuer_company_id": "DEMO-BRI",
+      "issuer_mf_raw": "DEMO-MF-BRI",
+      "buyer_company_id": "SYN-COMPANY-JUDGE-026",
+      "buyer_mf_raw": "DEMO-MF-BAT",
+      "invoice_number": "FAC-DEMO-001",
+      "invoice_version": "2",
+      "issued_on": "2026-09-05",
+      "available_at": "2026-09-08T10:00:00+01:00",
+      "currency": "TND",
+      "net_millimes": 4000000,
+      "tax_millimes": 760000,
+      "gross_millimes": 4760000,
+      "referenced_invoice_id": null,
+      "lines": [
+        {
+          "line_id": "LINE-SELL-001",
+          "item_description": "Brique - référence BRICK-A",
+          "normalized_item_code": "BRICK-A",
+          "quantity": "2000",
+          "unit": "piece",
+          "unit_price_millimes": 2000,
+          "line_net_millimes": 4000000,
+          "tax_rate": "0.19",
+          "project_id": null
+        }
+      ],
+      "transcription_status": "FIXTURE_FIELDS_KNOWN",
+      "origin_group_id": "DEMO-COUNTERPARTY-FEED-BRI"
+    }
+  ],
+  "transaction": [
+    {
+      "transaction_id": "TX-001",
+      "buyer_company_id": "SYN-COMPANY-JUDGE-026",
+      "seller_company_id": "DEMO-BRI",
+      "invoice_observation_ids": [
+        "OBS-BUY-001",
+        "OBS-SELL-001",
+        "SYN-VERSION-2"
+      ],
+      "project_id": "P1",
+      "economic_period": "2026-09",
+      "source_coverage": "AVAILABLE_FOR_THIS_TRANSACTION_ONLY",
+      "correlation_status": "MATCHED_IN_SYNTHETIC_FIXTURE",
+      "canonical_revision": 1
+    }
+  ],
+  "payment": [
+    {
+      "payment_id": "PAY-001",
+      "source_record_id": "DOC-PAY-001",
+      "payer_company_id": "SYN-COMPANY-JUDGE-026",
+      "payee_company_id": "DEMO-BRI",
+      "payer_mapping_ref": "MAP-PAYER-001",
+      "payee_mapping_ref": "MAP-PAYEE-001",
+      "currency": "TND",
+      "amount_millimes": 4760000,
+      "status": "SETTLED",
+      "occurred_at": "2026-09-07T12:00:00+01:00",
+      "available_at": "2026-09-08T10:00:00+01:00",
+      "origin_group_id": "DEMO-PAYMENT-FEED"
+    }
+  ],
+  "identity_mapping": [
+    {
+      "mapping_id": "MAP-PAYER-001",
+      "company_id": "SYN-COMPANY-JUDGE-026",
+      "source_record_id": "DOC-PAY-001",
+      "status": "ACCEPTED_SYNTHETIC_FIXTURE",
+      "verified_by": "DEMO-OFFICER"
+    },
+    {
+      "mapping_id": "MAP-PAYEE-001",
+      "company_id": "DEMO-BRI",
+      "source_record_id": "DOC-PAY-001",
+      "status": "ACCEPTED_SYNTHETIC_FIXTURE",
+      "verified_by": "DEMO-OFFICER"
+    }
+  ],
+  "allocation": [
+    {
+      "allocation_id": "ALLOC-P1-V1",
+      "transaction_id": "TX-001",
+      "line_id": "LINE-BUY-001",
+      "target_project_id": "P1",
+      "target_type": "PROJECT",
+      "quantity": "2000",
+      "unit": "piece",
+      "effective_on": "2026-09-06",
+      "source_refs": [
+        "CLAIM-001"
+      ],
+      "status": "ACCEPTED",
+      "fact_kind": "COMPANY_REPORTED_ALLOCATION",
+      "independent_verification": false
+    }
+  ],
+  "quantity_reference": [
+    {
+      "reference_id": "REF-P1",
+      "company_id": "SYN-COMPANY-JUDGE-026",
+      "project_id": "P1",
+      "item_code": "BRICK-A",
+      "unit": "piece",
+      "baseline_kind": "APPROVED_PROCUREMENT_ALLOCATION",
+      "quantity": "2000",
+      "valid_from": "2026-09-01",
+      "valid_to": "2026-11-30",
+      "source_refs": [
+        "DOC-REF-001"
+      ],
+      "acceptance_status": "ACCEPTED_SYNTHETIC_FIXTURE",
+      "accepted_by": "DEMO-OFFICER"
+    },
+    {
+      "reference_id": "REF-P2",
+      "company_id": "SYN-COMPANY-JUDGE-026",
+      "project_id": "P2",
+      "item_code": "BRICK-A",
+      "unit": "piece",
+      "baseline_kind": "APPROVED_PROCUREMENT_ALLOCATION",
+      "quantity": "2000",
+      "valid_from": "2026-09-01",
+      "valid_to": "2026-11-30",
+      "source_refs": [
+        "DOC-REF-001"
+      ],
+      "acceptance_status": "ACCEPTED_SYNTHETIC_FIXTURE",
+      "accepted_by": "DEMO-OFFICER"
+    }
+  ],
+  "context_claim": [
+    {
+      "claim_id": "CLAIM-001",
+      "company_id": "SYN-COMPANY-JUDGE-026",
+      "transaction_id": "TX-001",
+      "project_id": "P1",
+      "purpose_category": "CONSTRUCTION_PROJECT",
+      "purpose_text": "Achat affecté au lot de maçonnerie du chantier P1.",
+      "beneficiary_type": "CLIENT_PROJECT",
+      "planned_start": "2026-09-01",
+      "planned_end": "2026-11-30",
+      "stage": "IN_PROGRESS",
+      "reported_stock_qty": null,
+      "author_actor_id": "DEMO-COMPANY-BAT",
+      "submitted_at": "2026-09-08T10:00:00+01:00",
+      "supersedes_claim_id": null,
+      "evidence_refs": [],
+      "verification_status": "COMPANY_DECLARED"
+    }
+  ],
+  "delivery": [
+    {
+      "delivery_id": "DEL-001",
+      "transaction_id": "TX-001",
+      "item_code": "BRICK-A",
+      "quantity": "2000",
+      "unit": "piece",
+      "received_at": "2026-09-06",
+      "source_refs": [
+        "DOC-DEL-001"
+      ],
+      "status": "ACCEPTED_SYNTHETIC_FIXTURE"
+    }
+  ],
+  "payment_allocation": [
+    {
+      "payment_id": "PAY-001",
+      "transaction_id": "TX-001",
+      "allocated_millimes": 4760000,
+      "accepted_by": "DEMO-OFFICER",
+      "accepted_at": "2026-09-08T10:00:00+01:00"
+    }
+  ],
+  "project": [
+    {
+      "project_id": "P1",
+      "company_id": "SYN-COMPANY-JUDGE-026",
+      "label": "Lot de maçonnerie P1",
+      "project_type": "CONSTRUCTION_PROJECT",
+      "planned_start": "2026-09-01",
+      "planned_end": "2026-11-30",
+      "reference_ids": [
+        "REF-P1"
+      ],
+      "status": "IN_PROGRESS"
+    },
+    {
+      "project_id": "P2",
+      "company_id": "SYN-COMPANY-JUDGE-026",
+      "label": "Lot de maçonnerie P2",
+      "project_type": "CONSTRUCTION_PROJECT",
+      "planned_start": "2026-09-01",
+      "planned_end": "2026-11-30",
+      "reference_ids": [
+        "REF-P2"
+      ],
+      "status": "IN_PROGRESS"
+    }
+  ],
+  "document": [
+    {
+      "document_id": "DOC-BUY-001",
+      "subject_company_id": "SYN-COMPANY-JUDGE-026",
+      "case_id": "CASE-JUDGE-026",
+      "original_filename": "01_buyer_invoice.pdf",
+      "local_path": "D:\\hack_finance\\Boussla\\docs\\build_lock\\fixtures\\documents\\01_buyer_invoice.pdf",
+      "sha256": "67581d2bce727bd661e3cf7f3a226203881652586509e5b8a7d404bbf2fac95b",
+      "media_type": "application/pdf",
+      "page_count": 1,
+      "received_at": "2026-09-08T10:00:00+01:00",
+      "uploader_actor_id": "DEMO-COMPANY-BAT",
+      "acquisition_channel": "COMPANY_UPLOAD",
+      "asserted_issuer_id": null,
+      "origin_group_id": "COMPANY-SYN-COMPANY-JUDGE-026",
+      "source_record_id": null,
+      "confidentiality_scope": "CASE_PARTIES",
+      "extraction_status": "NOT_RUN",
+      "processing_limitations": [],
+      "supersedes_document_id": null
+    },
+    {
+      "document_id": "DOC-SELL-001",
+      "subject_company_id": "SYN-COMPANY-JUDGE-026",
+      "case_id": "CASE-JUDGE-026",
+      "original_filename": "02_seller_invoice_view.pdf",
+      "local_path": "D:\\hack_finance\\Boussla\\docs\\build_lock\\fixtures\\documents\\02_seller_invoice_view.pdf",
+      "sha256": "0b3b4c4728afbc879243168988b14306d5ccf1ea2ddd574546de0468f4f3f814",
+      "media_type": "application/pdf",
+      "page_count": 1,
+      "received_at": "2026-09-08T10:00:00+01:00",
+      "uploader_actor_id": "DEMO-OPERATOR",
+      "acquisition_channel": "SIMULATED_COUNTERPARTY_REFERENCE",
+      "asserted_issuer_id": null,
+      "origin_group_id": "DEMO-COUNTERPARTY-FEED-BRI",
+      "source_record_id": null,
+      "confidentiality_scope": "CASE_PARTIES",
+      "extraction_status": "NOT_RUN",
+      "processing_limitations": [],
+      "supersedes_document_id": null
+    },
+    {
+      "document_id": "DOC-PAY-001",
+      "subject_company_id": "SYN-COMPANY-JUDGE-026",
+      "case_id": "CASE-JUDGE-026",
+      "original_filename": "03_payment_record.pdf",
+      "local_path": "D:\\hack_finance\\Boussla\\docs\\build_lock\\fixtures\\documents\\03_payment_record.pdf",
+      "sha256": "d5ca47d02f7ac9fd954759a01d3ca0da18e083392f4b5792bdf70b25b37daa65",
+      "media_type": "application/pdf",
+      "page_count": 1,
+      "received_at": "2026-09-08T10:00:00+01:00",
+      "uploader_actor_id": "DEMO-OPERATOR",
+      "acquisition_channel": "OFFICER_UPLOAD",
+      "asserted_issuer_id": null,
+      "origin_group_id": "DEMO-PAYMENT-FEED",
+      "source_record_id": null,
+      "confidentiality_scope": "CASE_PARTIES",
+      "extraction_status": "NOT_RUN",
+      "processing_limitations": [],
+      "supersedes_document_id": null
+    },
+    {
+      "document_id": "DOC-REF-001",
+      "subject_company_id": "SYN-COMPANY-JUDGE-026",
+      "case_id": "CASE-JUDGE-026",
+      "original_filename": "04_procurement_allocations.pdf",
+      "local_path": "D:\\hack_finance\\Boussla\\docs\\build_lock\\fixtures\\documents\\04_procurement_allocations.pdf",
+      "sha256": "c9d079e957dacf1662c784257464c17d963afdab23f9bf1719852a9ec4dc3749",
+      "media_type": "application/pdf",
+      "page_count": 1,
+      "received_at": "2026-09-08T10:00:00+01:00",
+      "uploader_actor_id": "DEMO-OPERATOR",
+      "acquisition_channel": "OFFICER_UPLOAD",
+      "asserted_issuer_id": null,
+      "origin_group_id": "DEMO-REFERENCE-FEED",
+      "source_record_id": null,
+      "confidentiality_scope": "CASE_PARTIES",
+      "extraction_status": "NOT_RUN",
+      "processing_limitations": [],
+      "supersedes_document_id": null
+    },
+    {
+      "document_id": "DOC-DEL-001",
+      "subject_company_id": "SYN-COMPANY-JUDGE-026",
+      "case_id": "CASE-JUDGE-026",
+      "original_filename": "05_delivery_record.pdf",
+      "local_path": "D:\\hack_finance\\Boussla\\docs\\build_lock\\fixtures\\documents\\05_delivery_record.pdf",
+      "sha256": "d3d8e48690a659dcbc49fb3167aa4ead8a46b1ad4d891c9ddbf549223d87a1bc",
+      "media_type": "application/pdf",
+      "page_count": 1,
+      "received_at": "2026-09-08T10:00:00+01:00",
+      "uploader_actor_id": "DEMO-OPERATOR",
+      "acquisition_channel": "OFFICER_UPLOAD",
+      "asserted_issuer_id": null,
+      "origin_group_id": "DEMO-DELIVERY-FEED",
+      "source_record_id": null,
+      "confidentiality_scope": "CASE_PARTIES",
+      "extraction_status": "NOT_RUN",
+      "processing_limitations": [],
+      "supersedes_document_id": null
+    }
+  ]
+}

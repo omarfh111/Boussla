@@ -1,0 +1,34 @@
+{
+  "scenario_id": "JUDGE-015",
+  "description": "BLANK PDF",
+  "handler": "document",
+  "variant": "blank.pdf",
+  "case_id": "CASE-JUDGE-015",
+  "company_id": "SYN-COMPANY-JUDGE-015",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-015.json",
+  "company_context": {
+    "source": "observed/JUDGE-015.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-015.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-015.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/blank.pdf"
+  ],
+  "actions": [
+    "document"
+  ],
+  "provider_requirements": []
+}

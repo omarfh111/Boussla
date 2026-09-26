@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-038",
+  "description": "UPLOAD RETRY AND DUPLICATES",
+  "handler": "duplicates",
+  "variant": "clean",
+  "case_id": "CASE-JUDGE-038",
+  "company_id": "SYN-COMPANY-JUDGE-038",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-038.json",
+  "company_context": {
+    "source": "observed/JUDGE-038.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-038.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-038.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "duplicates"
+  ],
+  "provider_requirements": []
+}

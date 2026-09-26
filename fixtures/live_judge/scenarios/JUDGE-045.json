@@ -1,0 +1,45 @@
+{
+  "scenario_id": "JUDGE-045",
+  "description": "LLM DISAGREES WITH DATES",
+  "handler": "pending_context",
+  "variant": "llm_disagrees",
+  "case_id": "CASE-JUDGE-045",
+  "company_id": "SYN-COMPANY-JUDGE-045",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-045.json",
+  "company_context": {
+    "source": "observed/JUDGE-045.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-045.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-045.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "pending_context"
+  ],
+  "provider_requirements": [],
+  "simulated_provider_interpretation": {
+    "duration_category": "SHORT"
+  },
+  "context_input": {
+    "duration_category": "LONGER",
+    "purpose_text": "Projet synthétique de dix-huit mois",
+    "planned_start": "2026-01-01",
+    "planned_end": "2027-07-01",
+    "project_stage": "IN_PROGRESS"
+  }
+}

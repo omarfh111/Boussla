@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-019",
+  "description": "PROVIDER FAILURE CHAOS",
+  "handler": "chaos",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-019",
+  "company_id": "SYN-COMPANY-JUDGE-019",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-019.json",
+  "company_context": {
+    "source": "observed/JUDGE-019.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-019.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-019.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "chaos"
+  ],
+  "provider_requirements": []
+}

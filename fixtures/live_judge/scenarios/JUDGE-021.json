@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-021",
+  "description": "REVERSED PAYMENT",
+  "handler": "core",
+  "variant": "reversed",
+  "case_id": "CASE-JUDGE-021",
+  "company_id": "SYN-COMPANY-JUDGE-021",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-021.json",
+  "company_context": {
+    "source": "observed/JUDGE-021.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-021.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-021.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

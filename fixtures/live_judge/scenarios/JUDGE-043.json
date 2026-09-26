@@ -1,0 +1,40 @@
+{
+  "scenario_id": "JUDGE-043",
+  "description": "MISSING DATES",
+  "handler": "pending_context",
+  "variant": "missing_dates",
+  "case_id": "CASE-JUDGE-043",
+  "company_id": "SYN-COMPANY-JUDGE-043",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-043.json",
+  "company_context": {
+    "source": "observed/JUDGE-043.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-043.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-043.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "pending_context"
+  ],
+  "provider_requirements": [],
+  "context_input": {
+    "duration_category": "LONGER",
+    "purpose_text": "Projet synthétique de dix-huit mois",
+    "project_stage": "IN_PROGRESS"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-022",
+  "description": "UNKNOWN SETTLEMENT",
+  "handler": "core",
+  "variant": "unknown_payment",
+  "case_id": "CASE-JUDGE-022",
+  "company_id": "SYN-COMPANY-JUDGE-022",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-022.json",
+  "company_context": {
+    "source": "observed/JUDGE-022.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-022.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-022.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

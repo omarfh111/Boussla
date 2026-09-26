@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-027",
+  "description": "UNKNOWN ACCOUNT MAPPING",
+  "handler": "core",
+  "variant": "mapping",
+  "case_id": "CASE-JUDGE-027",
+  "company_id": "SYN-COMPANY-JUDGE-027",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-027.json",
+  "company_context": {
+    "source": "observed/JUDGE-027.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-027.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-027.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

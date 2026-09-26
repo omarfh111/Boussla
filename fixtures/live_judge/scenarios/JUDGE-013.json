@@ -1,0 +1,34 @@
+{
+  "scenario_id": "JUDGE-013",
+  "description": "DOCUMENT INJECTION",
+  "handler": "document",
+  "variant": "prompt-injection.pdf",
+  "case_id": "CASE-JUDGE-013",
+  "company_id": "SYN-COMPANY-JUDGE-013",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-013.json",
+  "company_context": {
+    "source": "observed/JUDGE-013.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-013.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-013.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/prompt-injection.pdf"
+  ],
+  "actions": [
+    "document"
+  ],
+  "provider_requirements": []
+}

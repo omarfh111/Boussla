@@ -1,0 +1,213 @@
+{
+  "version": "LIVE_JUDGE_V1",
+  "synthetic_only": true,
+  "seed": 32036,
+  "documents": [
+    {
+      "path": "documents/invoice-fr.pdf",
+      "bytes": 1961,
+      "sha256": "f25195a4510486f507d509e08358d70cd7601696efc71b65c01402100ee169a2"
+    },
+    {
+      "path": "documents/invoice-minimal.pdf",
+      "bytes": 1700,
+      "sha256": "49a8be592a37bccd8a870333e6fbb232cce9eb86d75bee740d6bae2092d303ef"
+    },
+    {
+      "path": "documents/invoice-dense.pdf",
+      "bytes": 2204,
+      "sha256": "64381637b8f74c9b926b6c22e55658f705cf98dc01daccbfb00573095d99ab6b"
+    },
+    {
+      "path": "documents/invoice-two-column.pdf",
+      "bytes": 1967,
+      "sha256": "df2cf3cd5b607fbd22a41a608a4045b0c7794e858245d136301fde902b3766d4"
+    },
+    {
+      "path": "documents/invoice-alternate.pdf",
+      "bytes": 1801,
+      "sha256": "97476a91e2c2f0fb726bd479d86393dbac3574bb02bde6963873f377eace39ff"
+    },
+    {
+      "path": "documents/invoice-accented.pdf",
+      "bytes": 2029,
+      "sha256": "6318603cf9f9534ffb7766f3fcc8d796f68580fab6a2bc3bf78b3e881f8c9aae"
+    },
+    {
+      "path": "documents/pi\u00e8ce \u00e9trange num\u00e9ro 7.pdf",
+      "bytes": 1961,
+      "sha256": "f25195a4510486f507d509e08358d70cd7601696efc71b65c01402100ee169a2"
+    },
+    {
+      "path": "documents/blank.pdf",
+      "bytes": 1376,
+      "sha256": "2b3220891f37ea2ea85269a24ee7186df41efbd20a13494773a1d5a61f2deefe"
+    },
+    {
+      "path": "documents/corrupted.pdf",
+      "bytes": 36,
+      "sha256": "67e2e5ea8f648aa862861e30033eef2df547cf6bb680619d5071270d1bdf09ff"
+    },
+    {
+      "path": "documents/fake-extension.pdf",
+      "bytes": 48,
+      "sha256": "480840c85463a854418277b9f91e6c1fa0dba53da4c6161d266829810e2d515d"
+    },
+    {
+      "path": "documents/six-pages.pdf",
+      "bytes": 6187,
+      "sha256": "12d799a2f1351614688d7db366745abada2988a1be20584040784307d697f606"
+    },
+    {
+      "path": "documents/oversized.pdf",
+      "bytes": 10487741,
+      "sha256": "361c665094c7fab4fc89f9af1d72bd5f5909646b95ef105541e577aab8adf1e6"
+    },
+    {
+      "path": "documents/missing-seller.pdf",
+      "bytes": 1925,
+      "sha256": "ddbee1761fec2062bfc1f9877a3a625504b245e1454beb1c7c1b17877693133f"
+    },
+    {
+      "path": "documents/missing-buyer.pdf",
+      "bytes": 1929,
+      "sha256": "5bd1fe99560c9fdec19b79d4be1cfd285bffd0d6a2fe3dc10c190924dc006533"
+    },
+    {
+      "path": "documents/missing-number.pdf",
+      "bytes": 1927,
+      "sha256": "36ad96b09795e857dfdd8bf423560e05854235ea0830725b30d2caa8da91089c"
+    },
+    {
+      "path": "documents/missing-date.pdf",
+      "bytes": 1936,
+      "sha256": "6fdcd0c2a2d6827e35c4100a4e21f7b7186aadc7352b6515869143ea5f1b3dc3"
+    },
+    {
+      "path": "documents/missing-tax.pdf",
+      "bytes": 1940,
+      "sha256": "e92e04fae031573e0d89f23ab4b8d5df71743ed97c069a29e1f2865b8bc95cd0"
+    },
+    {
+      "path": "documents/inconsistent-arithmetic.pdf",
+      "bytes": 1962,
+      "sha256": "7b41df5fcb76854ed82bc2c9aba81b781205fcfe4ec85d5ba3f537b4fa36adb7"
+    },
+    {
+      "path": "documents/duplicate.pdf",
+      "bytes": 1961,
+      "sha256": "f25195a4510486f507d509e08358d70cd7601696efc71b65c01402100ee169a2"
+    },
+    {
+      "path": "documents/near-duplicate.pdf",
+      "bytes": 2017,
+      "sha256": "765e7429b222f92cbe8f3f830502e505eff28c7892451d42bdef5b39af79bca6"
+    },
+    {
+      "path": "documents/payment.pdf",
+      "bytes": 1780,
+      "sha256": "05938156319f16bc636ff311328967d825c33e108c2649f37ca9e6d932d0208e"
+    },
+    {
+      "path": "documents/delivery.pdf",
+      "bytes": 1730,
+      "sha256": "67346d6254c9c3780ebb1cb690f1b0923993998223d8712b2222bfca8e58ecf8"
+    },
+    {
+      "path": "documents/credit-note.pdf",
+      "bytes": 1731,
+      "sha256": "1be2073e972e63eed294f3c3049b0f216b9e39c3c67304fd3ed896bb07daa747"
+    },
+    {
+      "path": "documents/allocation-reference.pdf",
+      "bytes": 1775,
+      "sha256": "ff8ec82cdee0a21c2abc79c28d25bbb022d936c79ccbc8406456dcbbdfb572be"
+    },
+    {
+      "path": "documents/allocation-response.pdf",
+      "bytes": 1785,
+      "sha256": "6c4f437a48495c629a05f3a30473fa518f9fd7032af323e5c32488a04586603e"
+    },
+    {
+      "path": "documents/ambiguous.pdf",
+      "bytes": 1700,
+      "sha256": "57d4c4cd0145ad7d3a3fbba078688bb8c7207d9e9b77af6054a86b8e4fc418a4"
+    },
+    {
+      "path": "documents/prompt-injection.pdf",
+      "bytes": 2175,
+      "sha256": "ed19b67d3b59295a7580d850c3371c3c62e3ff41687c5bad0b2bb31a7eb24b23"
+    },
+    {
+      "path": "documents/reference-injection.pdf",
+      "bytes": 1730,
+      "sha256": "2fe95b47a91968b91d548d692c28ab90b58c04c156b5a9403572adb09e19596b"
+    },
+    {
+      "path": "documents/invoice-spaces.pdf",
+      "bytes": 1961,
+      "sha256": "6065294b90fdeae12d8b9fe28355a9866fa3834f9f40f5bda70e28d996b92e69"
+    },
+    {
+      "path": "documents/invoice-version2.pdf",
+      "bytes": 2017,
+      "sha256": "12233b5ed39a6f542b52461021b787446c96f86d4befc5c200dd3e3acfdc8d40"
+    }
+  ],
+  "scenarios": [
+    "scenarios/JUDGE-001.json",
+    "scenarios/JUDGE-002.json",
+    "scenarios/JUDGE-003.json",
+    "scenarios/JUDGE-004.json",
+    "scenarios/JUDGE-005.json",
+    "scenarios/JUDGE-006.json",
+    "scenarios/JUDGE-007.json",
+    "scenarios/JUDGE-008.json",
+    "scenarios/JUDGE-009.json",
+    "scenarios/JUDGE-010.json",
+    "scenarios/JUDGE-011.json",
+    "scenarios/JUDGE-012.json",
+    "scenarios/JUDGE-013.json",
+    "scenarios/JUDGE-014.json",
+    "scenarios/JUDGE-015.json",
+    "scenarios/JUDGE-016.json",
+    "scenarios/JUDGE-017.json",
+    "scenarios/JUDGE-018.json",
+    "scenarios/JUDGE-019.json",
+    "scenarios/JUDGE-020.json",
+    "scenarios/JUDGE-021.json",
+    "scenarios/JUDGE-022.json",
+    "scenarios/JUDGE-023.json",
+    "scenarios/JUDGE-024.json",
+    "scenarios/JUDGE-025.json",
+    "scenarios/JUDGE-026.json",
+    "scenarios/JUDGE-027.json",
+    "scenarios/JUDGE-028.json",
+    "scenarios/JUDGE-029.json",
+    "scenarios/JUDGE-030.json",
+    "scenarios/JUDGE-031.json",
+    "scenarios/JUDGE-032.json",
+    "scenarios/JUDGE-033.json",
+    "scenarios/JUDGE-034.json",
+    "scenarios/JUDGE-035.json",
+    "scenarios/JUDGE-036.json",
+    "scenarios/JUDGE-037.json",
+    "scenarios/JUDGE-038.json",
+    "scenarios/JUDGE-039.json",
+    "scenarios/JUDGE-040.json",
+    "scenarios/JUDGE-041.json",
+    "scenarios/JUDGE-042.json",
+    "scenarios/JUDGE-043.json",
+    "scenarios/JUDGE-044.json",
+    "scenarios/JUDGE-045.json",
+    "scenarios/JUDGE-046.json",
+    "scenarios/JUDGE-047.json",
+    "scenarios/JUDGE-048.json",
+    "scenarios/JUDGE-049.json",
+    "scenarios/JUDGE-050.json",
+    "scenarios/JUDGE-051.json",
+    "scenarios/JUDGE-052.json",
+    "scenarios/JUDGE-053.json",
+    "scenarios/JUDGE-054.json"
+  ]
+}

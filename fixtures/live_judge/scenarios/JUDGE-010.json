@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-010",
+  "description": "CONFLICTING SELLER VIEW",
+  "handler": "core",
+  "variant": "line_conflict",
+  "case_id": "CASE-JUDGE-010",
+  "company_id": "SYN-COMPANY-JUDGE-010",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-010.json",
+  "company_context": {
+    "source": "observed/JUDGE-010.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-010.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-010.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

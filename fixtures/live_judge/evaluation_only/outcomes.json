@@ -1,0 +1,224 @@
+{
+  "JUDGE-001": {
+    "review_index": 0
+  },
+  "JUDGE-002": {
+    "review_index": 35
+  },
+  "JUDGE-003": {
+    "review_index": null
+  },
+  "JUDGE-004": {
+    "review_index": 0
+  },
+  "JUDGE-005": {
+    "review_index": 0
+  },
+  "JUDGE-006": {
+    "review_index": 40
+  },
+  "JUDGE-007": {
+    "invariant": "VALID SECOND-PROJECT EVIDENCE",
+    "phase": 1
+  },
+  "JUDGE-008": {
+    "invariant": "DECLARATION ONLY",
+    "phase": 1
+  },
+  "JUDGE-009": {
+    "review_index": 0
+  },
+  "JUDGE-010": {
+    "review_index": 35
+  },
+  "JUDGE-011": {
+    "invariant": "CREDIT NOTE",
+    "phase": 1
+  },
+  "JUDGE-012": {
+    "invariant": "DELIVERY RECORD",
+    "phase": 1
+  },
+  "JUDGE-013": {
+    "invariant": "DOCUMENT INJECTION",
+    "phase": 1
+  },
+  "JUDGE-014": {
+    "invariant": "MALFORMED PDF",
+    "phase": 1
+  },
+  "JUDGE-015": {
+    "invariant": "BLANK PDF",
+    "phase": 1
+  },
+  "JUDGE-016": {
+    "invariant": "LARGE PDF",
+    "phase": 1
+  },
+  "JUDGE-017": {
+    "invariant": "STALE VERSION",
+    "phase": 1
+  },
+  "JUDGE-018": {
+    "invariant": "DOUBLE SUBMIT",
+    "phase": 1
+  },
+  "JUDGE-019": {
+    "invariant": "PROVIDER FAILURE CHAOS",
+    "phase": 1
+  },
+  "JUDGE-020": {
+    "invariant": "ROLE TAMPERING",
+    "phase": 1
+  },
+  "JUDGE-021": {
+    "review_index": 0
+  },
+  "JUDGE-022": {
+    "review_index": 0
+  },
+  "JUDGE-023": {
+    "review_index": 0
+  },
+  "JUDGE-024": {
+    "review_index": 0
+  },
+  "JUDGE-025": {
+    "review_index": 0
+  },
+  "JUDGE-026": {
+    "review_index": 0
+  },
+  "JUDGE-027": {
+    "review_index": 0
+  },
+  "JUDGE-028": {
+    "invariant": "INPUT TAMPERING",
+    "phase": 1
+  },
+  "JUDGE-029": {
+    "invariant": "WEIRD PURPOSE",
+    "phase": 1
+  },
+  "JUDGE-030": {
+    "invariant": "DOCUMENT MATRIX",
+    "phase": 1
+  },
+  "JUDGE-031": {
+    "invariant": "ANALYSIS RESTART",
+    "phase": 1
+  },
+  "JUDGE-032": {
+    "invariant": "DECISION RESTART",
+    "phase": 1
+  },
+  "JUDGE-033": {
+    "invariant": "TWO CLIENTS",
+    "phase": 1
+  },
+  "JUDGE-034": {
+    "invariant": "RAG PRIVACY AND CITATIONS",
+    "phase": 1
+  },
+  "JUDGE-035": {
+    "invariant": "MODEL OUTPUT TAMPERING",
+    "phase": 1
+  },
+  "JUDGE-036": {
+    "invariant": "TRACE PRIVACY AND OUTAGE",
+    "phase": 1
+  },
+  "JUDGE-037": {
+    "invariant": "UNEXPECTED JSON PROPERTIES",
+    "phase": 1
+  },
+  "JUDGE-038": {
+    "invariant": "UPLOAD RETRY AND DUPLICATES",
+    "phase": 1
+  },
+  "JUDGE-039": {
+    "invariant": "REVISION IMMUTABILITY",
+    "phase": 1
+  },
+  "JUDGE-040": {
+    "invariant": "SHORT VS 18 MONTHS",
+    "phase": 2,
+    "review_index_unchanged": true,
+    "expected_handling": "NEEDS_CLARIFICATION"
+  },
+  "JUDGE-041": {
+    "invariant": "LONGER COMPLETE",
+    "phase": 2,
+    "review_index_unchanged": true,
+    "expected_handling": "NO_UNNECESSARY_QUESTION"
+  },
+  "JUDGE-042": {
+    "invariant": "LONGER MISSING STAGE",
+    "phase": 2,
+    "review_index_unchanged": true,
+    "expected_handling": "QUESTION"
+  },
+  "JUDGE-043": {
+    "invariant": "MISSING DATES",
+    "phase": 2,
+    "review_index_unchanged": true,
+    "expected_handling": "INSUFFICIENT"
+  },
+  "JUDGE-044": {
+    "invariant": "END BEFORE START",
+    "phase": 2,
+    "review_index_unchanged": true,
+    "expected_handling": "SAFE_REJECTION"
+  },
+  "JUDGE-045": {
+    "invariant": "LLM DISAGREES WITH DATES",
+    "phase": 2,
+    "review_index_unchanged": true,
+    "expected_handling": "NEEDS_CLARIFICATION"
+  },
+  "JUDGE-046": {
+    "invariant": "REACT API BROWSER",
+    "phase": 2
+  },
+  "JUDGE-047": {
+    "invariant": "LIVE JEV",
+    "phase": 1,
+    "broad_classes": {
+      "invoice-fr.pdf": "INVOICE",
+      "credit-note.pdf": "CREDIT_NOTE",
+      "payment.pdf": "PAYMENT_RECORD",
+      "delivery.pdf": "DELIVERY_RECORD",
+      "allocation-reference.pdf": "ALLOCATION_REFERENCE",
+      "allocation-response.pdf": "ALLOCATION_RESPONSE",
+      "ambiguous.pdf": "OTHER_OR_UNKNOWN"
+    }
+  },
+  "JUDGE-048": {
+    "invariant": "LIVE EXTRACTION",
+    "phase": 1
+  },
+  "JUDGE-049": {
+    "invariant": "LIVE PLANNER",
+    "phase": 1
+  },
+  "JUDGE-050": {
+    "invariant": "LIVE QDRANT",
+    "phase": 1
+  },
+  "JUDGE-051": {
+    "invariant": "LIVE GROUNDED RAG",
+    "phase": 1
+  },
+  "JUDGE-052": {
+    "invariant": "LIVE LANGSMITH",
+    "phase": 1
+  },
+  "JUDGE-053": {
+    "invariant": "LIVE VERSUS FALLBACK",
+    "phase": 1
+  },
+  "JUDGE-054": {
+    "invariant": "RAG APPLICABILITY BYPASS",
+    "phase": 1
+  }
+}

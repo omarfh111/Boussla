@@ -1,0 +1,37 @@
+{
+  "scenario_id": "JUDGE-052",
+  "description": "LIVE LANGSMITH",
+  "handler": "live",
+  "variant": "langsmith",
+  "case_id": "CASE-JUDGE-052",
+  "company_id": "SYN-COMPANY-JUDGE-052",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-052.json",
+  "company_context": {
+    "source": "observed/JUDGE-052.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-052.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-052.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "live"
+  ],
+  "provider_requirements": [
+    "langsmith"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-032",
+  "description": "DECISION RESTART",
+  "handler": "restart_decision",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-032",
+  "company_id": "SYN-COMPANY-JUDGE-032",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-032.json",
+  "company_context": {
+    "source": "observed/JUDGE-032.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-032.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-032.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "restart_decision"
+  ],
+  "provider_requirements": []
+}

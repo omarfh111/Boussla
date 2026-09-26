@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-026",
+  "description": "MULTIPLE INVOICE VERSIONS",
+  "handler": "core",
+  "variant": "versions",
+  "case_id": "CASE-JUDGE-026",
+  "company_id": "SYN-COMPANY-JUDGE-026",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-026.json",
+  "company_context": {
+    "source": "observed/JUDGE-026.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-026.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-026.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

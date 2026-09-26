@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-031",
+  "description": "ANALYSIS RESTART",
+  "handler": "restart_analysis",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-031",
+  "company_id": "SYN-COMPANY-JUDGE-031",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-031.json",
+  "company_context": {
+    "source": "observed/JUDGE-031.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-031.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-031.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "restart_analysis"
+  ],
+  "provider_requirements": []
+}

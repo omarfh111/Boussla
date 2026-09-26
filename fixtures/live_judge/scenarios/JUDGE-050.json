@@ -1,0 +1,37 @@
+{
+  "scenario_id": "JUDGE-050",
+  "description": "LIVE QDRANT",
+  "handler": "live",
+  "variant": "qdrant",
+  "case_id": "CASE-JUDGE-050",
+  "company_id": "SYN-COMPANY-JUDGE-050",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-050.json",
+  "company_context": {
+    "source": "observed/JUDGE-050.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-050.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-050.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "live"
+  ],
+  "provider_requirements": [
+    "qdrant"
+  ]
+}

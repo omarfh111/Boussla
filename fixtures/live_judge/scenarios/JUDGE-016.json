@@ -1,0 +1,34 @@
+{
+  "scenario_id": "JUDGE-016",
+  "description": "LARGE PDF",
+  "handler": "document",
+  "variant": "oversized.pdf",
+  "case_id": "CASE-JUDGE-016",
+  "company_id": "SYN-COMPANY-JUDGE-016",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-016.json",
+  "company_context": {
+    "source": "observed/JUDGE-016.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-016.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-016.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/oversized.pdf"
+  ],
+  "actions": [
+    "document"
+  ],
+  "provider_requirements": []
+}

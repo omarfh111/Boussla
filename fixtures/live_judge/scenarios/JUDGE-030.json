@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-030",
+  "description": "DOCUMENT MATRIX",
+  "handler": "documents",
+  "variant": "clean",
+  "case_id": "CASE-JUDGE-030",
+  "company_id": "SYN-COMPANY-JUDGE-030",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-030.json",
+  "company_context": {
+    "source": "observed/JUDGE-030.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-030.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-030.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "documents"
+  ],
+  "provider_requirements": []
+}

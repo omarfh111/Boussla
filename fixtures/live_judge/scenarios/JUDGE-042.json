@@ -1,0 +1,41 @@
+{
+  "scenario_id": "JUDGE-042",
+  "description": "LONGER MISSING STAGE",
+  "handler": "pending_context",
+  "variant": "missing_stage",
+  "case_id": "CASE-JUDGE-042",
+  "company_id": "SYN-COMPANY-JUDGE-042",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-042.json",
+  "company_context": {
+    "source": "observed/JUDGE-042.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-042.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-042.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "pending_context"
+  ],
+  "provider_requirements": [],
+  "context_input": {
+    "duration_category": "LONGER",
+    "purpose_text": "Projet synthétique de dix-huit mois",
+    "planned_start": "2026-01-01",
+    "planned_end": "2027-07-01"
+  }
+}

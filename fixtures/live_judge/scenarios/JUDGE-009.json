@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-009",
+  "description": "SAME SOURCE",
+  "handler": "core",
+  "variant": "same_source",
+  "case_id": "CASE-JUDGE-009",
+  "company_id": "SYN-COMPANY-JUDGE-009",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-009.json",
+  "company_context": {
+    "source": "observed/JUDGE-009.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-009.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-009.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

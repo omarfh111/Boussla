@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-003",
+  "description": "MISSING INVOICE FIELD",
+  "handler": "core",
+  "variant": "unconfirmed",
+  "case_id": "CASE-JUDGE-003",
+  "company_id": "SYN-COMPANY-JUDGE-003",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-003.json",
+  "company_context": {
+    "source": "observed/JUDGE-003.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-003.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-003.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "core"
+  ],
+  "provider_requirements": []
+}

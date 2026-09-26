@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-039",
+  "description": "REVISION IMMUTABILITY",
+  "handler": "history",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-039",
+  "company_id": "SYN-COMPANY-JUDGE-039",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-039.json",
+  "company_context": {
+    "source": "observed/JUDGE-039.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-039.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-039.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "history"
+  ],
+  "provider_requirements": []
+}

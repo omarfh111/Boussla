@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-054",
+  "description": "RAG APPLICABILITY BYPASS",
+  "handler": "rag_language",
+  "variant": "conflict",
+  "case_id": "CASE-JUDGE-054",
+  "company_id": "SYN-COMPANY-JUDGE-054",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-054.json",
+  "company_context": {
+    "source": "observed/JUDGE-054.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-054.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-054.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "rag_language"
+  ],
+  "provider_requirements": []
+}

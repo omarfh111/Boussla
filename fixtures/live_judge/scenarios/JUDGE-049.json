@@ -1,0 +1,37 @@
+{
+  "scenario_id": "JUDGE-049",
+  "description": "LIVE PLANNER",
+  "handler": "live",
+  "variant": "planner",
+  "case_id": "CASE-JUDGE-049",
+  "company_id": "SYN-COMPANY-JUDGE-049",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-049.json",
+  "company_context": {
+    "source": "observed/JUDGE-049.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-049.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-049.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "live"
+  ],
+  "provider_requirements": [
+    "planner"
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "scenario_id": "JUDGE-047",
+  "description": "LIVE JEV",
+  "handler": "live",
+  "variant": "jev",
+  "case_id": "CASE-JUDGE-047",
+  "company_id": "SYN-COMPANY-JUDGE-047",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-047.json",
+  "company_context": {
+    "source": "observed/JUDGE-047.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-047.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-047.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "live"
+  ],
+  "provider_requirements": [
+    "jev"
+  ]
+}

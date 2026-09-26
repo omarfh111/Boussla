@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-007",
+  "description": "VALID SECOND-PROJECT EVIDENCE",
+  "handler": "acceptance",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-007",
+  "company_id": "SYN-COMPANY-JUDGE-007",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-007.json",
+  "company_context": {
+    "source": "observed/JUDGE-007.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-007.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-007.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "acceptance"
+  ],
+  "provider_requirements": []
+}

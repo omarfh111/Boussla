@@ -1,0 +1,34 @@
+{
+  "scenario_id": "JUDGE-012",
+  "description": "DELIVERY RECORD",
+  "handler": "document",
+  "variant": "delivery.pdf",
+  "case_id": "CASE-JUDGE-012",
+  "company_id": "SYN-COMPANY-JUDGE-012",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-012.json",
+  "company_context": {
+    "source": "observed/JUDGE-012.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-012.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-012.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/delivery.pdf"
+  ],
+  "actions": [
+    "document"
+  ],
+  "provider_requirements": []
+}

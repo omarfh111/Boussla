@@ -1,0 +1,42 @@
+{
+  "scenario_id": "JUDGE-040",
+  "description": "SHORT VS 18 MONTHS",
+  "handler": "pending_context",
+  "variant": "short_long",
+  "case_id": "CASE-JUDGE-040",
+  "company_id": "SYN-COMPANY-JUDGE-040",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-040.json",
+  "company_context": {
+    "source": "observed/JUDGE-040.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-040.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-040.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "pending_context"
+  ],
+  "provider_requirements": [],
+  "context_input": {
+    "duration_category": "SHORT",
+    "purpose_text": "Projet synthétique de dix-huit mois",
+    "planned_start": "2026-01-01",
+    "planned_end": "2027-07-01",
+    "project_stage": "IN_PROGRESS"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "scenario_id": "JUDGE-033",
+  "description": "TWO CLIENTS",
+  "handler": "concurrent",
+  "variant": "quantity",
+  "case_id": "CASE-JUDGE-033",
+  "company_id": "SYN-COMPANY-JUDGE-033",
+  "actors": [
+    "COMPANY",
+    "OFFICER",
+    "OTHER_COMPANY",
+    "UNASSIGNED_OFFICER"
+  ],
+  "observed_file": "observed/JUDGE-033.json",
+  "company_context": {
+    "source": "observed/JUDGE-033.json",
+    "kind": "context_claim"
+  },
+  "payments": {
+    "source": "observed/JUDGE-033.json",
+    "kind": "payment"
+  },
+  "allocations": {
+    "source": "observed/JUDGE-033.json",
+    "kind": "allocation"
+  },
+  "input_documents": [
+    "documents/invoice-fr.pdf",
+    "documents/allocation-response.pdf"
+  ],
+  "actions": [
+    "concurrent"
+  ],
+  "provider_requirements": []
+}
