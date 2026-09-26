@@ -10,6 +10,7 @@ import pytest
 
 from boussla.config import get_settings
 
+CLOSED_ENDPOINT = "http://127.0.0.1:9/provider-disabled-in-tests"
 KEYS = ("OPENAI_API_KEY", "TYPESAFE_API_KEY", "LANGSMITH_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
         "QDRANT_URL", "QDRANT_API_KEY")
 
@@ -26,6 +27,15 @@ def hermetic_env(tmp_path_factory, monkeypatch):
     for key, name in (("CASE_DB_PATH", "cases.sqlite"), ("CHECKPOINT_DB_PATH", "checkpoints.sqlite"),
                       ("UPLOAD_DIR", "uploads"), ("EVENT_LOG_PATH", "events.jsonl")):
         monkeypatch.setenv(key, str(runtime / name))
+    # Hard-coded provider endpoints ignore OPENAI_BASE_URL; point them at a closed local
+    # port so a test that opts into a (fake) key can never reach a real provider.
+    # (Jev needs TYPESAFE_API_KEY and JEV_ENABLED, both disabled above; its tests assert its URL.)
+    for module in ("boussla.adapters.model_extraction", "boussla.context.interpreter",
+                   "boussla.retrieval.grounded_rag"):
+        try:
+            monkeypatch.setattr(f"{module}.ENDPOINT", CLOSED_ENDPOINT)
+        except (ImportError, AttributeError):
+            pass
     get_settings.cache_clear()
     _clear_reference_cache()
     yield
