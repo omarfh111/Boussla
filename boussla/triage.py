@@ -16,9 +16,12 @@ legal weights, and are shown to the officer as reason codes):
     CLARIFICATION_OVERDUE                +10  that response is past its DEMO service target
     REPEATED_UNANSWERED_CLARIFICATION    +10  two or more requests are past target without a response
     EVIDENCE_AWAITING_OFFICER_DECISION   +10  a company proposal waits for a human accept/reject
-    ACTIVITY_GAP_NEEDS_REVIEW            +10  lane B history signal ACTIVITY_GAP
-    HISTORICAL_DATA_GAP_NEEDS_REVIEW     +10  lane B history signal HISTORICAL_DATA_GAP
-    TRANSACTION_INCONSISTENCY_NEEDS_REVIEW +10 lane B history signal TRANSACTION_INCONSISTENCY
+    ACTIVITY_GAP_NEEDS_REVIEW            +10  lane B signal ACTIVITY_GAP
+    HISTORICAL_DATA_GAP_NEEDS_REVIEW     +10  lane B signal LATE_DOCUMENT_ACTIVITY or INSUFFICIENT_HISTORY
+    TRANSACTION_INCONSISTENCY_NEEDS_REVIEW +10 lane B signal REPEATED_INVOICE_CONFLICT
+    HISTORY_PATTERN_CHANGE_NEEDS_REVIEW  +5   lane B signal VOLUME_SPIKE, VOLUME_DROP,
+                                              PAYMENT_PATTERN_CHANGE or COUNTERPARTY_CONCENTRATION_CHANGE
+    (NO_SIGNIFICANT_CHANGE adds nothing; each triage reason counts once.)
 
 Unanswered or overdue clarifications only add urgency: they never create a finding,
 never change the review index and are never a fraud signal.
@@ -29,7 +32,7 @@ from datetime import datetime
 
 from boussla.contracts import (
     ClarificationDeadlineView, CompanyHistorySignal, EvidenceProposal, Finding, FindingStatus,
-    HistorySignalKind, ProposalStatus, RequestStatus, RequestView, TriageAssessment,
+    HistorySignalCode, ProposalStatus, RequestStatus, RequestView, TriageAssessment,
 )
 
 FORMULA_VERSION = "triage-demo-1"
@@ -44,12 +47,21 @@ POINTS = {
     "ACTIVITY_GAP_NEEDS_REVIEW": 10,
     "HISTORICAL_DATA_GAP_NEEDS_REVIEW": 10,
     "TRANSACTION_INCONSISTENCY_NEEDS_REVIEW": 10,
+    "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW": 5,
 }
 SIGNAL_REASON = {
-    HistorySignalKind.ACTIVITY_GAP: "ACTIVITY_GAP_NEEDS_REVIEW",
-    HistorySignalKind.HISTORICAL_DATA_GAP: "HISTORICAL_DATA_GAP_NEEDS_REVIEW",
-    HistorySignalKind.TRANSACTION_INCONSISTENCY: "TRANSACTION_INCONSISTENCY_NEEDS_REVIEW",
+    HistorySignalCode.ACTIVITY_GAP: "ACTIVITY_GAP_NEEDS_REVIEW",
+    HistorySignalCode.LATE_DOCUMENT_ACTIVITY: "HISTORICAL_DATA_GAP_NEEDS_REVIEW",
+    HistorySignalCode.INSUFFICIENT_HISTORY: "HISTORICAL_DATA_GAP_NEEDS_REVIEW",
+    HistorySignalCode.REPEATED_INVOICE_CONFLICT: "TRANSACTION_INCONSISTENCY_NEEDS_REVIEW",
+    HistorySignalCode.VOLUME_SPIKE: "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW",
+    HistorySignalCode.VOLUME_DROP: "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW",
+    HistorySignalCode.PAYMENT_PATTERN_CHANGE: "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW",
+    HistorySignalCode.COUNTERPARTY_CONCENTRATION_CHANGE: "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW",
 }
+SIGNAL_REASON_ORDER = ("ACTIVITY_GAP_NEEDS_REVIEW", "HISTORICAL_DATA_GAP_NEEDS_REVIEW",
+                       "TRANSACTION_INCONSISTENCY_NEEDS_REVIEW", "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW")
+ANOMALY_CODES = frozenset(SIGNAL_REASON) - {HistorySignalCode.INSUFFICIENT_HISTORY}
 
 
 def clarification_deadlines(requests: list[RequestView] | tuple[RequestView, ...],
@@ -88,9 +100,8 @@ def assess_triage(*, case_id: str, case_version: int, review_index: int | None,
         reasons.append("REPEATED_UNANSWERED_CLARIFICATION")
     if any(p.status is ProposalStatus.AWAITING_HUMAN_REVIEW for p in proposals):
         reasons.append("EVIDENCE_AWAITING_OFFICER_DECISION")
-    for kind in HistorySignalKind:  # fixed order; each kind counts once
-        if any(s.kind is kind for s in history_signals):
-            reasons.append(SIGNAL_REASON[kind])
+    present = {SIGNAL_REASON[s.reason_code] for s in history_signals if s.reason_code in SIGNAL_REASON}
+    reasons += [r for r in SIGNAL_REASON_ORDER if r in present]  # fixed order; each reason once
     base = review_index or 0
     components = {"REVIEW_INDEX_BASE": base, **{r: POINTS[r] for r in reasons}}
     priority = max(0, min(100, sum(components.values())))

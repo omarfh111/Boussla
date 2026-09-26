@@ -678,6 +678,11 @@ class ClarificationRequest(Contract):
     origin: Literal["OFFICER", "AUTOMATIC"] = "OFFICER"
     """AUTOMATIC: neutral fixed-catalogue request published by the service after a company
     submission (no human approval, ``approved_by`` stays None). Never a decision."""
+    reason_codes: tuple[str, ...] = ()
+    """Deterministic codes (context consistency / finding reasons) that led to the questions."""
+    reason_text_fr: str | None = None
+    overdue_state: Literal["ON_TRACK", "FOLLOW_UP_DUE"] | None = None
+    """Read-time only (demo target vs clock) for requests awaiting a response; never stored."""
 
 
 class ClarificationResponse(Contract):
@@ -838,6 +843,7 @@ class CompanyCaseView(Contract):
     inbox: tuple["RequestView", ...] = ()
     responses: tuple[ClarificationResponse, ...] = ()
     context_assessment: ContextAssessmentView | None = None
+    capabilities: "CaseCapabilities" = Field(default_factory=lambda: CaseCapabilities())
     mode: Mode
     banner_fr: str
 
@@ -887,7 +893,13 @@ class OfficerCaseView(Contract):
     """Officer-only queue urgency, separate from ``score.review_index``."""
     clarification_deadlines: tuple["ClarificationDeadlineView", ...] = ()
     history_signals: tuple["CompanyHistorySignal", ...] = ()
-    investigator_brief: "InvestigatorBrief | None" = None
+    investigator_brief: "InvestigatorBriefView | None" = None
+    enterprise_profile: "EnterpriseProfileView | None" = None
+    monthly_activity: tuple["MonthlyActivityView", ...] = ()
+    payment_timeline: tuple["PaymentTimelineEntry", ...] = ()
+    financial_snapshot: "FinancialSnapshotView | None" = None
+    invoice_comparisons: tuple["InvoiceComparisonView", ...] = ()
+    deliveries: tuple[Delivery, ...] = ()
     mode: Mode
     mode_by_node: dict[str, Mode] = Field(default_factory=dict)
     banner_fr: str
@@ -925,6 +937,12 @@ class QueueItem(Contract):
     triage_priority: int | None = None
     """Queue urgency (0..100), NOT the review index and NOT a fraud probability."""
     triage_reason_codes: tuple[str, ...] = ()
+    sector: str | None = None
+    synthetic_identifier: str | None = None
+    last_activity_at: date | None = None
+    history_signal_codes: tuple[str, ...] = ()
+    history_anomaly: bool | None = None
+    """True when a lane B signal other than NO_SIGNIFICANT_CHANGE/INSUFFICIENT_HISTORY exists."""
 
 
 class QueuePage(Contract):
@@ -1043,57 +1061,175 @@ class TriageAssessment(Contract):
                     "de fraude ; une absence de réponse ne crée aucun constat.")
 
 
-class HistorySignalKind(str, Enum):
-    """Lane B portfolio/history signals that may raise triage urgency (never the index)."""
+class HistorySignalCode(str, Enum):
+    """Lane B neutral history observations (``boussla.history_signals``). Review context only."""
 
     ACTIVITY_GAP = "ACTIVITY_GAP"
-    HISTORICAL_DATA_GAP = "HISTORICAL_DATA_GAP"
-    TRANSACTION_INCONSISTENCY = "TRANSACTION_INCONSISTENCY"
+    LATE_DOCUMENT_ACTIVITY = "LATE_DOCUMENT_ACTIVITY"
+    VOLUME_SPIKE = "VOLUME_SPIKE"
+    VOLUME_DROP = "VOLUME_DROP"
+    PAYMENT_PATTERN_CHANGE = "PAYMENT_PATTERN_CHANGE"
+    COUNTERPARTY_CONCENTRATION_CHANGE = "COUNTERPARTY_CONCENTRATION_CHANGE"
+    REPEATED_INVOICE_CONFLICT = "REPEATED_INVOICE_CONFLICT"
+    NO_SIGNIFICANT_CHANGE = "NO_SIGNIFICANT_CHANGE"
+    INSUFFICIENT_HISTORY = "INSUFFICIENT_HISTORY"
 
 
 class CompanyHistorySignal(Contract):
-    """Lane B: deterministic company history/portfolio observation (officer-only).
+    """Lane B deterministic history observation, typed for officer views (officer-only).
 
-    Operational context for queue urgency; not a finding, not evidence and never an
-    input to checks, scores, acceptance or revisions.
+    Operational review context for queue urgency; not a finding, not evidence, never a
+    fraud label and never an input to checks, scores, acceptance or revisions.
     """
 
     signal_id: str
     company_id: str
-    kind: HistorySignalKind
-    reason_code: str
-    as_of: date
-    summary_fr: str
-    source_record_ids: tuple[str, ...] = ()
+    reason_code: HistorySignalCode
+    period: str
+    metric: str
+    observed_value: str
+    baseline_value: str | None = None
+    baseline_periods: tuple[str, ...] = ()
+    evidence_source_ids: tuple[str, ...] = ()
+    explanation_fr: str
+    method: str
     mode: Mode
     affects_review_index: Literal[False] = False
 
 
-class InvestigatorBriefPoint(Contract):
+class BriefObservationView(Contract):
+    kind: Literal["FACT", "DECLARATION", "MODEL_INTERPRETATION", "HYPOTHESIS", "HYPOTHETICAL_SCENARIO"]
     text_fr: str
-    cited_finding_ids: tuple[str, ...] = ()
-    cited_rule_ids: tuple[str, ...] = ()
-    cited_fact_ids: tuple[str, ...] = ()
+    source_codes: tuple[str, ...] = ()
 
 
-class InvestigatorBrief(Contract):
-    """Lane C: officer-only AI briefing over the already-computed officer view.
+class BriefHypothesisView(Contract):
+    """One fixed-catalogue candidate explanation (lane C). Support is a deterministic label,
+    never a probability and never a score contribution."""
 
-    Display aid only: cites existing finding IDs / retrieved rule IDs, may suggest
-    allowlisted question IDs, never computes or changes the review index, never
-    accepts evidence and never states a legal conclusion.
+    hypothesis_id: str
+    name_fr: str
+    status: Literal["SUPPORTED", "PLAUSIBLE", "WEAK", "CONTRADICTED", "INSUFFICIENT"]
+    supporting_refs: tuple[str, ...] = ()
+    contradicting_refs: tuple[str, ...] = ()
+    missing_evidence: tuple[str, ...] = ()
+    why_it_matters_fr: str
+
+
+class InvestigatorBriefView(Contract):
+    """Officer-only assisted analysis built from lane C's ``InvestigatorBrief`` after the
+    deterministic evaluation, history signals, context consistency and public retrieval.
+
+    Cites only known finding evidence, retrieved rule IDs, history codes and catalogue
+    hypothesis IDs; suggests allowlisted question IDs only. Never changes the review
+    index, facts, evidence acceptance or legal applicability.
     """
 
-    brief_id: str
     case_id: str
     case_version: int
-    points: tuple[InvestigatorBriefPoint, ...] = ()
-    suggested_question_ids: tuple[str, ...] = ()
+    summary_fr: str
+    key_observations: tuple[BriefObservationView, ...] = ()
+    top_hypotheses: tuple[BriefHypothesisView, ...] = Field(default=(), max_length=5)
+    missing_information: tuple[str, ...] = ()
+    changes_since_previous_version: tuple[str, ...] = ()
+    questions_proposed: tuple[str, ...] = Field(default=(), max_length=3)
+    questions_already_asked: tuple[str, ...] = ()
+    reference_rule_ids: tuple[str, ...] = ()
+    history_signal_codes: tuple[str, ...] = ()
     limitations: tuple[str, ...] = ()
-    model_id: str | None = None
     mode: Mode
     authoritative: Literal[False] = False
-    disclaimer_fr: str = "Synthèse d'aide à la revue ; aucune conclusion juridique ; décision réservée à l'agent."
+    label_fr: str = "Analyse assistée BOUSSLA"
+    disclaimer_fr: str = "L'analyse assistée ne modifie pas l'indice de revue ni les faits du dossier."
+
+
+class EnterpriseProfileView(Contract):
+    company_id: str
+    display_name: str
+    synthetic_identifier: str
+    sector: str
+    created_on: date
+    activity_start: str | None = None
+    activity_end: str | None = None
+    portfolio_member: bool = False
+    data_kind: Literal["SYNTHETIC"] = "SYNTHETIC"
+
+
+class MonthlyActivityView(Contract):
+    """Deterministic monthly counts from the case facts (no imputation of missing months)."""
+
+    month: str
+    transaction_count: int
+    invoice_observation_count: int
+    settled_outflow_millimes: int
+    source_label: str = "Faits synthétiques du dossier"
+
+
+class PaymentTimelineEntry(Contract):
+    payment_id: str
+    transaction_id: str | None = None
+    occurred_at: AwareDatetime
+    amount_millimes: int
+    currency: Currency
+    status: PaymentStatus
+    origin_group_id: str
+
+
+class FinancialSnapshotView(Contract):
+    """Lane B synthetic authorized snapshot. Context only: no bank access, no proof."""
+
+    label_fr: Literal["Instantané financier synthétique — source autorisée simulée"] = (
+        "Instantané financier synthétique — source autorisée simulée")
+    data_kind: Literal["SYNTHETIC"] = "SYNTHETIC"
+    as_of: AwareDatetime
+    currency: Currency
+    observed_outflows_millimes: int
+    observed_settlements_millimes: int
+    documented_payable_millimes: int
+    outstanding_documented_payable_millimes: int
+    inflows_millimes: None = None
+    """Not supplied: the synthetic ledger covers purchases only (zero is not a revenue claim)."""
+    scope: str
+    statement_fr: str
+    source_count: int
+
+
+class InvoiceComparisonView(Contract):
+    """Buyer vs seller observation of one transaction, paired by authoritative IDs.
+    Differences are computed field by field on the server; agreement is corroboration
+    between independent observations, never proof of validity."""
+
+    transaction_id: str
+    buyer_observation_id: str | None = None
+    seller_observation_id: str | None = None
+    status: Literal["CONCORDANT", "DIFFERENCES", "SINGLE_OBSERVATION"]
+    label_fr: str
+    difference_fields: tuple[str, ...] = ()
+    counterparty_reason_code: str | None = None
+
+
+class CaseCapabilities(Contract):
+    supports_null_project_id: bool = True
+
+
+class AdminEnterpriseView(Contract):
+    """Synthetic portfolio enterprise as seen by the local DEMO_OPERATOR only."""
+
+    company_id: str
+    display_name: str
+    sector: str
+    synthetic_identifier: str
+    case_id: str
+    case_version: int | None = None
+    transaction_count: int
+    data_kind: Literal["SYNTHETIC"] = "SYNTHETIC"
+
+
+class AdminPortfolioResult(Contract):
+    action: Literal["SEED", "RESET", "ADD", "DELETE"]
+    enterprise_count: int
+    case_ids: tuple[str, ...] = ()
+    notice_fr: str = "Administration de données synthétiques — démonstration locale."
 
 
 CompanyCaseView.model_rebuild()
@@ -1150,13 +1286,6 @@ class CompanyHistorySignalProvider(Protocol):
     """Lane B: history/portfolio signals for one company as of a date (pure, local)."""
 
     def signals(self, company_id: str, as_of: date) -> list[CompanyHistorySignal]: ...
-
-
-@runtime_checkable
-class InvestigatorBriefProvider(Protocol):
-    """Lane C: optional officer briefing; failures/None leave the view unchanged."""
-
-    def brief(self, view: OfficerCaseView) -> InvestigatorBrief | None: ...
 
 
 @runtime_checkable
