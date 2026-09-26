@@ -281,3 +281,42 @@ def test_engine_discovery_prefers_lane_b(monkeypatch):
     import boussla
     monkeypatch.setattr(boussla, "checks", mod, raising=False)
     assert type(interim_checks.get_checks_engine()).__name__ == "ChecksEngineV4"
+
+
+def test_upload_revision_hash_covers_every_fact_of_that_version(svc, actors):
+    """The recorded fact_hash of a version must match the facts as of that version
+    (regression: the integrity fact was written after commit_version)."""
+    svc.upload_document(actors[0], CASE, PDF, "a.pdf", "application/pdf", ver(svc), "u")
+    v = ver(svc)
+    recorded = svc.store.revisions(CASE)[-1]
+    with svc.store.write(CASE) as tx:
+        actual = tx._current_fact_hash(v)
+    assert recorded.version == v and recorded.fact_hash == actual
+
+
+@pytest.mark.parametrize("payload", [
+    {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "d", "planned_start": "not-a-date"},
+    {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "d", "planned_start": "2026-12-01", "planned_end": "2026-01-01"},
+    {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "d", "reported_stock_qty": "beaucoup"},
+])
+def test_invalid_context_is_a_typed_error_and_writes_nothing(svc, actors, payload):
+    v = ver(svc)
+    assert code(lambda: svc.submit_context(actors[0], CASE, payload, v, "bad")) is ErrorCode.INSUFFICIENT_INFORMATION
+    assert ver(svc) == v
+
+
+def test_invalid_project_dates_on_create_case(svc, actors):
+    for payload in ({"label": "x", "planned_start": "32/13/2026"},
+                    {"label": "x", "planned_start": "2026-12-01", "planned_end": "2026-01-01"}):
+        assert code(lambda: svc.create_case(actors[0], "DEMO-BAT", payload, str(payload))) is ErrorCode.INSUFFICIENT_INFORMATION
+
+
+@pytest.mark.parametrize("cursor", ["abc", "-1", "1.5"])
+def test_invalid_queue_cursor_is_a_typed_error(svc, actors, cursor):
+    assert code(lambda: svc.list_queue(actors[1], None, 10, cursor)) is ErrorCode.INSUFFICIENT_INFORMATION
+
+
+def test_queue_pagination(svc, actors):
+    page = svc.list_queue(actors[1], None, 10, "0")
+    assert len(page.items) == 1 and page.next_cursor is None
+    assert svc.list_queue(actors[1], None, 10, "5").items == ()

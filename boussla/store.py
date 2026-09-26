@@ -168,6 +168,15 @@ class CaseStore:
             raise BousslaError(ErrorCode.NOT_FOUND, "Dossier inconnu")
         return {"case_id": case_id, "company_id": row[0], "version": row[1]}
 
+    def case_incarnation(self, case_id: str) -> str:
+        """Creation timestamp of this case row. A case deleted and re-created (demo
+        reset) gets a new incarnation, so derived workflow threads never collide."""
+        with self._connect() as conn:
+            row = conn.execute("SELECT created_at FROM cases WHERE case_id=?", (case_id,)).fetchone()
+        if row is None:
+            raise BousslaError(ErrorCode.NOT_FOUND, "Dossier inconnu")
+        return row[0]
+
     def list_cases(self) -> list[dict]:
         with self._connect() as conn:
             rows = conn.execute("SELECT case_id, company_id, current_version FROM cases ORDER BY case_id").fetchall()

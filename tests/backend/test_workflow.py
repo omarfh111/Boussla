@@ -123,3 +123,28 @@ def test_company_cannot_open_decision(env):
     with pytest.raises(BousslaError) as e:
         r.open_decision(actors["DEMO-COMPANY-BAT"], CASE, pid, ver(r))
     assert e.value.code is ErrorCode.FORBIDDEN
+
+
+def test_reset_case_store_with_surviving_checkpoints_starts_fresh(tmp_path):
+    """Deleting the case DB (demo reset) while checkpoints survive must not replay a
+    thread from the old case incarnation (regression: stale v2 view, answers stuck)."""
+    settings = Settings(case_db_path=tmp_path / "c.sqlite", upload_dir=tmp_path / "up",
+                        checkpoint_db_path=tmp_path / "cp.sqlite", event_log_path=tmp_path / "ev.jsonl")
+
+    def fresh_runner():
+        store = CaseStore(settings.case_db_path, settings.upload_dir)
+        seed_demo_case(store)
+        return WorkflowRunner(BousslaAppService(store, ActorRegistry.demo(), settings=settings),
+                              settings.checkpoint_db_path, planner=fake_planner)
+    r1 = fresh_runner()
+    co = r1.service.registry.actors["DEMO-COMPANY-BAT"]
+    view = r1.run_analysis(co, CASE, ver(r1))
+    r1.submit_answers(co, CASE, {view.questions[0].question_id: "x"})
+    assert ver(r1) == 2
+    r1.close()
+    (tmp_path / "c.sqlite").unlink()
+    r2 = fresh_runner()  # case recreated at version 1, same checkpoint file
+    view2 = r2.run_analysis(co, CASE, ver(r2))
+    assert ver(r2) == 1 and view2.case_version == 1
+    after = r2.submit_answers(co, CASE, {view2.questions[0].question_id: "y"})
+    assert after.case_version == 2 and ver(r2) == 2

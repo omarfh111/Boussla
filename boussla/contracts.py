@@ -751,6 +751,8 @@ class DocumentView(Contract):
     document: Document
     extraction: ExtractionProposal | None = None
     integrity: IntegrityReport | None = None
+    routing: RouterResult | None = None
+    """Candidate document class (Jev or MANUAL fallback). Never an input to checks or scores."""
     case_version: int
     mode: Mode
 
