@@ -563,7 +563,7 @@ class BousslaAppService:
         modes = {"checks": Mode.LIVE, "retrieval": self._retrieval_mode(), "router": self._router_mode(facts),
                  "extractor": Mode.LIVE if facts["extraction"] else Mode.NOT_RUN}
         answered = self._answered_question_ids(facts)
-        rounds = len({c.claim_id for c in facts["context_claim"] if c.purpose_text.startswith("[Q-")})
+        rounds = sum(1 for e in self.store.events(case_id) if e.kind == "ANSWERS")  # one per answer batch
         question_ids, modes["planner"] = self._plan(ev, facts, answered, planner)
         status = AnalysisStatus.COMPLETED
         if not officer:
