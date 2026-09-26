@@ -94,7 +94,7 @@ simulated provenance only. The current quantity path covers one material line
 and accepted same-unit procurement references. A service/UI integration and
 PDF/provider path remain `NOT_RUN` for this population.
 
-Validation before the `b4fc655` main sync: **234 passed** across
+Validation after merging `main` at `b4fc655`: **235 passed** across
 `tests/checks`, `tests/backend`, `tests/adapters`, `tests/documents`,
 `tests/integration`, `tests/retrieval`, and
 `docs/build_lock/reference/test_core.py`. The full UI suite was not executed in
