@@ -77,7 +77,8 @@ async def health(request: Request):
 
 async def bootstrap(request: Request):
     a = actor(request)
-    cases = (["CASE-BRICKS-001"] if a.role.value == "COMPANY" else list(a.assigned_case_ids))
+    cases = ([m["case_id"] for m in service(request).store.list_cases() if m["company_id"] == a.company_id]
+             if a.role.value == "COMPANY" else list(a.assigned_case_ids))
     return result({"role": a.role.value, "case_ids": cases,
                    "banner_fr": "Simulation locale de rôles — pas une authentification de production."})
 
