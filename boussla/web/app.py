@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -226,10 +227,20 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}/proposals/{proposal_id}/reject", decide, methods=["POST"]),
         Route("/{path:path}", spa),
     ]
-    application = Starlette(routes=routes, exception_handlers={BousslaError: on_error, HTTPException: on_error,
-                          ValidationError: on_error, ValueError: on_error, TypeError: on_error, Exception: on_error})
-    application.state.service = app_service or build_service()
+    @asynccontextmanager
+    async def lifespan(app: Starlette):
+        # Built when the server starts, never at import: importing this module must not
+        # read .env, open provider clients or create runtime/ files.
+        if app.state.service is None:
+            app.state.service = build_service()
+        yield
+
+    application = Starlette(routes=routes, lifespan=lifespan,
+                            exception_handlers={BousslaError: on_error, HTTPException: on_error,
+                                                ValidationError: on_error, ValueError: on_error, TypeError: on_error,
+                                                Exception: on_error})
+    application.state.service = app_service
     return application
 
 
-app = create_app()
+app = create_app()  # service built at startup (uvicorn boussla.web.app:app)

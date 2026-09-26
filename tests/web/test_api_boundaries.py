@@ -194,3 +194,10 @@ def test_stale_browser_version_is_surfaced(client):
     r = client.post(CTX, headers=h(key="this-tab"), json={"expected_version": stale, "context": {
         "purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "cet onglet", "beneficiary_type": "X"}})
     assert err(r) == (409, "STALE_REVISION") and version(client) == stale + 1
+
+
+def test_importing_the_asgi_module_builds_nothing():
+    """`boussla.web.app:app` must not build the service (read .env, open Qdrant/OpenAI
+    clients, create runtime/) at import time; that happens at server startup."""
+    import boussla.web.app as web
+    assert web.app.state.service is None
