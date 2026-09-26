@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from enum import Enum
 
-from boussla.contracts import PurposeCategory
+from boussla.contracts import Mode, PurposeCategory
 
 
 class HorizonBucket(str, Enum):
@@ -43,3 +43,23 @@ class ContextInput:
             declared_horizon=HorizonBucket(declared_horizon),
             project_reference=project_reference, reference_expected=reference_expected,
         )
+
+
+@dataclass(frozen=True)
+class ContextInterpretation:
+    suggested_purpose_category: PurposeCategory
+    suggested_horizon: HorizonBucket
+    explicit_duration_text: str | None
+    supporting_spans: tuple[str, ...]
+    ambiguities: tuple[str, ...]
+    model_id: str | None
+    mode: Mode
+
+
+def unknown_interpretation(mode: Mode, ambiguity: str) -> ContextInterpretation:
+    return ContextInterpretation(
+        suggested_purpose_category=PurposeCategory.OTHER_OR_UNKNOWN,
+        suggested_horizon=HorizonBucket.UNKNOWN,
+        explicit_duration_text=None, supporting_spans=(), ambiguities=(ambiguity,),
+        model_id=None, mode=mode,
+    )
