@@ -40,6 +40,8 @@ def test_health_role_isolation_and_safe_serialization(client):
     assert client.get("/api/demo/bootstrap", headers=headers()).json()["case_ids"] == [CASE]
     assert client.get("/api/demo/bootstrap", headers=headers("OTHER")).status_code == 403
     assert client.get("/api/demo/bootstrap", headers={"X-Boussla-Actor-Id": "DEMO-OFFICER"}).status_code == 403
+    assert client.post(f"/api/cases/{CASE}/context", headers=headers(key="forged"), json={
+        "expected_version": 1, "actor_id": "DEMO-OFFICER", "context": {}}).status_code == 403
     company, officer = view(client, "COMPANY"), view(client, "OFFICER")
     assert company["audience"] == "COMPANY" and "score" not in company
     assert "candidate_passages" not in company and "reference_note" not in company

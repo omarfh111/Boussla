@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "frontend" / "dist"
 ROLES = {"COMPANY": "DEMO-COMPANY-BAT", "OFFICER": "DEMO-OFFICER"}
 SAFE_DETAILS = {"used", "available", "question_ids", "fields"}
+FORBIDDEN_INPUT_FIELDS = {"actor_id", "company_id", "assigned_case_ids"}
 
 
 def service(request: Request) -> BousslaAppService:
@@ -48,12 +49,31 @@ def result(value, status_code=200):
 
 
 async def body(request: Request) -> dict:
+    if int(request.headers.get("content-length", "0") or "0") > 1024 * 1024:
+        raise HTTPException(413, "Corps JSON trop volumineux")
     try:
         value = await request.json()
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(400, "Corps JSON invalide") from None
     if not isinstance(value, dict):
         raise HTTPException(400, "Objet JSON attendu")
+    if contains_forbidden_fields(value):
+        raise BousslaError(ErrorCode.FORBIDDEN, "L'identité et le périmètre sont définis par le serveur")
+    return value
+
+
+def contains_forbidden_fields(value) -> bool:
+    if isinstance(value, dict):
+        return any(key in FORBIDDEN_INPUT_FIELDS or contains_forbidden_fields(item) for key, item in value.items())
+    if isinstance(value, list):
+        return any(contains_forbidden_fields(item) for item in value)
+    return False
+
+
+def object_field(data: dict, name: str) -> dict:
+    value = data.get(name, {})
+    if not isinstance(value, dict):
+        raise HTTPException(400, f"{name} doit être un objet")
     return value
 
 
@@ -122,7 +142,7 @@ async def upload(request: Request):
 async def context(request: Request):
     a, k, data = actor(request), key(request), await body(request)
     return result(service(request).submit_context(a, request.path_params["case_id"],
-                                                  data.get("context", {}), version(data), k))
+                                                  object_field(data, "context"), version(data), k))
 
 
 async def prepare(request: Request):
@@ -140,7 +160,7 @@ async def respond(request: Request):
     a, k, data = actor(request), key(request), await body(request)
     return result(service(request).submit_response(a, request.path_params["case_id"],
                                                    request.path_params["request_id"],
-                                                   data.get("response", {}), version(data), k))
+                                                   object_field(data, "response"), version(data), k))
 
 
 async def decide(request: Request):
