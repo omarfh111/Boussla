@@ -25,8 +25,8 @@ def load_public_references(path: str | Path = DEFAULT_CORPUS) -> tuple[Reference
         return ()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(data, list) or len(data) > 15:
-            raise ValueError("public corpus must be a list of at most 15 records")
+        if not isinstance(data, list) or len(data) > 50:
+            raise ValueError("public corpus must be a list of at most 50 records")
         records = []
         for item in data:
             if not isinstance(item, dict) or set(item) != FIELDS:
@@ -55,7 +55,7 @@ def public_reference_retriever(
     """Prefer Cloud vector retrieval; fail closed to labelled local lexical mode."""
     url = qdrant_url if qdrant_url is not None else os.getenv("QDRANT_URL", "")
     key = api_key if api_key is not None else os.getenv("QDRANT_API_KEY", "")
-    name = collection if collection is not None else os.getenv("QDRANT_COLLECTION", "boussla_public_references")
+    name = collection if collection is not None else os.getenv("QDRANT_COLLECTION", "boussla_public_references_v2")
     return _cached_retriever(str(Path(path).resolve()), url, key, name)
 
 

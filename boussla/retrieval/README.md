@@ -1,60 +1,38 @@
-# Public-reference candidates for the officer dossier
+# Officer reference candidates
 
-The eight records in `public_references.json` are exact short passages inspected on
-2026-09-26 from the [Tunisian Ministry of Finance invoice and transport FAQ](https://www.finances.gov.tn/fr/node/952).
-The SHA-256 of the inspected HTML response was
-`9fbdad1650772ef219382159665ab51c286c15fab60ed3a16d681d5cb350885e`.
-`REVIEWED` means the stored text was checked against that source; it does not
-mean that legal applicability was reviewed. The page gives no publication or
-effective date for these excerpts, so those fields are null. No article or page
-number was assigned to this HTML page.
+`public_references.json` contains 29 inspected short passages from four official
+Tunisian documents: two Ministry of Finance FAQ pages, the JIBAYA 2023 VAT-code
+compilation, and JIBAYA Note commune 11/2009. Every record contains the SHA-256
+of the inspected HTML/PDF response, URL, title, printed PDF page where applicable,
+and an exact short excerpt. The PDF publication dates were not independently
+established, so `source_date` is null; the VAT compilation's title identifies its
+2023 update, and the Note identifies 2009. Effective dates remain null. `REVIEWED`
+means the excerpt was inspected against its cited source, not that current legal
+applicability was established. The officer must check the current source and law.
 
-`public_reference_retriever()` uses `QDRANT_URL`, `QDRANT_API_KEY` and
-`QDRANT_COLLECTION` from the environment. With a healthy HTTPS Cloud cluster,
-it caches one Qdrant client and one local FastEmbed model per process. The model
-is `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions);
-its cache is under ignored `runtime/fastembed/`. Only the eight public passages,
-their metadata and locally generated vectors are sent to Cloud. The four
-allowlisted finding queries are embedded locally; Cloud receives query vectors.
+The manifest is bounded at 50 records. The Qdrant backend requires 8–50 unique,
+reviewed, official Tunisian references and uses only their public text/metadata.
+The default collection is `boussla_public_references_v2`. Set `QDRANT_COLLECTION`
+to this name when loading credentials from an older `.env`; the original
+`boussla_public_references` collection is left untouched. An existing collection
+must match the manifest's deterministic IDs and every payload exactly; extra,
+missing or changed points cause labelled lexical fallback, never destructive
+replacement. Only an empty/new collection is ingested.
 
-The dedicated collection is created if absent. An existing collection must
-already contain exactly these eight IDs and exact payloads; other contents
-cause lexical fallback instead of being overwritten. `backend_mode="QDRANT"`
-returns `mode=LIVE`. Cloud/model failure switches to `backend_mode="LEXICAL"`
-and `mode=TEMPLATE`, with a sanitized failure type. Missing corpus yields
-`backend_mode="NOT_SUPPLIED"` and no passages. The source hash can be rechecked
-against a fresh download; a changed page must be reinspected before updating
-the corpus. The live smoke is `python -m scripts.smoke_qdrant_references` after
-the three environment variables have been loaded; it prints only host, IDs,
-counts and modes.
+`public_reference_retriever()` uses `QDRANT_URL`, `QDRANT_API_KEY`, and
+`QDRANT_COLLECTION`. FastEmbed runs locally with
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384 dimensions)
+and caches under ignored `runtime/fastembed/`. Cloud receives the public vectors,
+payloads, and bounded query vectors. Healthy Cloud results have `mode=LIVE` and
+`backend_mode=QDRANT`; unavailable Cloud/model gives `mode=TEMPLATE` and
+`backend_mode=LEXICAL`; absent corpus gives `NOT_SUPPLIED` and no passages.
+Unknown effective dates suppress all company-audience passages.
 
-Lane A wiring at the officer view boundary:
-
-```python
-from boussla.retrieval.corpus import public_reference_retriever
-from boussla.retrieval.queries import enrich_officer_view
-
-retriever = public_reference_retriever()  # cache once in the service process
-officer_view = enrich_officer_view(officer_view, retriever, as_of=case_cutoff_date)
-# The helper calls candidate_passages_for_reasons(retriever,
-#   ((f.family, f.reason_code) for f in officer_view.findings), ...), then sets
-# OfficerCaseView.candidate_passages and mode_by_node["retrieval"].
-```
-
-Only four allowlisted counterparty reason codes produce fixed queries. No raw
-invoice text, tax ID, company name or user prose enters retrieval. Show results
-under the label **« passages de référence candidats à examiner »**. The officer
-must verify the source, version, date and applicability before citing a passage.
-Do not show them as an automatic legal conclusion or add them to the review
-index. Because effective dates are unknown, the company audience receives no
-passages from this corpus. Lane A must place retrieval after deterministic
-checks in the officer view path. `enrich_officer_view` maps the final backend
-mode to `LIVE`, `TEMPLATE` or `NOT_RUN` (a query failure may switch Qdrant to
-lexical) while leaving findings and score unchanged. The existing Streamlit
-officer dossier renders `candidate_passages`; Lane D should use the full label
-above in that view.
-
-`RetrievedPassage` currently carries the source URL, title, text and review
-status but not the stored source hash or source/effective dates. If these must
-be displayed, Lane A should extend that shared contract and its renderer; the
-corpus retains all of those fields.
+Lane A may call `candidate_passages_for_reasons(retriever,
+((f.family, f.reason_code) for f in findings), as_of=trusted_case_date)` after
+deterministic scoring, then populate `OfficerCaseView.candidate_passages` and
+`mode_by_node["retrieval"]`. `enrich_officer_view` already demonstrates this
+without altering findings or review index. Only allowlisted reason codes produce
+queries. No invoice text, tax ID, company name, payment data, or arbitrary user
+text enters retrieval. Display under **« Passages de référence candidats à examiner »**;
+these are candidates, not automatic legal conclusions.

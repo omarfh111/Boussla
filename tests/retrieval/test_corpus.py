@@ -9,10 +9,11 @@ from boussla.retrieval.corpus import load_public_references, public_reference_re
 def test_reviewed_official_corpus_has_inspected_provenance():
     records = load_public_references()
 
-    assert 5 <= len(records) <= 15
+    assert 24 <= len(records) <= 40
     assert len({record.rule_id for record in records}) == len(records)
-    assert all(record.source_url.startswith("https://www.finances.gov.tn/") for record in records)
-    assert all(record.source_hash == "9fbdad1650772ef219382159665ab51c286c15fab60ed3a16d681d5cb350885e" for record in records)
+    assert len({record.source_url for record in records}) >= 3
+    assert all(record.source_url.startswith(("https://www.finances.gov.tn/", "https://jibaya.tn/")) for record in records)
+    assert all(len(record.source_hash) == 64 for record in records)
     assert all(record.jurisdiction == "TN" and record.language == "fr" for record in records)
     assert all(record.review_status == "REVIEWED" for record in records)
     assert all(record.source_date is None and record.effective_from is None for record in records)

@@ -2,6 +2,8 @@ from dataclasses import replace
 from datetime import date
 
 from qdrant_client import QdrantClient
+from qdrant_client.models import PointStruct
+import pytest
 
 from boussla.contracts import Audience, FindingFamily, Mode
 from boussla.retrieval.corpus import load_public_references, public_reference_retriever
@@ -33,9 +35,9 @@ def test_qdrant_client_collection_ingestion_payload_and_bounded_query():
 
     assert retriever.backend_mode == "QDRANT"
     assert client.collection_exists("public_test")
-    assert client.count("public_test", exact=True).count == 8
-    assert len(embeddings.inputs) == 8
-    points, _ = client.scroll("public_test", limit=8, with_payload=True)
+    assert client.count("public_test", exact=True).count == len(records)
+    assert len(embeddings.inputs) == len(records)
+    points, _ = client.scroll("public_test", limit=len(records), with_payload=True)
     by_id = {record.rule_id: record for record in records}
     for point in points:
         source = by_id[point.payload["rule_id"]]
@@ -46,8 +48,8 @@ def test_qdrant_client_collection_ingestion_payload_and_bounded_query():
         as_of=date(2026, 9, 26),
     )
     assert found and found[0].mode is Mode.LIVE
-    assert len(embeddings.inputs) == 9  # one bounded query vector generated locally
-    assert all(item.source_url == records[0].source_url for item in found)
+    assert len(embeddings.inputs) == len(records) + 1  # one bounded query vector generated locally
+    assert all(item.source_url in {record.source_url for record in records} for item in found)
     assert retriever.search("facture", as_of=date(2026, 9, 26), jurisdiction="FR", audience=Audience.OFFICER) == []
     assert retriever.search("facture", as_of=date(2026, 9, 26), jurisdiction="TN", audience=Audience.COMPANY) == []
 
@@ -117,3 +119,19 @@ def test_factory_without_cloud_credentials_is_labelled_lexical():
 
     assert retriever.backend_mode == "LEXICAL"
     assert retriever.fallback_reason == "QDRANT_NOT_CONFIGURED"
+
+
+def test_existing_collection_rejects_foreign_point_without_deleting_it():
+    records = load_public_references()
+    client = QdrantClient(":memory:")
+    settings = dict(url="https://test.cloud.qdrant.io", api_key="test-only",
+                    collection="public_test", client=client, embeddings=StubEmbeddings())
+    QdrantReferenceRetriever(records, **settings)
+    client.upsert("public_test", points=[PointStruct(
+        id="818f7d8e-9e62-48dc-9f18-a4f56ca2ee50", vector=[1.0, 0.0, 0.0],
+        payload={"rule_id": "FOREIGN"},
+    )])
+
+    with pytest.raises(ValueError, match="unexpected points"):
+        QdrantReferenceRetriever(records, **settings)
+    assert client.count("public_test", exact=True).count == len(records) + 1

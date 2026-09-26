@@ -32,7 +32,7 @@ class LocalFastEmbedder:
 
 
 class QdrantReferenceRetriever:
-    """Only eight official public excerpts may enter the configured Cloud collection."""
+    """Only bounded, reviewed official public excerpts enter the Cloud collection."""
 
     backend_mode = "QDRANT"
     status = "READY"
@@ -48,8 +48,8 @@ class QdrantReferenceRetriever:
             raise ValueError("Qdrant Cloud HTTPS URL required")
         if parsed.username or parsed.password or not api_key or not collection:
             raise ValueError("Qdrant Cloud configuration incomplete")
-        if len(records) != 8 or len({record.rule_id for record in records}) != 8:
-            raise ValueError("only the eight inspected public references may be indexed")
+        if not 8 <= len(records) <= 50 or len({record.rule_id for record in records}) != len(records):
+            raise ValueError("Cloud corpus requires 8–50 unique reviewed references")
         if any(record.review_status != "REVIEWED" or record.jurisdiction != "TN" or
                urlparse(record.source_url).hostname not in OFFICIAL_HOSTS for record in records):
             raise ValueError("only reviewed official Tunisian references may be indexed")
@@ -94,8 +94,8 @@ class QdrantReferenceRetriever:
         return vectors
 
     def _verify_points(self) -> None:
-        points, next_offset = self.client.scroll(self.collection, limit=9, with_payload=True)
-        if next_offset is not None or len(points) != 8:
+        points, next_offset = self.client.scroll(self.collection, limit=len(self.records) + 1, with_payload=True)
+        if next_offset is not None or len(points) != len(self.records):
             raise ValueError("unexpected public-reference collection size")
         expected = {self._point_id(record.rule_id): self.payload_for(record) for record in self.records}
         if {str(point.id): point.payload for point in points} != expected:
@@ -108,7 +108,7 @@ class QdrantReferenceRetriever:
                 vectors_config=models.VectorParams(size=self.dimension, distance=models.Distance.COSINE),
             )
         count = self.client.count(self.collection, exact=True).count
-        if count == 8:
+        if count == len(self.records):
             self._verify_points()
             return
         if count != 0:
@@ -121,7 +121,7 @@ class QdrantReferenceRetriever:
             ) for record, vector in zip(self.records, vectors)],
             wait=True,
         )
-        if self.client.count(self.collection, exact=True).count != 8:
+        if self.client.count(self.collection, exact=True).count != len(self.records):
             raise ValueError("public-reference ingestion incomplete")
         self._verify_points()
 
@@ -140,7 +140,7 @@ class QdrantReferenceRetriever:
         try:
             vector = self._vectors([query])[0]
             response = self.client.query_points(
-                collection_name=self.collection, query=vector, limit=8, with_payload=True,
+                collection_name=self.collection, query=vector, limit=len(self.records), with_payload=True,
             )
             found = []
             for point in response.points:
