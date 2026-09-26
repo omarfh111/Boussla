@@ -223,3 +223,20 @@ def test_double_clicks_do_not_duplicate_actions():
     assert version(at) == v
     assert [r.reason for r in svc(at).store.revisions(CASE)].count(
         next(r.reason for r in svc(at).store.revisions(CASE) if r.reason.startswith("Pièce acceptée"))) == 1
+
+
+def test_double_context_submit_creates_one_claim():
+    at = start()
+    inputs = {t.label: t for t in at.text_input}
+    inputs["Précision sur l'usage"].set_value("Lot P1 double clic")
+    inputs["Bénéficiaire prévu"].set_value("Client")
+    submit = button(at, "Enregistrer le contexte déclaré")
+    submit.click().run()
+    v = version(at)
+    submit.click().run()  # same values submitted again
+    assert not at.exception, at.exception
+    assert version(at) == v
+    company = svc(at).registry.actors["DEMO-COMPANY-BAT"]
+    claims = [c for c in svc(at).get_case(company, CASE).context_claims if c.purpose_text == "Lot P1 double clic"]
+    assert len(claims) == 1
+    assert any("déjà enregistré" in i.value for i in at.info)

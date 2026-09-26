@@ -93,7 +93,15 @@ def render_context(service, actor, case: CompanyCaseView) -> None:
             payload = {"project_id": selected_project, "purpose_category": purpose.value,
                        "purpose_text": description.strip(), "beneficiary_type": beneficiary.strip(),
                        "planned_start": planned_start, "planned_end": planned_end, "stage": stage.strip() or None}
-            service_action(lambda: service.submit_context(actor, case.case_id, payload, case.case_version, str(uuid4())))
+            # Double-submit guard: an identical declaration already on record is not re-sent.
+            already = any((c.project_id, c.purpose_category.value, c.purpose_text, c.beneficiary_type,
+                           c.planned_start, c.planned_end, c.stage) == tuple(payload.values())
+                          for c in case.context_claims)
+            if already:
+                st.info("Ce contexte est déjà enregistré ; aucune nouvelle déclaration n'a été créée.")
+            else:
+                service_action(lambda: service.submit_context(actor, case.case_id, payload, case.case_version,
+                                                              str(uuid4())))
 
     if case.inbox:
         st.markdown("#### Boîte de demandes")
