@@ -745,7 +745,10 @@ class BousslaAppService:
             raise BousslaError(ErrorCode.STALE_REVISION, "Le dossier a changé ; rechargez-le")
         facts = self._facts(case_id, meta["version"])
         ev = self._evaluate(case_id, meta["company_id"], meta["version"], facts)
-        qids = deterministic_plan(ev.findings, True, set()) or ["Q-SUPPORTING-DOC"]
+        # Same global merge policy as start_analysis: context contradictions first, one cap of 3.
+        _, context_codes, _ = self._context_assessment(case_id, meta["company_id"], meta["version"], facts)
+        qids = (merge_question_plan(context_codes, deterministic_plan(ev.findings, True, set()), set())
+                or ["Q-SUPPORTING-DOC"])
         fact_ids = tuple(dict.fromkeys(
             r.source_record_id or r.document_id for f in ev.findings if f.status is FindingStatus.UNRESOLVED
             for r in f.evidence_refs if (r.source_record_id or r.document_id)))
@@ -816,6 +819,11 @@ class BousslaAppService:
                 response_id=f"RESP-{ihash[:8].upper()}", request_id=request_id, author_actor_id=actor.actor_id,
                 document_ids=doc_ids, answers=answers, submitted_at=utcnow())
             tx.put("response", response.response_id, response)
+            # Structured context answers (e.g. Q-HORIZON-CONFIRM) become a new attributed claim
+            # superseding the latest declaration, exactly as in answer_questions.
+            superseding = self._superseding_context_claim(actor, meta["company_id"], case_id, answers, ihash)
+            if superseding is not None:
+                tx.put("context_claim", superseding.claim_id, superseding)
             tx.put("request", request_id, rv.model_copy(update={
                 "request": rv.request.model_copy(update={"status": RequestStatus.RESPONDED})}))
             proposal_ids: tuple[str, ...] = ()
