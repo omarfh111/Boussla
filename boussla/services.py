@@ -46,6 +46,7 @@ from boussla.playbook import (
 from boussla.security import DEMO_BANNER_FR, ActorRegistry, authorize
 from boussla.seed import load_enterprises, seed_demo_case
 from boussla.store import CaseStore, ReceiptNote, stable_hash, utcnow
+from boussla.observability import traced
 from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clarification_deadlines
 
 ALL_FAMILIES = frozenset(FindingFamily)
@@ -543,14 +544,10 @@ class BousslaAppService(_DemoAdministration):
                tuple(sorted(p.rule_id for p in view.candidate_passages)))
         cached = self._brief_cache.get(key)
         if cached is None:
-            try:
-                cached = (self._investigator_brief(view, facts, self.investigator), None)
-            except Exception:  # noqa: BLE001 - model/selector failure: deterministic template brief
-                try:
-                    from boussla.investigator import InvestigatorAssistant
-                    cached = (self._investigator_brief(view, facts, InvestigatorAssistant()), None)
-                except Exception:  # noqa: BLE001 - assistive layer; never fatal, never a finding
-                    cached = (None, Mode.ERROR)
+            with traced("investigator", view.case_id, case_version=view.case_version) as meta:
+                cached = self._compute_brief(view, facts)
+                meta.update(mode=(cached[0].mode if cached[0] else cached[1] or Mode.NOT_RUN).value,
+                            question_count=len(cached[0].questions_proposed) if cached[0] else 0)
             if len(self._brief_cache) > 256:
                 self._brief_cache.clear()
             self._brief_cache[key] = cached
@@ -559,6 +556,17 @@ class BousslaAppService(_DemoAdministration):
             self._brief_questions[view.case_id] = brief.questions_proposed
         return view.model_copy(update={"investigator_brief": brief, "mode_by_node": {
             **view.mode_by_node, "investigator": error or (brief.mode if brief else Mode.NOT_RUN)}})
+
+    def _compute_brief(self, view: OfficerCaseView, facts: dict[str, list]) -> tuple:
+        """(brief | None, error mode | None); a model failure falls back to the template brief."""
+        try:
+            return self._investigator_brief(view, facts, self.investigator), None
+        except Exception:  # noqa: BLE001 - model/selector failure: deterministic template brief
+            try:
+                from boussla.investigator import InvestigatorAssistant
+                return self._investigator_brief(view, facts, InvestigatorAssistant()), None
+            except Exception:  # noqa: BLE001 - assistive layer; never fatal, never a finding
+                return None, Mode.ERROR
 
     def _investigator_brief(self, view: OfficerCaseView, facts: dict[str, list],
                             assistant) -> InvestigatorBriefView | None:
@@ -1306,8 +1314,11 @@ class BousslaAppService(_DemoAdministration):
         if actor.role is not Role.COMPANY or facts_after is None:
             return None
         version = tx.begin_version()
-        ev = self._evaluate(case_id, company_id, version, facts_after)
-        qids = self._automatic_question_ids(ev, facts_after, context_codes, case_id)
+        with traced("auto_clarification", case_id, case_version=version) as meta:
+            ev = self._evaluate(case_id, company_id, version, facts_after)
+            qids = self._automatic_question_ids(ev, facts_after, context_codes, case_id)
+            meta.update(mode="PUBLISHED" if qids else "SKIPPED", question_count=len(qids),
+                        finding_count=sum(f.status is FindingStatus.UNRESOLVED for f in ev.findings))
         if not qids:
             return None
         reasons = tuple(dict.fromkeys([str(getattr(c, "value", c)) for c in context_codes] + [
