@@ -243,3 +243,36 @@ def test_langgraph_analysis_carries_context_questions_and_recomputes():
     assert view.mode_by_node["context"] is Mode.NOT_RUN
     runner.submit_answers(actors(svc)[0], CASE, {"Q-HORIZON-CONFIRM": "LONGER_HORIZON"})
     assert svc.get_case(actors(svc)[0], CASE).context_assessment.consistency_status == "CONSISTENT"
+
+
+def test_published_request_carries_context_questions_and_response_supersedes_claim():
+    """React/Streamlit use prepare -> publish -> submit_response, not start_analysis."""
+    svc = service()
+    co, off = actors(svc)
+    before = deterministic(svc)
+    declare(svc, "r1", declared_horizon="SHORT_HORIZON", **LONG)
+    draft = svc.prepare_clarification(off, CASE, ver(svc))
+    ids = [q.question_id for q in draft.questions]
+    assert len(ids) <= 3 and ids[0] == "Q-HORIZON-CONFIRM"
+    assert next(q for q in draft.questions if q.question_id == "Q-HORIZON-CONFIRM").choices == ("SHORT_HORIZON",
+                                                                                               "LONGER_HORIZON")
+    req = svc.publish_clarification(off, CASE, draft.draft_id, ver(svc), "pub")
+    with pytest.raises(BousslaError) as e:  # display labels are not accepted, only enum values
+        svc.submit_response(co, CASE, req.request.request_id, {"answers": {"Q-HORIZON-CONFIRM": "Horizon long"}},
+                            ver(svc), "bad")
+    assert e.value.code is ErrorCode.INSUFFICIENT_INFORMATION
+    first = svc.get_case(co, CASE).context_assessment
+    svc.submit_response(co, CASE, req.request.request_id,
+                        {"answers": {"Q-HORIZON-CONFIRM": "LONGER_HORIZON"}}, ver(svc), "ok")
+    after = svc.get_case(co, CASE).context_assessment
+    assert after.declared_horizon is HorizonBucket.LONGER_HORIZON and after.claim_id != first.claim_id
+    assert "DECLARED_HORIZON_DATE_CONFLICT" not in after.reason_codes
+    claims = {c.claim_id: c for c in svc.store.facts(CASE, "context_claim", ContextClaim)}
+    assert claims[first.claim_id].declared_horizon is HorizonBucket.SHORT_HORIZON  # history immutable
+    assert deterministic(svc) == before
+
+
+def test_brick_case_published_request_unchanged():
+    svc = service()
+    draft = svc.prepare_clarification(actors(svc)[1], CASE, ver(svc))
+    assert [q.question_id for q in draft.questions] == ["Q-PROJECT-ALLOCATION", "Q-SUPPORTING-DOC", "Q-STOCK"]
