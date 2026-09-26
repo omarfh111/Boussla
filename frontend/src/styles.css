@@ -1878,3 +1878,461 @@ input[type="number"] {
   font-weight: 400;
   line-height: 1.45;
 }
+
+/* ===================== Final release: brand, boot splash, micro-interactions ===================== */
+.brand-mark {
+  border: 0;
+  border-radius: 0;
+}
+.boussla-mark {
+  display: block;
+  flex: none;
+}
+
+/* About 3 s cold-load splash (CSS + inline SVG only, once per session). */
+.boot-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 50% 42%, #0e2a44 0%, #07111f 62%);
+  animation: boot-bg 0.5s ease-out both;
+  transition: opacity 0.3s ease;
+}
+.boot-splash.leaving {
+  opacity: 0;
+}
+.boot-center {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+}
+.boot-wordmark {
+  font:
+    800 30px Manrope,
+    sans-serif;
+  letter-spacing: 0.34em;
+  padding-left: 0.34em;
+  color: #eaf6ff;
+  opacity: 0;
+  animation: boot-fade-up 0.6s 1.6s ease-out forwards;
+}
+.boot-lines {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  width: 280px;
+}
+.boot-lines li {
+  position: relative;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: #8fb0c6;
+  padding-bottom: 5px;
+  opacity: 0;
+  animation: boot-fade-up 0.35s ease-out forwards;
+}
+.boot-lines li::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, #126bdb, #16c6e3, #20d6b5);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: boot-line 0.45s ease-out forwards;
+}
+.boot-lines li:nth-child(1),
+.boot-lines li:nth-child(1)::after {
+  animation-delay: 2s;
+}
+.boot-lines li:nth-child(2),
+.boot-lines li:nth-child(2)::after {
+  animation-delay: 2.2s;
+}
+.boot-lines li:nth-child(3),
+.boot-lines li:nth-child(3)::after {
+  animation-delay: 2.4s;
+}
+.mark-arc {
+  stroke-dashoffset: 595;
+  animation: mark-draw-arc 0.55s ease-out forwards;
+}
+.mark-inner {
+  opacity: 0;
+  animation: mark-inner 0.5s 0.4s ease-out forwards;
+}
+.mark-north {
+  opacity: 0;
+  transform: translateY(-14px);
+  animation: mark-north 0.5s 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+.mark-south {
+  opacity: 0;
+  animation: mark-inner-full 0.4s 0.8s ease-out forwards;
+}
+.mark-check {
+  stroke-dasharray: 190;
+  stroke-dashoffset: 190;
+  animation: mark-draw-check 0.6s 1s ease-in-out forwards;
+}
+.mark-node {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0.2);
+  animation: mark-node 0.3s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
+}
+.mark-node:nth-of-type(1) {
+  animation-delay: 1.4s;
+}
+.mark-node:nth-of-type(2) {
+  animation-delay: 1.52s;
+}
+.mark-node:nth-of-type(3) {
+  animation-delay: 1.64s;
+}
+@keyframes boot-bg {
+  from {
+    background-color: #03070d;
+    opacity: 0.6;
+  }
+}
+@keyframes boot-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes boot-line {
+  to {
+    transform: scaleX(1);
+  }
+}
+@keyframes mark-draw-arc {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mark-inner {
+  to {
+    opacity: 0.26;
+  }
+}
+@keyframes mark-inner-full {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes mark-north {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes mark-draw-check {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mark-node {
+  60% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.boot-splash.reduced .boot-wordmark,
+.boot-splash.reduced .boot-lines li {
+  opacity: 1;
+  animation: none;
+}
+.boot-splash.reduced .boot-lines li::after {
+  transform: scaleX(1);
+  animation: none;
+}
+
+/* One-time entrances after data arrives (no loops). */
+.enter-once {
+  animation: enter-once 0.28s ease-out both;
+}
+@keyframes enter-once {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.portfolio-card-item {
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+.portfolio-card-item:hover {
+  transform: translateY(-2px);
+  border-color: #3f86a8;
+  box-shadow: 0 8px 22px rgba(3, 12, 22, 0.45);
+}
+.portfolio-card-metrics .portfolio-triage {
+  display: block;
+  padding: 0;
+  border: 0;
+  color: #7ce3ed;
+  font:
+    800 24px Manrope,
+    sans-serif;
+}
+.triage-reasons {
+  padding: 0 21px 14px;
+}
+.content > .triage-reasons {
+  padding: 0;
+}
+.triage-metric strong {
+  color: #7ce3ed;
+}
+
+/* Automatic questionnaire: slide/fade once, badge pulses once, questions staggered. */
+.auto-request-banner {
+  display: grid;
+  gap: 6px;
+  font-weight: 500;
+}
+.auto-badge {
+  justify-self: start;
+  display: inline-block;
+  border: 1px solid #30c6d5;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #9ff0f5;
+  background: rgba(22, 198, 227, 0.1);
+}
+.auto-badge.small {
+  margin-left: 8px;
+  padding: 1px 7px;
+  font-size: 10px;
+}
+.auto-request-enter {
+  animation: auto-request-in 0.42s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.auto-request-enter .auto-badge {
+  animation: badge-pulse 0.9s 0.35s ease-out 1;
+}
+.auto-request-enter .question-list.staggered li {
+  opacity: 0;
+  animation: stagger-in 0.3s ease-out forwards;
+}
+@keyframes stagger-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes auto-request-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes badge-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(48, 198, 213, 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgba(48, 198, 213, 0);
+  }
+}
+.follow-up {
+  margin-left: 8px;
+  color: #ffcf7a;
+}
+
+/* Investigator, hypotheses, scenarios. */
+.investigator-disclaimer {
+  font-weight: 700;
+  color: #cfe0ee;
+}
+.investigator-grid .brief-section {
+  animation: enter-once 0.3s ease-out both;
+}
+.investigator-grid .brief-section:nth-child(2) {
+  animation-delay: 50ms;
+}
+.investigator-grid .brief-section:nth-child(3) {
+  animation-delay: 100ms;
+}
+.investigator-grid .brief-section:nth-child(4) {
+  animation-delay: 150ms;
+}
+.investigator-grid .brief-section:nth-child(n + 5) {
+  animation-delay: 200ms;
+}
+.hypothesis-card {
+  animation: enter-once 0.28s ease-out both;
+}
+.hypothesis-card:nth-child(2) {
+  animation-delay: 60ms;
+}
+.hypothesis-card:nth-child(3) {
+  animation-delay: 120ms;
+}
+.hypothesis-card:nth-child(4) {
+  animation-delay: 180ms;
+}
+.hypothesis-card:nth-child(5) {
+  animation-delay: 240ms;
+}
+.scenario-shift {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font:
+    800 26px Manrope,
+    sans-serif;
+}
+.scenario-arrow {
+  animation: arrow-nudge 0.6s 0.2s ease-out 1;
+}
+@keyframes arrow-nudge {
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+/* Enterprise 360. */
+.month-bars {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 8px;
+  align-items: end;
+  height: 150px;
+  padding-top: 8px;
+}
+.month-bars > div {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-items: end;
+  gap: 3px;
+  font-size: 11px;
+  color: #8fb0c6;
+}
+.month-bar {
+  display: block;
+  width: 100%;
+  min-height: 2px;
+  border-radius: 5px 5px 2px 2px;
+  background: linear-gradient(180deg, #16c6e3, #126bdb);
+  transform-origin: bottom;
+  animation: bar-grow 0.45s ease-out both;
+}
+@keyframes bar-grow {
+  from {
+    transform: scaleY(0);
+  }
+}
+.signal-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 10px;
+}
+.signal-list li {
+  border-left: 3px solid #2f7ea1;
+  background: #0f2536;
+  padding: 10px 12px;
+  border-radius: 0 9px 9px 0;
+}
+.signal-list li > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.signal-list p {
+  margin: 6px 0 4px;
+  color: #cfe0ee;
+}
+.signal-list small {
+  color: #8fb0c6;
+}
+.snapshot-label {
+  font-weight: 800;
+  color: #9ff0f5;
+}
+.comparison-block {
+  margin-bottom: 14px;
+}
+.comparison-status.concordant strong {
+  color: #7fe0b5;
+}
+.comparison-status.differences strong {
+  color: #ffcf7a;
+}
+.comparison-more summary,
+.company360 details summary {
+  cursor: pointer;
+  color: #7ce3ed;
+  margin: 8px 0;
+}
+.admin-notice {
+  font-weight: 700;
+  color: #ffcf7a;
+}
+button.danger {
+  border-color: #a05a4a;
+  color: #ffd2c7;
+}
+.toast.inline {
+  position: static;
+  margin: 0 0 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot-splash,
+  .mark-arc,
+  .mark-inner,
+  .mark-north,
+  .mark-south,
+  .mark-check,
+  .mark-node,
+  .enter-once,
+  .auto-request-enter,
+  .auto-request-enter .question-list.staggered li,
+  .hypothesis-card,
+  .month-bar,
+  .scenario-arrow {
+    animation: none !important;
+    transform: none !important;
+    stroke-dashoffset: 0 !important;
+  }
+  .mark-north,
+  .mark-south,
+  .mark-node,
+  .auto-request-enter .question-list.staggered li {
+    opacity: 1 !important;
+  }
+  .portfolio-card-item:hover {
+    transform: none;
+  }
+}

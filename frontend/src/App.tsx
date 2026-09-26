@@ -1,5 +1,6 @@
 ﻿import {
   Component,
+  useCallback,
   useRef,
   useState,
   type FormEvent,
@@ -19,7 +20,6 @@ import {
   ChevronRight,
   CircleHelp,
   ClipboardList,
-  Compass,
   Database,
   FileText,
   FolderOpen,
@@ -30,6 +30,8 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ApiError, api } from "./api/client";
+import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
+import { BousslaMark } from "./brand/BousslaMark";
 import {
   Company360,
   DemoAdmin,
@@ -38,6 +40,7 @@ import {
   InvoiceCompare,
   Portfolio,
   ScenarioCards,
+  triageLabel,
 } from "./portfolio/components";
 import type {
   Role,
@@ -81,6 +84,8 @@ const officerTabs: [Tab, string, ReactNode][] = [
   ["references", "Références", <BookOpen size={18} />],
   ["history", "Historique", <History size={18} />],
   ["diagnostics", "Diagnostics", <Activity size={18} />],
+];
+const operatorTabs: [Tab, string, ReactNode][] = [
   ["admin", "Données démo", <Database size={18} />],
 ];
 const status: Record<string, string> = {
@@ -116,6 +121,8 @@ const status: Record<string, string> = {
   BUYER_RECEIVED: "Copie reçue par l’acheteur",
   SELLER_ISSUED: "Émission du vendeur",
   INTERNAL_PURCHASE_ENTRY: "Écriture d’achat interne",
+  FOLLOW_UP_DUE: "Relance à prévoir",
+  ON_TRACK: "Dans la cible de démonstration",
 };
 const familyLabel: Record<string, string> = {
   COUNTERPARTY: "Concordance des observations",
@@ -177,6 +184,8 @@ const nodeLabel: Record<string, string> = {
   reference_note: "Synthèse de références",
   extractor: "Extraction des champs",
   planner: "Planification des questions",
+  history: "Signaux historiques (lot B)",
+  investigator: "Analyse assistée BOUSSLA",
 };
 const HORIZON_CONVENTION_FR =
   "Cette catégorie est une convention de démonstration BOUSSLA ; elle ne constitue pas une classification fiscale, comptable ou juridique.";
@@ -197,6 +206,13 @@ const money = (millimes: number | null) =>
 const date = (s: string | null) =>
   s ? new Date(s).toLocaleDateString("fr-FR") : "N/D";
 const short = (s: string) => (s.length > 20 ? `${s.slice(0, 16)}…` : s);
+/** Animate a new automatic request only the first time its stable ID is seen. */
+const seenRequests = new Set<string>();
+const firstSeen = (id: string) => {
+  if (seenRequests.has(id)) return false;
+  seenRequests.add(id);
+  return true;
+};
 const badge = (value: string) => (
   <span
     className={`badge ${["EXPLAINED", "LIVE", "ACCEPTED"].includes(value) ? "good" : ["UNRESOLVED", "PENDING", "PUBLISHED_IN_DEMO", "AWAITING_HUMAN_REVIEW"].includes(value) ? "warn" : ""}`}
@@ -366,6 +382,8 @@ function Revision({
 
 function AppInner() {
   const query = useQueryClient();
+  const [booting, setBooting] = useState(shouldShowBoot);
+  const endBoot = useCallback(() => setBooting(false), []);
   const [role, setRole] = useState<Role>("OFFICER");
   const [tab, setTab] = useState<Tab>("queue");
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -389,13 +407,16 @@ function AppInner() {
   const switchRole = (next: Role) => {
     if (next === role) return;
     setRole(next);
-    setTab(next === "COMPANY" ? "overview" : "queue");
+    setTab(
+      next === "COMPANY" ? "overview" : next === "OPERATOR" ? "admin" : "queue",
+    );
     setSelectedCaseId(null);
     setNotice("");
     setRevision(null);
     query.removeQueries({ queryKey: ["case"] });
     query.removeQueries({ queryKey: ["history"] });
     query.removeQueries({ queryKey: ["queue"] });
+    query.removeQueries({ queryKey: ["admin"] });
   };
   const refresh = async () => {
     await query.invalidateQueries();
@@ -426,20 +447,31 @@ function AppInner() {
       locked.current = false;
     }
   };
-  const tabs = role === "COMPANY" ? companyTabs : officerTabs;
+  const tabs =
+    role === "COMPANY"
+      ? companyTabs
+      : role === "OPERATOR"
+        ? operatorTabs
+        : officerTabs;
   return (
     <div className="app-shell">
+      {booting && <BootSplash onDone={endBoot} />}
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
-            <Compass size={22} />
+            <BousslaMark size={32} />
           </span>
           <span>
             BOUSSLA<small>Espace de revue</small>
           </span>
         </div>
         <div className="workspace-label">
-          ESPACE {role === "COMPANY" ? "ENTREPRISE" : "AGENT"}
+          ESPACE{" "}
+          {role === "COMPANY"
+            ? "ENTREPRISE"
+            : role === "OPERATOR"
+              ? "OPÉRATEUR DÉMO"
+              : "AGENT"}
         </div>
         <nav aria-label="Navigation principale">
           {tabs.map(([id, label, icon]) => (
@@ -494,6 +526,13 @@ function AppInner() {
               >
                 Agent
               </button>
+              <button
+                className={role === "OPERATOR" ? "active" : ""}
+                onClick={() => switchRole("OPERATOR")}
+                title="Administration de données synthétiques — démonstration locale."
+              >
+                Opérateur démo
+              </button>
             </div>
             <button
               className="icon-button"
@@ -517,7 +556,13 @@ function AppInner() {
               </button>
             </div>
           )}
-          {bootstrap.isLoading || caseQuery.isLoading ? (
+          {role === "OPERATOR" ? (
+            bootstrap.isLoading ? (
+              <Skeleton />
+            ) : (
+              <DemoAdmin enabled={!!bootstrap.data?.demo_admin?.can_list} />
+            )
+          ) : bootstrap.isLoading || caseQuery.isLoading ? (
             <Skeleton />
           ) : bootstrap.isError || caseQuery.isError ? (
             <div className="error-state">
@@ -1057,15 +1102,6 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                       {d.document.acquisition_channel.replaceAll("_", " ")}
                     </dd>
                   </div>
-                  {d.document.perspective && (
-                    <div>
-                      <dt>Perspective</dt>
-                      <dd>
-                        {status[d.document.perspective] ||
-                          d.document.perspective}
-                      </dd>
-                    </div>
-                  )}
                   {d.document.origin_group_id && (
                     <div>
                       <dt>Groupe d’origine</dt>
@@ -1107,66 +1143,93 @@ function RequestInbox({
     <div className="stack">
       {c.inbox.length ? (
         c.inbox.map((r) => (
-          <Panel
-            key={r.request.request_id}
-            eyebrow={`DEMANDE ${r.request.request_id}`}
-            title="Précisions attendues"
-            action={badge(r.request.status)}
-          >
-            <p className="muted">
-              Publiée le {date(r.request.published_at)} · Pièces attendues :{" "}
-              {r.request.allowed_document_types
-                .map((kind) => status[kind] || kind)
-                .join(", ") || "à préciser"}
-            </p>
-            {r.request.origin === "AUTOMATIC" && (
-              <p className="auto-request-banner">
-                BOUSSLA a demandé automatiquement des précisions
+          <AutoRequestFrame key={r.request.request_id} request={r}>
+            <Panel
+              eyebrow={`DEMANDE ${r.request.request_id}`}
+              title="Précisions attendues"
+              action={badge(r.request.status)}
+            >
+              <p className="muted">
+                Publiée le {date(r.request.published_at)} · Pièces attendues :{" "}
+                {r.request.allowed_document_types
+                  .map((kind) => status[kind] || kind)
+                  .join(", ") || "à préciser"}
               </p>
-            )}
-            {(r.request.reason_text_fr || r.request.reason_codes?.length) && (
-              <p>
-                Pourquoi cette demande :{" "}
-                {r.request.reason_text_fr ||
-                  r.request.reason_codes?.join(" · ")}
-              </p>
-            )}
-            {r.request.target_response_at && (
-              <p>
-                Date cible de réponse (démonstration) :{" "}
-                {date(r.request.target_response_at)}
-              </p>
-            )}
-            {r.request.overdue_state && (
-              <p>
-                État de suivi :{" "}
-                {status[r.request.overdue_state] || r.request.overdue_state}
-              </p>
-            )}
-            <p>{r.text_fr}</p>
-            <ul className="question-list">
-              {r.questions.map((q) => (
-                <li key={q.question_id}>{q.text_fr}</li>
-              ))}
-            </ul>
-            {r.request.status === "PUBLISHED_IN_DEMO" &&
-              (selected === r.request.request_id ? (
-                <ResponseComposer c={c} request={r} act={act} />
-              ) : (
-                <button
-                  className="primary"
-                  onClick={() => setSelected(r.request.request_id)}
-                >
-                  Répondre à la demande <ArrowRight size={16} />
-                </button>
-              ))}
-            <p className="footnote">Déclaration seule ≠ preuve acceptée.</p>
-          </Panel>
+              <RequestMeta request={r} />
+              <p>{r.text_fr}</p>
+              <ul className="question-list staggered">
+                {r.questions.map((q, i) => (
+                  <li
+                    key={q.question_id}
+                    style={{ animationDelay: `${120 + i * 80}ms` }}
+                  >
+                    {q.text_fr}
+                  </li>
+                ))}
+              </ul>
+              {r.request.status === "PUBLISHED_IN_DEMO" &&
+                (selected === r.request.request_id ? (
+                  <ResponseComposer c={c} request={r} act={act} />
+                ) : (
+                  <button
+                    className="primary"
+                    onClick={() => setSelected(r.request.request_id)}
+                  >
+                    Répondre à la demande <ArrowRight size={16} />
+                  </button>
+                ))}
+              <p className="footnote">Déclaration seule ≠ preuve acceptée.</p>
+            </Panel>
+          </AutoRequestFrame>
         ))
       ) : (
         <Empty>Aucune demande publiée pour ce dossier.</Empty>
       )}
     </div>
+  );
+}
+
+/** One-time entrance for a NEW automatic request (stable ID; never replays on rerender). */
+function AutoRequestFrame({
+  request,
+  children,
+}: {
+  request: RequestView;
+  children: ReactNode;
+}) {
+  const [animate] = useState(
+    () =>
+      request.request.origin === "AUTOMATIC" &&
+      firstSeen(request.request.request_id),
+  );
+  return (
+    <div className={animate ? "auto-request-enter" : undefined}>{children}</div>
+  );
+}
+
+/** Origin, reason, demo target and follow-up state exactly as supplied by the service. */
+function RequestMeta({ request: r }: { request: RequestView }) {
+  return (
+    <>
+      {r.request.origin === "AUTOMATIC" && (
+        <div className="auto-request-banner">
+          <span className="auto-badge">Demande automatique BOUSSLA</span>
+          <span>
+            Précisions demandées automatiquement à partir des informations
+            disponibles.
+          </span>
+        </div>
+      )}
+      {r.request.target_response_at && (
+        <p className="muted">
+          Cible de réponse de démonstration :{" "}
+          {date(r.request.target_response_at)}
+          {r.request.overdue_state === "FOLLOW_UP_DUE" && (
+            <span className="badge warn follow-up">Relance à prévoir</span>
+          )}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -1460,7 +1523,6 @@ function Officer({
   if (tab === "references") return <References c={c} />;
   if (tab === "history") return <HistoryPanel c={c} />;
   if (tab === "diagnostics") return <Diagnostics c={c} />;
-  if (tab === "admin") return <AdminTab />;
   return (
     <>
       <SectionHead
@@ -1509,13 +1571,30 @@ function Officer({
                 "N/D"}
             </strong>
           </div>
+          <div className="triage-metric">
+            <span>Urgence de traitement (triage)</span>
+            <strong>{format(c.triage?.triage_priority)}</strong>
+            <small>Distincte de l’indice de revue</small>
+          </div>
         </div>
       </div>
+      {c.triage && c.triage.reason_codes.length > 0 && (
+        <div className="tags triage-reasons" aria-label="Raisons du triage">
+          {c.triage.reason_codes.map((code) => (
+            <span className="badge" key={code}>
+              {triageLabel[code] || code}
+            </span>
+          ))}
+        </div>
+      )}
       <p className="hero-caption">
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
         les contrôles déterministes.
       </p>
-      <InvestigatorPanel brief={c.investigator_brief} />
+      <InvestigatorPanel
+        brief={c.investigator_brief}
+        passages={c.candidate_passages}
+      />
       <div className="two-col">
         <QuantityStory c={c} />
         <Clarification c={c} act={act} />
@@ -1527,11 +1606,10 @@ function Officer({
       <div className="two-col">
         <InvoiceCompare
           observations={c.invoice_observations}
-          finding={c.findings.find((f) => f.family === "COUNTERPARTY") ?? null}
-          comparison={c.invoice_comparison ?? null}
+          comparisons={c.invoice_comparisons}
         />
         <HypothesisCards
-          hypotheses={c.investigator_brief?.top_hypotheses ?? c.hypotheses}
+          hypotheses={c.investigator_brief?.top_hypotheses ?? []}
         />
       </div>
       <ContextAssessment ctx={c.context_assessment} />
@@ -1585,14 +1663,6 @@ function Company360Tab({ c }: { c: OfficerCaseView }) {
     queryFn: () => api.history("OFFICER", c.case_id),
   });
   return <Company360 c={c} history={history.data ?? null} />;
-}
-
-function AdminTab() {
-  const queue = useQuery({
-    queryKey: ["queue", "admin"],
-    queryFn: () => api.queue(),
-  });
-  return <DemoAdmin items={queue.data?.items ?? []} />;
 }
 
 function QuantityStory({ c }: { c: OfficerCaseView }) {
@@ -1745,7 +1815,7 @@ function Clarification({
     }
   };
   return (
-    <Panel eyebrow="ACTION HUMAINE" title="Demande de précision">
+    <Panel eyebrow="CLARIFICATION" title="Demande de précision">
       {draft ? (
         <>
           <p>{draft.text_fr}</p>
@@ -1771,7 +1841,8 @@ function Clarification({
       ) : (
         <>
           <p className="muted">
-            Préparer une demande neutre à partir des constats actuels.
+            Les demandes neutres sont publiées automatiquement après chaque
+            dépôt de l’entreprise. Une demande supplémentaire reste possible.
           </p>
           <button
             className="secondary"
@@ -1796,21 +1867,18 @@ function Clarification({
               <span>
                 <span className="mono">{r.request.request_id}</span>
                 {r.request.origin === "AUTOMATIC" && (
-                  <small>Demande automatique de BOUSSLA</small>
-                )}
-                {r.request.reason_text_fr && (
-                  <small>{r.request.reason_text_fr}</small>
+                  <span className="auto-badge small">
+                    Demande automatique BOUSSLA
+                  </span>
                 )}
                 {r.request.target_response_at && (
                   <small>
-                    Date cible de démo : {date(r.request.target_response_at)}
+                    Cible de réponse de démonstration :{" "}
+                    {date(r.request.target_response_at)}
                   </small>
                 )}
-                {r.request.overdue_state && (
-                  <small>
-                    Suivi :{" "}
-                    {status[r.request.overdue_state] || r.request.overdue_state}
-                  </small>
+                {r.request.overdue_state === "FOLLOW_UP_DUE" && (
+                  <small className="follow-up">Relance à prévoir</small>
                 )}
               </span>
               {badge(r.request.status)}

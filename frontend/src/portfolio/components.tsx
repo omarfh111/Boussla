@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Building2, CircleHelp, Search } from "lucide-react";
+import { api } from "../api/client";
 import type {
-  Finding,
+  AdminEnterprise,
+  BriefHypothesis,
+  HistorySignal,
   HistoryView,
-  Hypothesis,
   InvestigatorBrief,
   InvoiceComparison,
   InvoiceObservation,
   OfficerCaseView,
   QueueItem,
+  RetrievedPassage,
   Scenario,
 } from "../api/types";
 
@@ -22,11 +26,7 @@ const money = (value: number | null | undefined, currency = "TND") =>
   value === null || value === undefined
     ? "Non communiqué"
     : `${new Intl.NumberFormat("fr-TN", { minimumFractionDigits: 3, maximumFractionDigits: 3 }).format(value / 1000)} ${currency}`;
-const pendingStatuses = new Set([
-  "PENDING",
-  "PUBLISHED_IN_DEMO",
-  "AWAITING_RESPONSE",
-]);
+const pendingStatuses = new Set(["PENDING", "FOLLOW_UP_DUE"]);
 const serviceLabel: Record<string, string> = {
   NOT_REQUESTED: "Aucune demande",
   PUBLISHED_IN_DEMO: "En attente de réponse",
@@ -34,19 +34,78 @@ const serviceLabel: Record<string, string> = {
   ANSWERED: "Répondu",
   EXTENDED: "Échéance prolongée",
   CLOSED: "Clôturée",
-  OVERDUE: "Suivi à revoir",
   PENDING: "En attente",
+  FOLLOW_UP_DUE: "Relance à prévoir",
   UNRESOLVED: "À clarifier",
+  EXPLAINED: "Expliqué",
+  INSUFFICIENT: "Information insuffisante",
   SUPPORTED: "Étayée",
+  PLAUSIBLE: "Plausible",
+  WEAK: "Faiblement étayée",
   CONTRADICTED: "Contredite",
   HYPOTHETICAL: "Hypothétique",
   SETTLED: "Réglé observé",
+  REVERSED: "Annulé",
+  PARTIAL: "Partiel",
   ALLOCATION_RESPONSE: "Réponse d’affectation",
   STOCK_RECORD: "Pièce de stock",
   AMENDED_ALLOCATION_REFERENCE: "Référence d’affectation révisée",
 };
-const label = (value: string) =>
-  serviceLabel[value] || value.replaceAll("_", " ");
+export const label = (value: string) =>
+  serviceLabel[value] || value.replaceAll("_", " ").toLowerCase();
+
+/** Neutral French labels for lane B history codes (review context, never findings). */
+export const historyLabel: Record<string, string> = {
+  ACTIVITY_GAP: "Période sans activité documentée",
+  LATE_DOCUMENT_ACTIVITY: "Pièces disponibles tardivement",
+  VOLUME_SPIKE: "Hausse du volume",
+  VOLUME_DROP: "Baisse du volume",
+  PAYMENT_PATTERN_CHANGE: "Évolution des règlements observés",
+  COUNTERPARTY_CONCENTRATION_CHANGE:
+    "Évolution de la concentration fournisseurs",
+  REPEATED_INVOICE_CONFLICT: "Divergences répétées entre observations",
+  NO_SIGNIFICANT_CHANGE: "Aucun changement marquant",
+  INSUFFICIENT_HISTORY: "Historique insuffisant",
+};
+/** Labels for the server's triage reason codes (the formula stays on the server). */
+export const triageLabel: Record<string, string> = {
+  REVIEW_FINDING_PRESENT: "Constat de revue présent",
+  CLARIFICATION_PENDING: "Clarification en attente",
+  CLARIFICATION_OVERDUE: "Relance à prévoir",
+  REPEATED_UNANSWERED_CLARIFICATION: "Demandes répétées sans réponse",
+  EVIDENCE_AWAITING_OFFICER_DECISION: "Décision de l’agent attendue",
+  ACTIVITY_GAP_NEEDS_REVIEW: "Période sans activité à examiner",
+  HISTORICAL_DATA_GAP_NEEDS_REVIEW: "Lacune historique à examiner",
+  TRANSACTION_INCONSISTENCY_NEEDS_REVIEW:
+    "Divergences de transactions à examiner",
+  HISTORY_PATTERN_CHANGE_NEEDS_REVIEW: "Évolution historique à contextualiser",
+};
+export const questionName: Record<string, string> = {
+  "Q-PROJECT-ALLOCATION": "Répartition des quantités par lot",
+  "Q-SUPPORTING-DOC": "Pièce d’affectation ou de référence",
+  "Q-PURPOSE": "Usage prévu",
+  "Q-PROJECT-DATES": "Dates du projet",
+  "Q-STOCK": "Quantité conservée en stock",
+  "Q-COUNTERPART-RECORD": "Autre justificatif de l’opération",
+  "Q-HORIZON-CONFIRM": "Confirmation de la période prévue",
+  "Q-PROJECT-STAGE": "Phase du projet",
+  "Q-PROJECT-BENEFICIARY": "Projet, lot ou bénéficiaire",
+  "Q-PROJECT-REFERENCE": "Pièce de référence",
+};
+const fieldLabel: Record<string, string> = {
+  invoice_number: "Facture n°",
+  invoice_version: "Version",
+  issued_on: "Date",
+  currency: "Devise",
+  net_millimes: "Net",
+  tax_millimes: "Taxe",
+  gross_millimes: "Brut",
+  "line.item_description": "Ligne",
+  "line.quantity": "Quantité",
+  "line.unit": "Unité",
+  "line.unit_price_millimes": "Prix unitaire",
+  "line.line_net_millimes": "Net de ligne",
+};
 
 export type PortfolioFilter =
   | "all"
@@ -57,6 +116,8 @@ export type PortfolioFilter =
   | "history-anomaly";
 export type PortfolioSort = "triage" | "review" | "activity" | "name";
 
+/** Client-side search/filter/sort over loaded rows, using server values only.
+ * "triage" keeps the authoritative server order. */
 export function selectPortfolio(
   items: QueueItem[],
   query: string,
@@ -65,48 +126,39 @@ export function selectPortfolio(
   sort: PortfolioSort,
 ): QueueItem[] {
   const maxTriage = Math.max(
-    ...items.map((item) => item.triage?.rank ?? -Infinity),
+    ...items.map((item) => item.triage_priority ?? -Infinity),
   );
   const term = query.trim().toLocaleLowerCase("fr");
-  return items
-    .filter((item) => {
-      if (
-        term &&
-        ![item.company_display_name, item.case_id, item.synthetic_identifier]
-          .filter(Boolean)
-          .some((value) => value!.toLocaleLowerCase("fr").includes(term))
-      )
-        return false;
-      if (sector && item.sector !== sector) return false;
-      if (filter === "highest-triage")
-        return Number.isFinite(maxTriage) && item.triage?.rank === maxTriage;
-      if (filter === "review-priority") return item.review_index !== null;
-      if (filter === "clarification-pending")
-        return pendingStatuses.has(item.clarification_status);
-      if (filter === "evidence-incomplete")
-        return item.coverage_complete === false;
-      if (filter === "history-anomaly") return item.history_anomaly === true;
-      return true;
-    })
-    .sort((a, b) => {
-      const order =
-        sort === "triage"
-          ? (b.triage?.rank ?? -Infinity) - (a.triage?.rank ?? -Infinity)
-          : sort === "review"
-            ? (b.review_index ?? -Infinity) - (a.review_index ?? -Infinity)
-            : sort === "activity"
-              ? (b.last_activity_at ?? "").localeCompare(
-                  a.last_activity_at ?? "",
-                )
-              : a.company_display_name.localeCompare(
-                  b.company_display_name,
-                  "fr",
-                );
-      return (
-        order ||
-        a.company_display_name.localeCompare(b.company_display_name, "fr")
-      );
-    });
+  const filtered = items.filter((item) => {
+    if (
+      term &&
+      ![item.company_display_name, item.case_id, item.synthetic_identifier]
+        .filter(Boolean)
+        .some((value) => value!.toLocaleLowerCase("fr").includes(term))
+    )
+      return false;
+    if (sector && item.sector !== sector) return false;
+    if (filter === "highest-triage")
+      return Number.isFinite(maxTriage) && item.triage_priority === maxTriage;
+    if (filter === "review-priority")
+      return item.review_index !== null && item.review_index > 0;
+    if (filter === "clarification-pending")
+      return pendingStatuses.has(item.clarification_status);
+    if (filter === "evidence-incomplete")
+      return item.coverage_complete === false;
+    if (filter === "history-anomaly") return item.history_anomaly === true;
+    return true;
+  });
+  if (sort === "triage") return filtered; // server order: triage, index, activity, id
+  return [...filtered].sort((a, b) => {
+    const order =
+      sort === "review"
+        ? (b.review_index ?? -1) - (a.review_index ?? -1)
+        : sort === "activity"
+          ? (b.last_activity_at ?? "").localeCompare(a.last_activity_at ?? "")
+          : a.company_display_name.localeCompare(b.company_display_name, "fr");
+    return order || a.case_id.localeCompare(b.case_id);
+  });
 }
 
 export function Portfolio({
@@ -119,7 +171,7 @@ export function Portfolio({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<PortfolioFilter>("all");
   const [sector, setSector] = useState("");
-  const [sort, setSort] = useState<PortfolioSort>("review");
+  const [sort, setSort] = useState<PortfolioSort>("triage");
   const sectors = [
     ...new Set(
       items.map((item) => item.sector).filter((s): s is string => !!s),
@@ -134,14 +186,10 @@ export function Portfolio({
       { id: "all", label: "Tous", available: true },
       {
         id: "highest-triage",
-        label: "Triage le plus élevé",
-        available: items.some((i) => i.triage),
+        label: "Urgence la plus élevée",
+        available: items.some((i) => i.triage_priority !== null),
       },
-      {
-        id: "review-priority",
-        label: "Priorité de revue",
-        available: items.some((i) => i.review_index !== null),
-      },
+      { id: "review-priority", label: "Constat de revue", available: true },
       {
         id: "clarification-pending",
         label: "Clarification en attente",
@@ -150,12 +198,12 @@ export function Portfolio({
       {
         id: "evidence-incomplete",
         label: "Preuves incomplètes",
-        available: items.some((i) => typeof i.coverage_complete === "boolean"),
+        available: true,
       },
       {
         id: "history-anomaly",
         label: "Signal historique",
-        available: items.some((i) => typeof i.history_anomaly === "boolean"),
+        available: items.some((i) => i.history_anomaly !== null),
       },
     ];
   return (
@@ -165,7 +213,8 @@ export function Portfolio({
           <span className="eyebrow">PORTEFEUILLE · DONNÉES SYNTHÉTIQUES</span>
           <h1>Portefeuille des entreprises</h1>
           <p>
-            Vue des dossiers assignés et des signaux fournis par le service.
+            Dossiers assignés, ordonnés par urgence de traitement calculée par
+            le service.
           </p>
         </div>
         <span className="portfolio-count">
@@ -174,12 +223,14 @@ export function Portfolio({
       </header>
       <div className="portfolio-distinction">
         <div>
-          <span>Triage / urgence</span>
-          <strong>Signal distinct fourni par le service</strong>
+          <span>Urgence de traitement (triage)</span>
+          <strong>
+            Quoi examiner en premier — ni preuve, ni probabilité de fraude
+          </strong>
         </div>
         <div>
           <span>Priorité de revue déterministe</span>
-          <strong>Indice des contrôles documentaires</strong>
+          <strong>Indice issu des contrôles documentaires</strong>
         </div>
       </div>
       <div className="portfolio-toolbar">
@@ -198,8 +249,8 @@ export function Portfolio({
             value={sort}
             onChange={(e) => setSort(e.target.value as PortfolioSort)}
           >
+            <option value="triage">Urgence (ordre du service)</option>
             <option value="review">Priorité de revue</option>
-            <option value="triage">Triage</option>
             <option value="activity">Dernière activité</option>
             <option value="name">Entreprise</option>
           </select>
@@ -268,9 +319,9 @@ export function Portfolio({
               </div>
               <div className="portfolio-card-metrics">
                 <div>
-                  <span>Triage / urgence</span>
-                  <strong>
-                    {item.triage ? item.triage.label_fr : "Non communiqué"}
+                  <span>Urgence (triage)</span>
+                  <strong className="portfolio-triage">
+                    {show(item.triage_priority)}
                   </strong>
                 </div>
                 <div>
@@ -292,6 +343,15 @@ export function Portfolio({
                   <strong>{item.active_finding_count}</strong>
                 </div>
               </div>
+              {item.triage_reason_codes.length > 0 && (
+                <div className="tags triage-reasons">
+                  {item.triage_reason_codes.map((code) => (
+                    <span className="badge" key={code}>
+                      {triageLabel[code] || code}
+                    </span>
+                  ))}
+                </div>
+              )}
               <div className="portfolio-card-foot">
                 <div>
                   <span>Clarification</span>
@@ -304,11 +364,11 @@ export function Portfolio({
                 <div>
                   <span>Signaux historiques</span>
                   <strong>
-                    {item.historical_signals?.length
-                      ? item.historical_signals
-                          .map((s) => s.label_fr)
+                    {item.history_signal_codes.length
+                      ? item.history_signal_codes
+                          .map((c) => historyLabel[c] || c)
                           .join(" · ")
-                      : "Non communiqué"}
+                      : "Aucun historique synthétique"}
                   </strong>
                 </div>
               </div>
@@ -317,8 +377,9 @@ export function Portfolio({
         </div>
       )}
       <p className="portfolio-note">
-        <CircleHelp size={15} /> Les valeurs absentes restent non communiquées.
-        Le triage et la priorité de revue sont deux indicateurs distincts.
+        <CircleHelp size={15} /> L’urgence (triage) et la priorité de revue sont
+        deux indicateurs distincts calculés par le service ; une absence de
+        réponse ne crée aucun constat.
       </p>
     </section>
   );
@@ -334,7 +395,7 @@ function Card({
   className?: string;
 }) {
   return (
-    <section className={`portfolio-card ${className}`}>
+    <section className={`portfolio-card enter-once ${className}`}>
       <h2>{title}</h2>
       {children}
     </section>
@@ -342,6 +403,44 @@ function Card({
 }
 function EmptyData({ children }: { children: React.ReactNode }) {
   return <p className="portfolio-no-data">{children}</p>;
+}
+
+export function HistorySignals({ signals }: { signals: HistorySignal[] }) {
+  return (
+    <Card
+      title="Signaux historiques (contexte de revue)"
+      className="history-signals"
+    >
+      <p className="portfolio-source">
+        Observations synthétiques neutres — ce ne sont ni des constats ni des
+        indices de fraude.
+      </p>
+      {signals.length ? (
+        <ul className="signal-list">
+          {signals.map((s) => (
+            <li key={s.signal_id}>
+              <div>
+                <strong>{historyLabel[s.reason_code] || s.reason_code}</strong>
+                <span className="mono">{s.period}</span>
+              </div>
+              <p>{s.explanation_fr}</p>
+              <small>
+                Observé : {s.observed_value}
+                {s.baseline_value !== null
+                  ? ` · Référence : ${s.baseline_value}`
+                  : ""}{" "}
+                · {s.evidence_source_ids.length} source(s) synthétique(s)
+              </small>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <EmptyData>
+          Aucun historique synthétique pour cette entreprise.
+        </EmptyData>
+      )}
+    </Card>
+  );
 }
 
 export function Company360({
@@ -352,6 +451,13 @@ export function Company360({
   history: HistoryView | null;
 }) {
   const profile = c.enterprise_profile;
+  const maxMonth = Math.max(
+    1,
+    ...c.monthly_activity.map((m) => m.transaction_count),
+  );
+  const pairs = c.invoice_comparisons.filter(
+    (x) => x.status !== "SINGLE_OBSERVATION",
+  );
   return (
     <section className="company360">
       <header className="portfolio-intro">
@@ -370,144 +476,193 @@ export function Company360({
         </div>
         <div>
           <span>Identifiant synthétique</span>
-          <strong>{show(profile?.synthetic_identifier ?? c.company_id)}</strong>
+          <strong>{show(profile?.synthetic_identifier)}</strong>
         </div>
         <div>
           <span>Période d’activité</span>
           <strong>
-            {profile?.activity_period
-              ? `${date(profile.activity_period.start)} — ${date(profile.activity_period.end)}`
+            {profile?.activity_start
+              ? `${profile.activity_start} — ${show(profile.activity_end)}`
               : "Non communiquée"}
           </strong>
         </div>
+        <div>
+          <span>Nature des données</span>
+          <strong>Synthétiques</strong>
+        </div>
       </div>
+      <div className="metric-grid four enter-once">
+        <div className="metric">
+          <span>Factures observées</span>
+          <strong>{c.invoice_observations.length}</strong>
+          <small>{c.transactions.length} transaction(s)</small>
+        </div>
+        <div className="metric">
+          <span>Paires acheteur / vendeur</span>
+          <strong>{pairs.length}</strong>
+          <small>
+            {pairs.filter((x) => x.status === "DIFFERENCES").length} avec
+            différences
+          </small>
+        </div>
+        <div className="metric">
+          <span>Règlements observés</span>
+          <strong>{c.payment_timeline.length}</strong>
+          <small>Chronologie synthétique</small>
+        </div>
+        <div className="metric">
+          <span>Déclarations de contexte</span>
+          <strong>{c.context_claims.length}</strong>
+          <small>Affirmations attribuées</small>
+        </div>
+      </div>
+      <Card title="Activité sur 12 mois">
+        {c.monthly_activity.length ? (
+          <div
+            className="month-bars"
+            role="list"
+            aria-label="Transactions par mois"
+          >
+            {c.monthly_activity.map((m) => (
+              <div
+                role="listitem"
+                key={m.month}
+                title={`${m.month} : ${m.transaction_count} transaction(s)`}
+              >
+                <span
+                  className="month-bar"
+                  style={{
+                    height: `${(m.transaction_count / maxMonth) * 100}%`,
+                  }}
+                />
+                <strong>{m.transaction_count}</strong>
+                <small>{m.month.slice(5)}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <EmptyData>Aucune activité mensuelle dans le dossier.</EmptyData>
+        )}
+        <p className="portfolio-source">
+          Source : faits synthétiques du dossier ; un mois absent n’est jamais
+          compté comme nul.
+        </p>
+      </Card>
+      <HistorySignals signals={c.history_signals} />
       <div className="portfolio-columns">
         <Card title="Chronologie des factures">
-          <ol className="portfolio-timeline">
-            {c.transactions.map((tx) => (
-              <li key={tx.transaction_id}>
-                <span>{date(tx.issued_on)}</span>
-                <strong>{show(tx.invoice_number)}</strong>
-                <small>
-                  {show(tx.counterparty_display_name)} · Facturé{" "}
-                  {money(tx.invoiced_gross_millimes)}
-                </small>
-              </li>
-            ))}
-          </ol>
-          {!c.transactions.length && (
-            <EmptyData>Aucune facture observée.</EmptyData>
-          )}
-        </Card>
-        <Card title="Règlements observés">
-          <p className="portfolio-source">
-            Source : données synthétiques fournies au dossier.
-          </p>
-          {c.payment_timeline?.length ? (
+          <details>
+            <summary>
+              {c.transactions.length} transaction(s) — afficher le détail
+            </summary>
             <ol className="portfolio-timeline">
-              {c.payment_timeline.map((payment) => (
-                <li key={payment.payment_id}>
-                  <span>{date(payment.occurred_at)}</span>
-                  <strong>
-                    {money(payment.amount_millimes, payment.currency ?? "TND")}
-                  </strong>
+              {c.transactions.map((tx) => (
+                <li key={tx.transaction_id}>
+                  <span>{date(tx.issued_on)}</span>
+                  <strong>{show(tx.invoice_number)}</strong>
                   <small>
-                    {label(payment.status)} · {show(payment.origin_group_id)}
+                    {show(tx.counterparty_display_name ?? tx.transaction_id)} ·
+                    Facturé {money(tx.invoiced_gross_millimes)} · Réglé observé{" "}
+                    {money(tx.settled_millimes)}
                   </small>
                 </li>
               ))}
             </ol>
-          ) : (
-            <EmptyData>
-              Chronologie de paiement non fournie par le service.
-            </EmptyData>
-          )}
+          </details>
         </Card>
-        <Card title="Activité par mois">
-          {c.monthly_activity?.length ? (
-            <div className="portfolio-months">
-              {c.monthly_activity.map((month) => (
-                <div key={month.month}>
-                  <strong>{month.month}</strong>
-                  <span>{month.transaction_count} transaction(s)</span>
-                  <small>
-                    Entrées : {money(month.inflow_millimes)} · Sorties :{" "}
-                    {money(month.outflow_millimes)}
-                  </small>
-                  <small>Source : {month.source_label}</small>
-                </div>
-              ))}
-            </div>
+        <Card title="Règlements observés">
+          {c.payment_timeline.length ? (
+            <details>
+              <summary>
+                {c.payment_timeline.length} règlement(s) — afficher le détail
+              </summary>
+              <ol className="portfolio-timeline">
+                {c.payment_timeline.map((payment) => (
+                  <li key={payment.payment_id}>
+                    <span>{date(payment.occurred_at)}</span>
+                    <strong>
+                      {money(payment.amount_millimes, payment.currency)}
+                    </strong>
+                    <small>
+                      {label(payment.status)} · {payment.origin_group_id}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            </details>
           ) : (
-            <EmptyData>
-              Activité mensuelle non fournie par le service.
-            </EmptyData>
+            <EmptyData>Aucun règlement observé.</EmptyData>
           )}
         </Card>
         <Card title="Activité financière">
-          <p className="portfolio-source">
-            {c.financial_activity
-              ? `Source synthétique : ${c.financial_activity.source_label}`
-              : "Source : résumés de transactions synthétiques du dossier."}
-          </p>
-          {c.financial_activity ? (
-            <dl className="portfolio-facts">
-              <div>
-                <dt>Règlements observés</dt>
-                <dd>
-                  {money(
-                    c.financial_activity.observed_settlements_millimes,
-                    c.financial_activity.currency,
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>Entrées</dt>
-                <dd>
-                  {money(
-                    c.financial_activity.inflow_millimes,
-                    c.financial_activity.currency,
-                  )}
-                </dd>
-              </div>
-              <div>
-                <dt>Sorties</dt>
-                <dd>
-                  {money(
-                    c.financial_activity.outflow_millimes,
-                    c.financial_activity.currency,
-                  )}
-                </dd>
-              </div>
-            </dl>
-          ) : c.transactions.some((item) => item.settled_millimes !== null) ? (
-            <dl className="portfolio-facts">
-              {c.transactions
-                .filter((item) => item.settled_millimes !== null)
-                .map((item) => (
-                  <div key={item.transaction_id}>
-                    <dt>Règlement observé · {show(item.invoice_number)}</dt>
-                    <dd>{money(item.settled_millimes)}</dd>
-                  </div>
-                ))}
-            </dl>
+          {c.financial_snapshot ? (
+            <>
+              <p className="snapshot-label">{c.financial_snapshot.label_fr}</p>
+              <dl className="portfolio-facts">
+                <div>
+                  <dt>Règlements observés</dt>
+                  <dd>
+                    {money(c.financial_snapshot.observed_settlements_millimes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Sorties observées</dt>
+                  <dd>
+                    {money(c.financial_snapshot.observed_outflows_millimes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Montant documenté à payer</dt>
+                  <dd>
+                    {money(c.financial_snapshot.documented_payable_millimes)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Reste documenté (non exigible établi)</dt>
+                  <dd>
+                    {money(
+                      c.financial_snapshot
+                        .outstanding_documented_payable_millimes,
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Entrées</dt>
+                  <dd>Non fournies (périmètre achats uniquement)</dd>
+                </div>
+              </dl>
+              <p className="portfolio-source">
+                {c.financial_snapshot.statement_fr}
+              </p>
+            </>
           ) : (
-            <EmptyData>Aucun règlement observé fourni.</EmptyData>
+            <EmptyData>
+              Aucun instantané financier synthétique pour cette entreprise.
+              BOUSSLA n’accède à aucun compte bancaire.
+            </EmptyData>
           )}
         </Card>
         <Card title="Déclarations de contexte">
           {c.context_claims.length ? (
-            <ol className="portfolio-timeline">
-              {c.context_claims.map((claim) => (
-                <li key={claim.claim_id}>
-                  <span>{date(claim.submitted_at)}</span>
-                  <strong>{claim.purpose_text}</strong>
-                  <small>
-                    {claim.beneficiary_type} · {claim.purpose_category}
-                  </small>
-                </li>
-              ))}
-            </ol>
+            <details>
+              <summary>
+                {c.context_claims.length} déclaration(s) — afficher
+              </summary>
+              <ol className="portfolio-timeline">
+                {c.context_claims.map((claim) => (
+                  <li key={claim.claim_id}>
+                    <span>{date(claim.submitted_at)}</span>
+                    <strong>{claim.purpose_text}</strong>
+                    <small>
+                      {claim.project_id
+                        ? `Projet ${claim.project_id}`
+                        : "Sans projet"}{" "}
+                      · {label(claim.purpose_category)}
+                    </small>
+                  </li>
+                ))}
+              </ol>
+            </details>
           ) : (
             <EmptyData>Aucune déclaration de contexte.</EmptyData>
           )}
@@ -530,199 +685,176 @@ export function Company360({
       </div>
       <InvoiceCompare
         observations={c.invoice_observations}
-        finding={c.findings.find((f) => f.family === "COUNTERPARTY") ?? null}
-        comparison={c.invoice_comparison ?? null}
+        comparisons={c.invoice_comparisons}
       />
     </section>
   );
 }
 
-export function InvoiceCompare({
-  observations,
-  finding,
-  comparison,
-}: {
-  observations: InvoiceObservation[];
-  finding: Finding | null;
-  comparison: InvoiceComparison | null;
-}) {
-  const groups = new Map<
-    string,
-    { buyer: InvoiceObservation[]; seller: InvoiceObservation[] }
-  >();
-  for (const item of observations) {
-    if (
-      item.perspective !== "BUYER_RECEIVED" &&
-      item.perspective !== "SELLER_ISSUED"
-    )
-      continue;
-    const key =
-      item.transaction_id ||
-      `${item.issuer_company_id ?? "?"}:${item.invoice_number}:${item.issued_on}`;
-    const group = groups.get(key) ?? { buyer: [], seller: [] };
-    group[item.perspective === "BUYER_RECEIVED" ? "buyer" : "seller"].push(
-      item,
-    );
-    groups.set(key, group);
+const observationValue = (o: InvoiceObservation, field: string) => {
+  const line = o.lines[0];
+  switch (field) {
+    case "issued_on":
+      return date(o.issued_on);
+    case "net_millimes":
+    case "tax_millimes":
+    case "gross_millimes":
+      return money(o[field], o.currency);
+    case "line.item_description":
+      return show(line?.item_description);
+    case "line.quantity":
+      return show(line?.quantity);
+    case "line.unit":
+      return show(line?.unit);
+    case "line.unit_price_millimes":
+      return money(line?.unit_price_millimes, o.currency);
+    case "line.line_net_millimes":
+      return money(line?.line_net_millimes, o.currency);
+    default:
+      return show((o as unknown as Record<string, string | null>)[field]);
   }
-  const pairs = [...groups.entries()].flatMap(([key, group]) =>
-    Array.from(
-      { length: Math.max(group.buyer.length, group.seller.length) },
-      (_, index) => ({
-        key: `${key}:${index}`,
-        buyer: group.buyer[index],
-        seller: group.seller[index],
-      }),
-    ),
-  );
-  const matching =
-    pairs.length === 1 &&
-    !!pairs[0].buyer &&
-    !!pairs[0].seller &&
-    (comparison?.status === "MATCH" ||
-      finding?.reason_code === "INDEPENDENT_INVOICE_VIEWS_MATCH");
-  // A case-level comparison cannot attribute a field gap to a specific invoice
-  // when several invoice pairs are present.
-  const differences = new Set(
-    pairs.length === 1 ? (comparison?.difference_fields ?? []) : [],
-  );
-  const field = (
-    label: string,
-    key: string,
-    value: string | number | null | undefined,
-  ) => (
-    <div className={differences.has(key) ? "comparison-difference" : ""}>
-      <dt>{label}</dt>
-      <dd>{show(value)}</dd>
-    </div>
-  );
-  const observation = (
-    value: InvoiceObservation | undefined,
-    title: string,
-  ) => (
+};
+
+function ComparisonPair({
+  comparison,
+  byId,
+}: {
+  comparison: InvoiceComparison;
+  byId: Map<string, InvoiceObservation>;
+}) {
+  const buyer = comparison.buyer_observation_id
+    ? byId.get(comparison.buyer_observation_id)
+    : undefined;
+  const seller = comparison.seller_observation_id
+    ? byId.get(comparison.seller_observation_id)
+    : undefined;
+  const differences = new Set(comparison.difference_fields);
+  const side = (value: InvoiceObservation | undefined, title: string) => (
     <div className="comparison-side">
       <h3>{title}</h3>
       {value ? (
         <>
           <dl className="portfolio-facts">
-            {field("Facture n°", "invoice_number", value.invoice_number)}
-            {field("Date", "issued_on", date(value.issued_on))}
-            {field("Devise", "currency", value.currency)}
-            {field(
-              "Net",
-              "net_millimes",
-              money(value.net_millimes, value.currency ?? "TND"),
-            )}
-            {field(
-              "Taxe",
-              "tax_millimes",
-              money(value.tax_millimes, value.currency ?? "TND"),
-            )}
-            {field(
-              "Brut",
-              "gross_millimes",
-              money(value.gross_millimes, value.currency ?? "TND"),
-            )}
-            {field(
-              "Ligne",
-              "lines",
-              value.lines
-                .map((line) => line.item_description || line.line_id)
-                .join(" · "),
-            )}
-            {field(
-              "Quantité",
-              "quantity",
-              value.lines.map((line) => line.quantity).join(" · "),
-            )}
-            {field(
-              "Unité",
-              "unit",
-              value.lines.map((line) => line.unit).join(" · "),
-            )}
-            {field("Origine", "origin_group_id", value.origin_group_id)}
+            {Object.keys(fieldLabel).map((field) => (
+              <div
+                key={field}
+                className={
+                  differences.has(field) ? "comparison-difference" : ""
+                }
+              >
+                <dt>{fieldLabel[field]}</dt>
+                <dd>{observationValue(value, field)}</dd>
+              </div>
+            ))}
+            <div>
+              <dt>Source / origine</dt>
+              <dd>{value.origin_group_id}</dd>
+            </div>
           </dl>
           <small className="portfolio-source">
             Pièce : {value.document_id}
           </small>
         </>
       ) : (
-        <EmptyData>Observation non fournie.</EmptyData>
+        <EmptyData>Observation non disponible.</EmptyData>
       )}
     </div>
   );
+  return (
+    <div className="comparison-block">
+      <p className={`comparison-status ${comparison.status.toLowerCase()}`}>
+        <strong>{comparison.label_fr}</strong> · {comparison.transaction_id}
+      </p>
+      <div className="comparison-pair">
+        {side(buyer, "Observation acheteur")}
+        {side(seller, "Observation vendeur")}
+      </div>
+    </div>
+  );
+}
+
+export function InvoiceCompare({
+  observations,
+  comparisons,
+}: {
+  observations: InvoiceObservation[];
+  comparisons: InvoiceComparison[];
+}) {
+  const byId = new Map(observations.map((o) => [o.observation_id, o]));
+  const ordered = [
+    ...comparisons.filter((x) => x.status === "DIFFERENCES"),
+    ...comparisons.filter((x) => x.status !== "DIFFERENCES"),
+  ];
+  const [first, ...rest] = ordered;
   return (
     <Card
       title="Facture · observation acheteur / vendeur"
       className="comparison-card"
     >
       <p className="portfolio-source">
-        {matching
-          ? "Observations concordantes selon le contrôle du service."
-          : finding
-            ? `Constat du service : ${show(finding.reason_code)} · ${finding.status}`
-            : "Aucun constat de comparaison fourni."}
+        Appariement par identifiant de transaction ; seules les différences
+        calculées par le service sont surlignées.
       </p>
-      {pairs.length ? (
-        pairs.map((pair) => (
-          <div className="comparison-pair" key={pair.key}>
-            {observation(pair.buyer, "Observation acheteur")}
-            {observation(pair.seller, "Observation vendeur")}
-          </div>
-        ))
+      {first ? (
+        <>
+          <ComparisonPair comparison={first} byId={byId} />
+          {rest.length > 0 && (
+            <details className="comparison-more">
+              <summary>Afficher les {rest.length} autre(s) paire(s)</summary>
+              {rest.map((comparison) => (
+                <ComparisonPair
+                  key={comparison.transaction_id}
+                  comparison={comparison}
+                  byId={byId}
+                />
+              ))}
+            </details>
+          )}
+        </>
       ) : (
         <EmptyData>Aucune observation de facture fournie.</EmptyData>
       )}
       <p className="portfolio-note">
-        Une concordance documentaire ne valide pas à elle seule la déclaration.
+        Des observations concordantes renforcent la corroboration ; elles ne
+        prouvent ni l’authenticité ni la validité juridique.
       </p>
     </Card>
   );
 }
 
-const evidence = (
-  refs:
-    | { document_id: string | null; source_record_id: string | null }[]
-    | undefined,
-) =>
-  refs
-    ?.map((ref) => ref.document_id || ref.source_record_id)
-    .filter(Boolean)
-    .join(" · ") || "Non fourni";
-export function HypothesisCards({ hypotheses }: { hypotheses: Hypothesis[] }) {
+export function HypothesisCards({
+  hypotheses,
+}: {
+  hypotheses: BriefHypothesis[];
+}) {
   return (
     <Card title="Top hypothèses" className="hypothesis-panel">
+      <p className="portfolio-source">
+        Catalogue fixe d’explications neutres ; le statut est un libellé de
+        support, jamais une probabilité.
+      </p>
       {hypotheses.length ? (
         <div className="hypothesis-grid">
-          {hypotheses.slice(0, 5).map((hypothesis) => (
-            <article key={hypothesis.hypothesis_id} className="hypothesis-card">
+          {hypotheses.slice(0, 5).map((h) => (
+            <article key={h.hypothesis_id} className="hypothesis-card">
               <div className="hypothesis-head">
-                <strong>
-                  {hypothesis.name_fr || hypothesis.hypothesis_id}
-                </strong>
-                <span>{label(hypothesis.status)}</span>
+                <strong>{h.name_fr}</strong>
+                <span>Support de l’hypothèse : {label(h.status)}</span>
               </div>
-              <p>{hypothesis.scope}</p>
-              {hypothesis.support_index !== null &&
-                hypothesis.support_index !== undefined && (
-                  <p>
-                    <span>Support de l’hypothèse</span>{" "}
-                    <strong>{hypothesis.support_index}</strong>
-                  </p>
-                )}
+              <p>{h.why_it_matters_fr}</p>
               <dl className="portfolio-facts">
                 <div>
                   <dt>Éléments favorables</dt>
-                  <dd>{evidence(hypothesis.supporting_refs)}</dd>
+                  <dd>{h.supporting_refs.join(" · ") || "Aucun"}</dd>
                 </div>
                 <div>
                   <dt>Éléments contraires</dt>
-                  <dd>{evidence(hypothesis.contradicting_refs)}</dd>
+                  <dd>{h.contradicting_refs.join(" · ") || "Aucun"}</dd>
                 </div>
                 <div>
                   <dt>Informations manquantes</dt>
                   <dd>
-                    {hypothesis.missing_evidence_types.map(label).join(" · ") ||
+                    {h.missing_evidence.map(label).join(" · ") ||
                       "Aucune indiquée"}
                   </dd>
                 </div>
@@ -731,50 +863,75 @@ export function HypothesisCards({ hypotheses }: { hypotheses: Hypothesis[] }) {
           ))}
         </div>
       ) : (
-        <EmptyData>Aucune hypothèse fournie par le service.</EmptyData>
+        <EmptyData>Aucune hypothèse à examiner pour cette version.</EmptyData>
       )}
     </Card>
   );
 }
 
-function BriefList({ title, values }: { title: string; values: string[] }) {
+function BriefList({
+  title,
+  values,
+  limit = 8,
+}: {
+  title: string;
+  values: string[];
+  limit?: number;
+}) {
+  const item = (value: string, index: number) => (
+    <li key={`${value}-${index}`}>{value}</li>
+  );
   return (
-    <section>
+    <section className="brief-section">
       <h3>{title}</h3>
       {values.length ? (
-        <ul>
-          {values.map((value, index) => (
-            <li key={`${value}-${index}`}>{value}</li>
-          ))}
-        </ul>
+        <>
+          <ul>{values.slice(0, limit).map(item)}</ul>
+          {values.length > limit && (
+            <details>
+              <summary>
+                Afficher {values.length - limit} élément(s) de plus
+              </summary>
+              <ul>{values.slice(limit).map((v, i) => item(v, i + limit))}</ul>
+            </details>
+          )}
+        </>
       ) : (
-        <EmptyData>Aucune information fournie.</EmptyData>
+        <EmptyData>Aucune information.</EmptyData>
       )}
     </section>
   );
 }
 export function InvestigatorPanel({
   brief,
+  passages,
 }: {
   brief: InvestigatorBrief | null | undefined;
+  passages: RetrievedPassage[];
 }) {
+  const refs = new Set(brief?.reference_rule_ids ?? []);
   return (
     <Card title="Analyse assistée BOUSSLA" className="investigator-panel">
       <div className="investigator-head">
         <span className="eyebrow">
-          AIDE À LA REVUE · {brief?.mode ?? "NON FOURNIE"}
+          AIDE À LA REVUE ·{" "}
+          {brief
+            ? brief.mode === "LIVE"
+              ? "MODÈLE"
+              : "REPLI DÉTERMINISTE"
+            : "NON DISPONIBLE"}
         </span>
-        <p>
-          La synthèse reste attribuée au service et soumise à la revue de
-          l’agent.
+        <p className="investigator-disclaimer">
+          L'analyse assistée ne modifie pas l'indice de revue ni les faits du
+          dossier.
         </p>
       </div>
       {brief ? (
-        <div className="investigator-grid">
-          <BriefList
-            title="Résumé"
-            values={brief.summary_fr ? [brief.summary_fr] : []}
-          />
+        <div
+          className="investigator-grid"
+          key={`${brief.case_id}-${brief.case_version}`}
+        >
+          <BriefList title="Résumé" values={[brief.summary_fr]} />
           <BriefList
             title="Observations clés"
             values={brief.key_observations.map((item) => item.text_fr)}
@@ -783,36 +940,39 @@ export function InvestigatorPanel({
             title="Top hypothèses"
             values={brief.top_hypotheses
               .slice(0, 5)
-              .map((item) => item.name_fr || item.hypothesis_id)}
+              .map((h) => `${h.name_fr} — ${label(h.status)}`)}
           />
           <BriefList
             title="Informations manquantes"
-            values={brief.missing_information}
+            values={brief.missing_information.map(label)}
           />
           <BriefList
-            title="Changements depuis la dernière version"
-            values={brief.changes_since_last_version}
+            title="Changements depuis la version précédente"
+            values={brief.changes_since_previous_version}
           />
           <BriefList
             title="Questions proposées / déjà posées"
             values={[
-              ...brief.questions_proposed.map((value) => `Proposée : ${value}`),
+              ...brief.questions_proposed.map(
+                (q) => `Proposée : ${questionName[q] || q}`,
+              ),
               ...brief.questions_already_asked.map(
-                (value) => `Déjà posée : ${value}`,
+                (q) => `Déjà posée : ${questionName[q] || q}`,
               ),
             ]}
           />
           <BriefList
             title="Références publiques candidates"
-            values={brief.candidate_public_references.map(
-              (item) => `${item.document_title} · ${item.rule_id}`,
-            )}
+            values={passages
+              .filter((p) => refs.has(p.rule_id))
+              .map((p) => `${p.document_title} · ${p.rule_id}`)}
           />
+          <BriefList title="Limitations" values={brief.limitations} />
         </div>
       ) : (
         <EmptyData>
-          Le service n’a pas fourni d’InvestigatorBrief pour cette version.
-          Aucune analyse n’est simulée.
+          Aucune analyse assistée pour cette version. Aucune analyse n’est
+          simulée.
         </EmptyData>
       )}
     </Card>
@@ -820,8 +980,9 @@ export function InvestigatorPanel({
 }
 
 const outputLabels: Record<string, string> = {
-  review_index: "Priorité hypothétique",
-  hypothetical_review_index: "Priorité hypothétique",
+  current_review_index: "Indice de revue actuel",
+  hypothetical_review_index: "Indice de revue hypothétique",
+  quantity_status_after: "Écart de quantité (simulation)",
   residual_units: "Unités résiduelles",
   unit: "Unité",
   status: "Statut",
@@ -834,28 +995,36 @@ export function ScenarioCards({
   scenarios: Scenario[];
 }) {
   return (
-    <Card title="Scénarios de sensibilité" className="scenario-panel">
+    <Card title="Scénarios hypothétiques" className="scenario-panel">
       <div className="scenario-grid">
         <article className="scenario-card current">
           <span>État actuel</span>
-          <strong>Priorité {show(reviewIndex)}</strong>
-          <small>Valeur du dossier fournie par le service</small>
+          <strong>Indice de revue {show(reviewIndex)}</strong>
+          <small>Valeur canonique du dossier</small>
         </article>
-        {scenarios.map((scenario) => (
-          <article className="scenario-card" key={scenario.scenario_id}>
-            <span>{scenario.label}</span>
-            {Object.entries(scenario.outputs).map(([key, value]) => (
-              <div key={key}>
-                <small>{outputLabels[key] || key}</small>
-                <strong>
-                  {typeof value === "string"
-                    ? label(value)
-                    : show(typeof value === "number" ? value : null)}
+        {scenarios.map((scenario) => {
+          const hypothetical = scenario.outputs.hypothetical_review_index;
+          return (
+            <article className="scenario-card" key={scenario.scenario_id}>
+              <span>{scenario.label}</span>
+              {hypothetical !== undefined && (
+                <strong className="scenario-shift">
+                  {show(scenario.outputs.current_review_index ?? reviewIndex)}
+                  <ArrowRight size={18} className="scenario-arrow" />
+                  {hypothetical}
                 </strong>
-              </div>
-            ))}
-          </article>
-        ))}
+              )}
+              {Object.entries(scenario.outputs)
+                .filter(([key]) => key !== "status")
+                .map(([key, value]) => (
+                  <div key={key}>
+                    <small>{outputLabels[key] || key}</small>
+                    <strong>{label(String(value))}</strong>
+                  </div>
+                ))}
+            </article>
+          );
+        })}
       </div>
       <p className="portfolio-note">
         Simulation hypothétique — aucun changement du dossier.
@@ -864,59 +1033,161 @@ export function ScenarioCards({
   );
 }
 
-export function DemoAdmin({ items }: { items: QueueItem[] }) {
-  const enterprises = [
-    ...new Map(
-      items.map((item) => [item.company_id || item.case_id, item]),
-    ).values(),
-  ];
+export function DemoAdmin({ enabled }: { enabled: boolean }) {
+  const client = useQueryClient();
+  const list = useQuery({
+    queryKey: ["admin", "enterprises"],
+    queryFn: () => api.admin.list(),
+    enabled,
+  });
+  const [name, setName] = useState("");
+  const [sector, setSector] = useState("");
+  const [notice, setNotice] = useState("");
+  const [pending, setPending] = useState(false);
+  const run = async (job: () => Promise<unknown>, success: string) => {
+    if (pending) return;
+    setPending(true);
+    try {
+      await job();
+      setNotice(success);
+      await client.invalidateQueries({ queryKey: ["admin"] });
+      await client.invalidateQueries({ queryKey: ["queue"] });
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Action impossible.");
+    } finally {
+      setPending(false);
+    }
+  };
+  const items: AdminEnterprise[] = list.data?.items ?? [];
   return (
     <section className="company360">
       <header className="portfolio-intro">
         <div>
-          <span className="eyebrow">DONNÉES SYNTHÉTIQUES</span>
+          <span className="eyebrow">OPÉRATEUR DÉMO · DONNÉES SYNTHÉTIQUES</span>
           <h1>Administration de démonstration</h1>
-          <p>
-            Actions disponibles après publication d’une API autorisée par le
-            service.
+          <p className="admin-notice">
+            Administration de données synthétiques — démonstration locale.
           </p>
         </div>
       </header>
-      <Card title="Entreprises synthétiques visibles">
-        <div className="admin-list">
-          {enterprises.map((item) => (
-            <div key={item.company_id || item.case_id}>
-              <Building2 size={18} />
-              <span>
-                <strong>{item.company_display_name}</strong>
-                <small>
-                  {show(item.synthetic_identifier ?? item.company_id)} ·{" "}
-                  {show(item.sector)}
-                </small>
-              </span>
-              <button disabled title="API autorisée non disponible">
-                Supprimer
+      {!enabled ? (
+        <EmptyData>Réservé au rôle « Opérateur démo ».</EmptyData>
+      ) : (
+        <>
+          {notice && (
+            <p className="toast inline" role="status">
+              {notice}
+            </p>
+          )}
+          <Card title={`Entreprises synthétiques (${items.length})`}>
+            <div className="admin-list">
+              {items.map((item) => (
+                <div key={item.company_id}>
+                  <Building2 size={18} />
+                  <span>
+                    <strong>{item.display_name}</strong>
+                    <small>
+                      {item.synthetic_identifier} · {item.sector} ·{" "}
+                      {item.transaction_count} transaction(s) · {item.case_id}
+                    </small>
+                  </span>
+                  <button
+                    className="danger"
+                    disabled={pending}
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Supprimer l’entreprise synthétique ${item.company_id} et son dossier de démonstration ?`,
+                        )
+                      )
+                        void run(
+                          () => api.admin.remove(item.company_id),
+                          `Entreprise synthétique ${item.company_id} supprimée.`,
+                        );
+                    }}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              ))}
+            </div>
+            {list.isLoading && <EmptyData>Chargement…</EmptyData>}
+          </Card>
+          <Card title="Ajouter une entreprise synthétique">
+            <form
+              className="form-grid"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void run(
+                  () => api.admin.add(name, sector),
+                  "Entreprise synthétique ajoutée au portefeuille.",
+                ).then(() => {
+                  setName("");
+                  setSector("");
+                });
+              }}
+            >
+              <label>
+                Nom
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  maxLength={80}
+                />
+              </label>
+              <label>
+                Secteur
+                <input
+                  value={sector}
+                  onChange={(e) => setSector(e.target.value)}
+                  required
+                  maxLength={60}
+                />
+              </label>
+              <button className="primary" disabled={pending}>
+                Ajouter
+              </button>
+            </form>
+          </Card>
+          <Card title="Gestion du portefeuille">
+            <div className="admin-actions">
+              <button
+                disabled={pending}
+                onClick={() =>
+                  void run(
+                    () => api.admin.seed(),
+                    "Dossiers manquants initialisés.",
+                  )
+                }
+              >
+                Initialiser les dossiers manquants
+              </button>
+              <button
+                className="danger"
+                disabled={pending}
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Réinitialiser le portefeuille synthétique ? Toutes les modifications des 12 dossiers synthétiques et les entreprises ajoutées seront supprimées.",
+                    )
+                  )
+                    void run(
+                      () => api.admin.reset(),
+                      "Portefeuille synthétique réinitialisé.",
+                    );
+                }}
+              >
+                Réinitialiser le portefeuille (destructif)
               </button>
             </div>
-          ))}
-        </div>
-        {!enterprises.length && (
-          <EmptyData>
-            Aucune entreprise renvoyée par la file de revue.
-          </EmptyData>
-        )}
-      </Card>
-      <Card title="Gestion du portefeuille">
-        <div className="admin-actions">
-          <button disabled>Initialiser le portefeuille</button>
-          <button disabled>Réinitialiser le portefeuille</button>
-          <button disabled>Ajouter une entreprise synthétique</button>
-        </div>
-        <p className="portfolio-note">
-          Commandes désactivées : les points d’API autorisés ne sont pas exposés
-          par la version actuelle.
-        </p>
-      </Card>
+            <p className="portfolio-note">
+              Données synthétiques uniquement. Le dossier de démonstration
+              principal n’est jamais modifié par ces actions.
+            </p>
+          </Card>
+        </>
+      )}
     </section>
   );
 }

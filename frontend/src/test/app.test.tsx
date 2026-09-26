@@ -67,6 +67,23 @@ const officer: OfficerCaseView = {
   reference_note: null,
   mode_by_node: { checks: "LIVE", retrieval: "NOT_RUN" },
   invoice_observations: [],
+  invoice_comparisons: [],
+  investigator_brief: null,
+  triage: {
+    triage_priority: 50,
+    review_index: 40,
+    reason_codes: ["REVIEW_FINDING_PRESENT", "CLARIFICATION_PENDING"],
+    components: { REVIEW_INDEX_BASE: 40, CLARIFICATION_PENDING: 10 },
+    formula_version: "triage-demo-1",
+    note_fr: "Urgence de traitement",
+    not_fraud_probability: true,
+  },
+  clarification_deadlines: [],
+  history_signals: [],
+  enterprise_profile: null,
+  monthly_activity: [],
+  payment_timeline: [],
+  financial_snapshot: null,
   quantity_references: [],
 };
 
@@ -80,28 +97,70 @@ function mockApi(
       const role = (init?.headers as Record<string, string>)?.[
         "X-Boussla-Demo-Role"
       ];
-      const payload = path.includes("/bootstrap")
-        ? { role, case_ids: [shared.case_id], banner_fr: shared.banner_fr }
-        : path.includes("/officer/queue")
+      const payload = path.includes("/admin/enterprises")
+        ? {
+            items: [
+              {
+                company_id: "SYN-OP-001",
+                display_name: "SYNTHÉTIQUE — Atelier Horizon",
+                sector: "Fabrication",
+                synthetic_identifier: "SYNTHETIC-MF-OP-001",
+                case_id: "SYN-OP-001-CASE",
+                case_version: 1,
+                transaction_count: 12,
+                data_kind: "SYNTHETIC",
+              },
+            ],
+            notice_fr:
+              "Administration de données synthétiques — démonstration locale.",
+          }
+        : path.includes("/bootstrap")
           ? {
-              items: [
-                {
-                  case_id: shared.case_id,
-                  company_display_name: shared.company_display_name,
-                  case_version: 1,
-                  review_index: 40,
-                  evidence_coverage: "75.00",
-                  active_finding_count: 1,
-                  clarification_status: "NOT_REQUESTED",
-                  scope_note: "Documentaire",
-                },
-              ],
-              next_cursor: null,
-              mode: "LIVE",
+              role: role === "OPERATOR" ? "DEMO_OPERATOR" : role,
+              case_ids: role === "OPERATOR" ? [] : [shared.case_id],
+              banner_fr: shared.banner_fr,
+              demo_admin: Object.fromEntries(
+                [
+                  "can_list",
+                  "can_seed",
+                  "can_reset",
+                  "can_add",
+                  "can_delete",
+                ].map((k) => [k, role === "OPERATOR"]),
+              ),
             }
-          : role === "COMPANY"
-            ? companyView
-            : officerView;
+          : path.includes("/officer/queue")
+            ? {
+                items: [
+                  {
+                    case_id: shared.case_id,
+                    company_display_name: shared.company_display_name,
+                    case_version: 1,
+                    review_index: 40,
+                    evidence_coverage: "75.00",
+                    active_finding_count: 1,
+                    clarification_status: "NOT_REQUESTED",
+                    scope_note: "Documentaire",
+                    company_id: "DEMO-BAT",
+                    coverage_complete: false,
+                    triage_priority: 50,
+                    triage_reason_codes: [
+                      "REVIEW_FINDING_PRESENT",
+                      "CLARIFICATION_PENDING",
+                    ],
+                    sector: "Construction",
+                    synthetic_identifier: "DEMO-MF",
+                    last_activity_at: "2026-09-07",
+                    history_signal_codes: [],
+                    history_anomaly: null,
+                  },
+                ],
+                next_cursor: null,
+                mode: "LIVE",
+              }
+            : role === "COMPANY"
+              ? companyView
+              : officerView;
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -112,7 +171,9 @@ function mockApi(
   return fetchMock;
 }
 
-function mount() {
+function mount({ splash = false } = {}) {
+  if (splash) sessionStorage.removeItem("boussla.boot.v1");
+  else sessionStorage.setItem("boussla.boot.v1", "1");
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -441,7 +502,7 @@ it("shows a bounded automatic request in the company inbox without an officer dr
           reason_text_fr: "Règlement à préciser.",
           target_response_at: "2026-10-03T10:00:00Z",
           target_kind: "DEMO_SERVICE_TARGET",
-          overdue_state: "ON_TIME",
+          overdue_state: "FOLLOW_UP_DUE",
         },
         questions: [
           {
@@ -461,12 +522,20 @@ it("shows a bounded automatic request in the company inbox without an officer dr
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   fireEvent.click(await screen.findByRole("button", { name: "Demandes" }));
   expect(
-    await screen.findByText("BOUSSLA a demandé automatiquement des précisions"),
+    await screen.findByText("Demande automatique BOUSSLA"),
   ).toBeInTheDocument();
-  expect(screen.getByText(/Règlement à préciser/)).toBeInTheDocument();
   expect(
-    screen.getByText(/Date cible de réponse \(démonstration\)/),
+    screen.getByText(
+      "Précisions demandées automatiquement à partir des informations disponibles.",
+    ),
   ).toBeInTheDocument();
+  expect(
+    screen.getByText(/Cible de réponse de démonstration/),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Relance à prévoir")).toBeInTheDocument();
+  expect(document.body.textContent).not.toMatch(
+    /fraude détectée|suspicious|délai légal dépassé/i,
+  );
   expect(
     screen.getByText("Quelle pièce documente le règlement ?"),
   ).toBeInTheDocument();
@@ -511,4 +580,65 @@ it("only offers general company use when the server capability permits a null pr
     expect(postBodies(fetchMock, "/context")).toHaveLength(1),
   );
   expect(postBodies(fetchMock, "/context")[0].context.project_id).toBeNull();
+});
+
+it("shows triage separately from the review index in the officer dossier", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  expect(
+    screen.getByText("50", { selector: ".portfolio-triage" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("40", { selector: ".portfolio-index" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  expect(
+    await screen.findByText("Urgence de traitement (triage)"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getAllByText("Clarification en attente").length,
+  ).toBeGreaterThan(0);
+  expect(document.body.textContent).not.toMatch(/probabilit[ée] de fraude/i);
+});
+
+it("keeps demo administration behind the operator role", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  expect(
+    screen.queryByRole("button", { name: "Données démo" }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Opérateur démo" }));
+  expect(
+    await screen.findByText(
+      "Administration de données synthétiques — démonstration locale.",
+    ),
+  ).toBeInTheDocument();
+  expect(
+    await screen.findByText("SYNTHÉTIQUE — Atelier Horizon"),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Supprimer" })).toBeEnabled();
+});
+
+it("renders the brand mark and a time-bounded boot splash once per session", async () => {
+  mockApi();
+  mount({ splash: true });
+  expect(
+    screen.getByRole("status", { name: "Chargement de BOUSSLA" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getAllByRole("img", { name: "BOUSSLA" }).length,
+  ).toBeGreaterThan(0);
+  expect(sessionStorage.getItem("boussla.boot.v1")).toBe("1");
+  await waitFor(
+    () =>
+      expect(
+        screen.queryByRole("status", { name: "Chargement de BOUSSLA" }),
+      ).not.toBeInTheDocument(),
+    { timeout: 4000 },
+  );
+  expect(
+    screen.getByText("Portefeuille des entreprises", { selector: "h1" }),
+  ).toBeInTheDocument();
 });

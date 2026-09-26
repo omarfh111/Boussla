@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="BOUSSLA">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#126BDB"/>
+      <stop offset="55%" stop-color="#16C6E3"/>
+      <stop offset="100%" stop-color="#20D6B5"/>
+    </linearGradient>
+    <linearGradient id="n" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B2F63"/>
+      <stop offset="100%" stop-color="#16C6E3"/>
+    </linearGradient>
+  </defs>
+  <circle cx="128" cy="128" r="94" fill="none" stroke="#126BDB" stroke-width="10" stroke-linecap="round" stroke-dasharray="420 175" transform="rotate(-34 128 128)"/>
+  <circle cx="128" cy="128" r="72" fill="none" stroke="#16C6E3" stroke-width="2" opacity=".26"/>
+  <path d="M128 12 L151 78 L128 65 L105 78 Z" fill="url(#g)"/>
+  <path d="M128 244 L114 204 L128 212 L142 204 Z" fill="#0B2F63"/>
+  <path d="M71 133 L113 175 L190 87" fill="none" stroke="url(#n)" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="113" cy="175" r="8" fill="#20D6B5"/>
+  <circle cx="58" cy="96" r="5" fill="#126BDB"/>
+  <circle cx="198" cy="163" r="5" fill="#16C6E3"/>
+</svg>
