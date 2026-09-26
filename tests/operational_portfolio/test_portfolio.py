@@ -98,7 +98,7 @@ def test_copy_on_write_management(portfolio):
     assert portfolio == original
 
 
-@pytest.mark.parametrize("field", ["company", "invoice", "payment", "document", "context", "project", "source", "oracle", "snapshot"])
+@pytest.mark.parametrize("field", ["company", "invoice", "payment", "document", "context", "project", "source", "oracle", "snapshot", "coverage", "source_extra"])
 def test_reject_cross_company_and_extra_data(portfolio, field):
     row = enterprise_facts(portfolio,"SYN-OP-001")
     i = row["events"][0]["inputs"]
@@ -110,6 +110,8 @@ def test_reject_cross_company_and_extra_data(portfolio, field):
     elif field == "project": row["events"][0]["projects"][0]["company_id"] = "SYN-OP-002"
     elif field == "source": row["source_records"][0]["company_id"] = "SYN-OP-002"
     elif field == "oracle": row["expected_answer"] = 0
+    elif field == "coverage": row["coverage"][0]["source_id"] = "SYN-OP-002-COV"
+    elif field == "source_extra": row["source_records"][0]["expected_answer"] = 0
     else: row["synthetic_authorized_financial_snapshot"]["observed_outflows_millimes"] = 0
     with pytest.raises(ValueError):
         add_synthetic_enterprise(delete_synthetic_enterprise(portfolio,"SYN-OP-001"),row)

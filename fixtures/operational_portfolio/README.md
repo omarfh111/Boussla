@@ -50,3 +50,55 @@ The existing quantity check honestly returns INSUFFICIENT for warehouse scope an
 for assets without project allocation. Partial settlement with unknown due terms
 also remains INSUFFICIENT. The data does not force these cases into a resolved state.
 No production check, score, service, workflow or UI was changed.
+
+## Historical observations for A/C
+
+`boussla.history_signals.analyze_history(inputs, company_id=..., as_of=..., coverage=...)`
+returns immutable `HistorySignal` values. `inputs` are shared `TransactionInputs`;
+`coverage` maps complete synthetic ledger months (`YYYY-MM`) to their source IDs.
+Use the enterprise bundle's coverage records. Pass an explicit timezone-aware cutoff.
+Only completed, covered months and source views available by that cutoff are used.
+Unknown months are never converted into zero activity. Duplicate transactions and
+mixed-company documents/payments/invoices are rejected. No clock, network or mutation.
+
+The output includes code, period, metric, observed/baseline values, baseline periods,
+source IDs, French neutral explanation, method version and `affects_review_index=False`.
+Thresholds are descriptive demo conventions:
+
+| Code | Definition |
+|---|---|
+| ACTIVITY_GAP | At least two consecutive covered months without available buyer-invoice activity |
+| LATE_DOCUMENT_ACTIVITY | Buyer document available more than 45 days after issue; 45 is a descriptive threshold |
+| VOLUME_SPIKE | Monthly transaction count at least 3× the previous three covered months' mean, mean at least 1 |
+| VOLUME_DROP | Monthly count at most ⅓ of that mean |
+| PAYMENT_PATTERN_CHANGE | Absolute change at least 0.4 in observed settlement/gross ratio versus the previous three months |
+| COUNTERPARTY_CONCENTRATION_CHANGE | Absolute change at least 0.4 in largest supplier's transaction share between latest two covered quarters |
+| REPEATED_INVOICE_CONFLICT | At least two distinct transactions with current counterparty conflicts in latest covered quarter |
+| NO_SIGNIFICANT_CHANGE | No descriptive threshold met on sufficient covered history; no validation of declarations |
+| INSUFFICIENT_HISTORY | No usable consecutive baseline/observations; never interpreted as clean |
+
+Payment ratios attribute observed settlements to the transaction's economic month
+as known at the explicit cutoff. They are not historical account balances, due-date
+judgments or contemporaneous month-end snapshots. All monetary comparisons are TND.
+Counterparty repetition delegates to existing `ChecksEngineV4`; no new score logic.
+History codes are review/context candidates, not financial findings or probabilities.
+
+The archetype checklist and expected compatibility values are exclusively under
+`evaluation_only/`, which neither runtime module nor evaluator reads. The test suite
+reads this oracle separately. `results/operational_portfolio/` contains computed
+observations from current checks/history rules; it is not a runtime answer key.
+
+```python
+from datetime import datetime
+from boussla.data.operational_portfolio import seed_portfolio, enterprise_facts, transaction_inputs
+from boussla.history_signals import analyze_history
+
+portfolio = seed_portfolio()
+company_id = "SYN-OP-006"
+bundle = enterprise_facts(portfolio, company_id)
+signals = analyze_history(
+    transaction_inputs(portfolio, company_id), company_id=company_id,
+    as_of=datetime.fromisoformat(portfolio["as_of"]),
+    coverage={row["period"]: row["source_id"] for row in bundle["coverage"]},
+)
+```

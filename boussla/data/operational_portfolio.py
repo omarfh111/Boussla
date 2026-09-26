@@ -197,6 +197,14 @@ def _validate_enterprise(row: dict) -> None:
     cid = identity.company_id
     if not cid.startswith("SYN-") or not identity.synthetic_mf.startswith("SYNTHETIC-"):
         raise ValueError("synthetic identities required")
+    covered = set()
+    for coverage in row["coverage"]:
+        if (set(coverage) != {"period", "status", "source_id"}
+                or coverage["status"] != "COMPLETE_SYNTHETIC_LEDGER"
+                or not coverage["source_id"].startswith(cid+"-") or coverage["period"] in covered):
+            raise ValueError("invalid synthetic coverage")
+        date.fromisoformat(coverage["period"]+"-01")
+        covered.add(coverage["period"])
     seen = set()
     for event in row["events"]:
         if set(event) != {"inputs", "projects"}:
@@ -225,6 +233,10 @@ def _validate_enterprise(row: dict) -> None:
             raise ValueError("cross-company project")
     if any(source["company_id"] != cid for source in row["source_records"]):
         raise ValueError("cross-company source record")
+    if any(set(source) != {"source_id", "company_id", "transaction_id", "data_kind", "description"}
+           or source["data_kind"] != "SYNTHETIC" or not source["source_id"].startswith(cid+"-")
+           for source in row["source_records"]):
+        raise ValueError("invalid structured synthetic source")
     if any(source["transaction_id"] not in seen for source in row["source_records"]):
         raise ValueError("unlinked source record")
     if row["synthetic_authorized_financial_snapshot"] != _snapshot(row["events"]):
