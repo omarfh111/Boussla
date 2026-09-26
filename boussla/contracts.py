@@ -135,6 +135,16 @@ class PurposeCategory(str, Enum):
     OTHER_OR_UNKNOWN = "OTHER_OR_UNKNOWN"
 
 
+class HorizonBucket(str, Enum):
+    """Project horizon bucket. BOUSSLA demo convention (0–90 days = short, 91+ = longer),
+    not a legal, tax, accounting, risk or fraud classification. Shared by the context
+    layer (boussla.context) and ContextClaim; never an input to scoring."""
+
+    SHORT_HORIZON = "SHORT_HORIZON"
+    LONGER_HORIZON = "LONGER_HORIZON"
+    UNKNOWN = "UNKNOWN"
+
+
 class BaselineKind(str, Enum):
     APPROVED_PROCUREMENT_ALLOCATION = "APPROVED_PROCUREMENT_ALLOCATION"
     CONSUMPTION_ESTIMATE = "CONSUMPTION_ESTIMATE"
@@ -488,6 +498,9 @@ class ContextClaim(Contract):
     supersedes_claim_id: str | None = None
     evidence_refs: tuple[str, ...] = ()
     verification_status: Literal["COMPANY_DECLARED"] = "COMPANY_DECLARED"
+    declared_horizon: HorizonBucket = HorizonBucket.UNKNOWN
+    """Explicit company declaration only. Never derived from dates or model output;
+    a change is recorded as a new superseding claim."""
 
 
 class Project(Contract):
@@ -773,6 +786,31 @@ class TransactionSummary(Contract):
     project_id: str | None = None
 
 
+class ContextAssessmentView(Contract):
+    """Declared / interpreted / calculated project context, side by side.
+
+    Clarification aid only: never a finding, score contribution, risk or fraud label.
+    Interpreted values are model suggestions; supporting spans are exact substrings of
+    the company's own purpose text. Corroboration is not assessed by this layer.
+    """
+
+    claim_id: str
+    declared_horizon: HorizonBucket
+    interpreted_horizon: HorizonBucket
+    calculated_horizon: HorizonBucket
+    declared_purpose_category: PurposeCategory
+    interpreted_purpose_category: PurposeCategory
+    duration_days: int | None
+    consistency_status: Literal["CONSISTENT", "NEEDS_CLARIFICATION", "INSUFFICIENT"]
+    reason_codes: tuple[str, ...] = ()
+    recommended_question_ids: tuple[str, ...] = ()
+    supporting_spans: tuple[str, ...] = ()
+    corroboration_status: Literal["NOT_ASSESSED"] = "NOT_ASSESSED"
+    interpretation_mode: Mode
+    horizon_convention_fr: str = ("Convention de démonstration BOUSSLA : 0 à 90 jours = court ; 91 jours ou plus = "
+                                  "plus long. Ce n'est pas une classification juridique, fiscale ou comptable.")
+
+
 class CompanyCaseView(Contract):
     """Company audience: own records, own claims, published questions only.
 
@@ -794,6 +832,7 @@ class CompanyCaseView(Contract):
     open_questions: tuple[Question, ...] = ()
     inbox: tuple["RequestView", ...] = ()
     responses: tuple[ClarificationResponse, ...] = ()
+    context_assessment: ContextAssessmentView | None = None
     mode: Mode
     banner_fr: str
 
@@ -837,6 +876,7 @@ class OfficerCaseView(Contract):
     proposals: tuple[EvidenceProposal, ...] = ()
     candidate_passages: tuple[RetrievedPassage, ...] = ()
     reference_note: GroundedNoteView | None = None
+    context_assessment: ContextAssessmentView | None = None
     """Officer-only; CompanyCaseView deliberately has no equivalent."""
     mode: Mode
     mode_by_node: dict[str, Mode] = Field(default_factory=dict)

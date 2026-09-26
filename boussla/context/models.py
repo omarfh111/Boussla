@@ -4,15 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
-from enum import Enum
+from boussla.contracts import HorizonBucket, Mode, PurposeCategory  # HorizonBucket: single shared definition
 
-from boussla.contracts import Mode, PurposeCategory
-
-
-class HorizonBucket(str, Enum):
-    SHORT_HORIZON = "SHORT_HORIZON"
-    LONGER_HORIZON = "LONGER_HORIZON"
-    UNKNOWN = "UNKNOWN"
+__all__ = ["ContextInput", "ContextInterpretation", "HorizonBucket", "unknown_interpretation"]
 
 
 @dataclass(frozen=True)

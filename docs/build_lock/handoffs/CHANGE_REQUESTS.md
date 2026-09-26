@@ -18,3 +18,11 @@ Only A approves and merges changes. Record: requester, proposed change, reason, 
 - **Reason:** C's `GroundedReferenceNote` is a dataclass internal to `boussla.retrieval`; D needs a typed, officer-scoped view to render "Synthèse assistée à partir des passages retrouvés".
 - **Consumers:** D (optional rendering). Backward compatible (optional, default None).
 - **Tests:** `tests/integration/test_reference_service.py`.
+
+## CR-003 — shared project-horizon types for context consistency (A, applied)
+
+- **Requester / decider:** A, for lane C integration (`integration/context-consistency`), 2026-09-26.
+- **Change:** `HorizonBucket` (SHORT_HORIZON / LONGER_HORIZON / UNKNOWN) now lives only in `boussla.contracts`; `boussla.context.models` re-imports it (one definition, no import cycle). `ContextClaim.declared_horizon: HorizonBucket = UNKNOWN` (explicit company declaration only). New `ContextAssessmentView` (declared / interpreted / calculated horizon and purpose, duration, consistency status, reason codes, recommended question IDs, validated spans, corroboration NOT_ASSESSED, interpretation mode, horizon convention text), exposed as optional `context_assessment` on both `CompanyCaseView` and `OfficerCaseView`.
+- **Reason:** C's context layer needs a company-confirmed horizon and a typed presentation contract for D.
+- **Consumers:** D (React: Déclaré / Interprété / Calculé / Cohérence). All fields additive with safe defaults; stored claims without the field load as UNKNOWN.
+- **Tests:** `tests/integration/test_context_service.py`.
