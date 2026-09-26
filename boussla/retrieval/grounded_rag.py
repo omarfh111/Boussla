@@ -19,7 +19,12 @@ from boussla.retrieval.queries import candidate_passages_for_reasons, query_for_
 ENDPOINT = "https://api.openai.com/v1/responses"
 DISCLAIMER = "Synthèse indicative — l'applicabilité doit être vérifiée par l'agent."
 _FORBIDDEN = re.compile(
-    r"\b(?:s'applique|est applicable|doit être sanctionn|constitue une fraude|dans ce dossier|ce contribuable)\b", re.I,
+    r"\b(?:s['’]applique|est applicable|applies\s+to|"
+    r"(?:this|the)\s+law\s+applies|"
+    r"violat(?:e|es|ed|ion)|viole(?:nt|r)?|"
+    r"ill[eé]gal(?:e|es|s)?|illegal|unlawful|"
+    r"non[-\s]?compliant|non[-\s]?conforme(?:s)?|non[-\s]?conformit[eé]|"
+    r"doit être sanctionn|constitue une fraude|dans ce dossier|ce contribuable)\b", re.I,
 )
 _RULE_ID = re.compile(r"\bTN-[A-Z0-9-]+\b")
 _SCHEMA = {
