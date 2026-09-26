@@ -65,18 +65,10 @@ test("real company-to-officer review creates a 40 to 0 revision", async ({
   ).toBeVisible();
   await capture(page, "06_reference_panel.png");
   await page.getByRole("button", { name: "Dossier", exact: true }).click();
-  await page.getByRole("button", { name: "Préparer la demande" }).click();
-  await expect(
-    page.getByRole("button", { name: "Publier dans la boîte de démo" }),
-  ).toBeVisible();
+  // The company's declaration already published one neutral, fixed-catalogue request:
+  // the officer does not have to click anything to gather information.
+  await expect(page.locator(".request-mini")).toContainText("REQ-AUTO-");
   await capture(page, "07_clarification.png");
-  // Double click: the client lock and server version checks allow one request only.
-  await page
-    .getByRole("button", { name: "Publier dans la boîte de démo" })
-    .dblclick();
-  await expect(
-    page.getByText("Demande publiée dans la boîte de démonstration."),
-  ).toBeVisible();
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await page.getByRole("button", { name: "Pièces" }).click();
   await page.getByRole("button", { name: "Demandes" }).click();
@@ -92,9 +84,15 @@ test("real company-to-officer review creates a 40 to 0 revision", async ({
     .locator(".response-form textarea")
     .first()
     .fill("Affectation proposée : 1 000 unités au lot P1 et 1 000 au lot P2.");
-  await expect(page.locator(".response-form select").first()).not.toHaveValue(
-    "",
-  );
+  // The automatic request may include fixed-choice questions (e.g. the horizon
+  // confirmation left by the context spec on this shared database): pick an allowed value.
+  for (const choice of await page
+    .locator(".response-form select:has(option[value=''])")
+    .all())
+    await choice.selectOption({ index: 1 });
+  await expect(
+    page.locator(".allocation-input select").first(),
+  ).not.toHaveValue("");
   await page.locator(".allocation-input input").nth(0).fill("1000");
   await page.locator(".allocation-input input").nth(1).fill("1000");
   await capture(page, "08_company_response_evidence.png");

@@ -1,7 +1,7 @@
 """Shared typed contracts — lane A owns this file.
 
 Python source of truth for `docs/build_lock/contracts/CONTRACTS.md`
-(version `boussla-context-1`). B, C and D import from here; propose changes
+(version `boussla-automation-1`). B, C and D import from here; propose changes
 through `docs/build_lock/handoffs/CHANGE_REQUESTS.md`, never fork a copy.
 
 Conventions (CONTRACTS.md §1):
@@ -105,6 +105,8 @@ class ErrorCode(str, Enum):
     INVALID_EVIDENCE_REFERENCE = "INVALID_EVIDENCE_REFERENCE"
     NOT_FOUND = "NOT_FOUND"
     INVALID_STATE = "INVALID_STATE"
+    INVALID_INPUT = "INVALID_INPUT"
+    """Malformed request structure, e.g. a property outside the input contract."""
 
 
 class AcquisitionChannel(str, Enum):
@@ -673,6 +675,9 @@ class ClarificationRequest(Contract):
     approved_by: str | None = None
     published_at: AwareDatetime | None = None
     available_in_inbox_at: AwareDatetime | None = None
+    origin: Literal["OFFICER", "AUTOMATIC"] = "OFFICER"
+    """AUTOMATIC: neutral fixed-catalogue request published by the service after a company
+    submission (no human approval, ``approved_by`` stays None). Never a decision."""
 
 
 class ClarificationResponse(Contract):
@@ -878,6 +883,11 @@ class OfficerCaseView(Contract):
     reference_note: GroundedNoteView | None = None
     context_assessment: ContextAssessmentView | None = None
     """Officer-only; CompanyCaseView deliberately has no equivalent."""
+    triage: "TriageAssessment | None" = None
+    """Officer-only queue urgency, separate from ``score.review_index``."""
+    clarification_deadlines: tuple["ClarificationDeadlineView", ...] = ()
+    history_signals: tuple["CompanyHistorySignal", ...] = ()
+    investigator_brief: "InvestigatorBrief | None" = None
     mode: Mode
     mode_by_node: dict[str, Mode] = Field(default_factory=dict)
     banner_fr: str
@@ -912,6 +922,9 @@ class QueueItem(Contract):
     active_finding_count: int
     clarification_status: ClarificationStatus
     scope_note: str
+    triage_priority: int | None = None
+    """Queue urgency (0..100), NOT the review index and NOT a fraud probability."""
+    triage_reason_codes: tuple[str, ...] = ()
 
 
 class QueuePage(Contract):
@@ -986,6 +999,103 @@ class LocalDraftArtifact(Contract):
     disclaimer_fr: str
 
 
+# ---------------------------------------------------------------------------
+# Triage, clarification deadlines and cross-lane integration contracts
+# (boussla-automation-1, additive)
+# ---------------------------------------------------------------------------
+
+class ClarificationDeadlineView(Contract):
+    """Demo service target for one clarification request, evaluated at read time.
+
+    Not a legal deadline. Being overdue only raises queue urgency (triage); it never
+    creates a finding and never changes the review index.
+    """
+
+    request_id: str
+    origin: Literal["OFFICER", "AUTOMATIC"]
+    status: RequestStatus
+    target_response_at: AwareDatetime | None
+    target_kind: Literal["DEMO_SERVICE_TARGET"] = "DEMO_SERVICE_TARGET"
+    overdue: bool
+    overdue_days: int = Field(ge=0)
+    note_fr: str = "Date cible de démonstration BOUSSLA ; ce n'est pas un délai légal."
+
+
+class TriageAssessment(Contract):
+    """Operational queue urgency for the officer (0..100), with explicit reason codes.
+
+    Separate from ``ScoreSnapshot.review_index`` (documentary review priority): triage
+    may rise because a clarification is pending/overdue or a human decision is waiting,
+    none of which is evidence. Never a fraud probability, never a finding.
+    """
+
+    case_id: str
+    case_version: int
+    triage_priority: int = Field(ge=0, le=100)
+    review_index: int | None
+    """Echo of the deterministic review index used as the base; never modified here."""
+    reason_codes: tuple[str, ...] = ()
+    components: dict[str, int] = Field(default_factory=dict)
+    formula_version: str
+    as_of: AwareDatetime
+    not_fraud_probability: Literal[True] = True
+    note_fr: str = ("Urgence de traitement (démonstration) : n'est ni l'indice de revue ni une probabilité "
+                    "de fraude ; une absence de réponse ne crée aucun constat.")
+
+
+class HistorySignalKind(str, Enum):
+    """Lane B portfolio/history signals that may raise triage urgency (never the index)."""
+
+    ACTIVITY_GAP = "ACTIVITY_GAP"
+    HISTORICAL_DATA_GAP = "HISTORICAL_DATA_GAP"
+    TRANSACTION_INCONSISTENCY = "TRANSACTION_INCONSISTENCY"
+
+
+class CompanyHistorySignal(Contract):
+    """Lane B: deterministic company history/portfolio observation (officer-only).
+
+    Operational context for queue urgency; not a finding, not evidence and never an
+    input to checks, scores, acceptance or revisions.
+    """
+
+    signal_id: str
+    company_id: str
+    kind: HistorySignalKind
+    reason_code: str
+    as_of: date
+    summary_fr: str
+    source_record_ids: tuple[str, ...] = ()
+    mode: Mode
+    affects_review_index: Literal[False] = False
+
+
+class InvestigatorBriefPoint(Contract):
+    text_fr: str
+    cited_finding_ids: tuple[str, ...] = ()
+    cited_rule_ids: tuple[str, ...] = ()
+    cited_fact_ids: tuple[str, ...] = ()
+
+
+class InvestigatorBrief(Contract):
+    """Lane C: officer-only AI briefing over the already-computed officer view.
+
+    Display aid only: cites existing finding IDs / retrieved rule IDs, may suggest
+    allowlisted question IDs, never computes or changes the review index, never
+    accepts evidence and never states a legal conclusion.
+    """
+
+    brief_id: str
+    case_id: str
+    case_version: int
+    points: tuple[InvestigatorBriefPoint, ...] = ()
+    suggested_question_ids: tuple[str, ...] = ()
+    limitations: tuple[str, ...] = ()
+    model_id: str | None = None
+    mode: Mode
+    authoritative: Literal[False] = False
+    disclaimer_fr: str = "Synthèse d'aide à la revue ; aucune conclusion juridique ; décision réservée à l'agent."
+
+
 CompanyCaseView.model_rebuild()
 OfficerCaseView.model_rebuild()
 
@@ -1033,6 +1143,20 @@ class ReferenceRetriever(Protocol):
     """Lane C: Qdrant local (or labelled lexical) legal/reference retrieval."""
 
     def search(self, query: str, *, as_of: date, jurisdiction: str, audience: Audience, limit: int = 5) -> list[RetrievedPassage]: ...
+
+
+@runtime_checkable
+class CompanyHistorySignalProvider(Protocol):
+    """Lane B: history/portfolio signals for one company as of a date (pure, local)."""
+
+    def signals(self, company_id: str, as_of: date) -> list[CompanyHistorySignal]: ...
+
+
+@runtime_checkable
+class InvestigatorBriefProvider(Protocol):
+    """Lane C: optional officer briefing; failures/None leave the view unchanged."""
+
+    def brief(self, view: OfficerCaseView) -> InvestigatorBrief | None: ...
 
 
 @runtime_checkable

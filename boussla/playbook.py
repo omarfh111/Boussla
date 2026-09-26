@@ -47,6 +47,14 @@ REQUEST_TEXT_FR = (
     "Une demande de précision n'est pas une accusation."
 )
 
+AUTO_REQUEST_TEXT_FR = (
+    "Demande de précision générée automatiquement à partir d'un catalogue fixe de questions "
+    "(démonstration locale, aucun envoi externe). Elle sert uniquement à compléter les informations "
+    "du dossier : ce n'est ni une accusation ni une décision. Merci de répondre aux questions ci-dessous "
+    "et de joindre, si elle existe, la pièce utile. La date cible indiquée est une cible de démonstration, "
+    "pas un délai légal."
+)
+
 
 def deterministic_plan(findings, has_context_claim: bool, answered_ids: set[str]) -> list[str]:
     """Rule-based question selection from unresolved prerequisites (fallback planner)."""
