@@ -1,6 +1,7 @@
 """Thin Starlette adapter. The service owns permissions, facts, and revisions."""
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from starlette.applications import Starlette
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, PlainTextResponse, Response
-from starlette.routing import Route
+from starlette.routing import Match, Route
 
 from boussla.contracts import BousslaError, ErrorCode
 from boussla.services import BousslaAppService, build_service
@@ -18,7 +19,10 @@ ROOT = Path(__file__).resolve().parents[2]
 DIST = ROOT / "frontend" / "dist"
 ROLES = {"COMPANY": "DEMO-COMPANY-BAT", "OFFICER": "DEMO-OFFICER"}
 SAFE_DETAILS = {"used", "available", "question_ids", "fields"}
-FORBIDDEN_INPUT_FIELDS = {"actor_id", "company_id", "assigned_case_ids"}
+# Identity, scope and trust signals are server-side only; rejected anywhere in a JSON body.
+FORBIDDEN_INPUT_FIELDS = {"actor_id", "company_id", "assigned_case_ids", "role", "reference_expected"}
+MAX_JSON_BYTES = 1024 * 1024
+HTTP_ERROR_CODES = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED", 413: "LIMIT_EXCEEDED"}
 
 
 def service(request: Request) -> BousslaAppService:
@@ -49,10 +53,15 @@ def result(value, status_code=200):
 
 
 async def body(request: Request) -> dict:
-    if int(request.headers.get("content-length", "0") or "0") > 1024 * 1024:
+    if int(request.headers.get("content-length", "0") or "0") > MAX_JSON_BYTES:
         raise HTTPException(413, "Corps JSON trop volumineux")
+    raw = bytearray()
+    async for chunk in request.stream():  # bounded even without an honest Content-Length
+        raw.extend(chunk)
+        if len(raw) > MAX_JSON_BYTES:
+            raise HTTPException(413, "Corps JSON trop volumineux")
     try:
-        value = await request.json()
+        value = json.loads(bytes(raw))
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(400, "Corps JSON invalide") from None
     if not isinstance(value, dict):
@@ -176,6 +185,9 @@ async def decide(request: Request):
 async def spa(request: Request):
     path = request.path_params.get("path", "")
     if path.startswith("api/"):
+        # Never render the SPA for /api/*: a known API path with the wrong method is 405.
+        if any(route.matches(request.scope)[0] is Match.PARTIAL for route in request.app.routes[:-1]):
+            raise HTTPException(405)
         raise HTTPException(404)
     if not DIST.is_dir():
         return PlainTextResponse("Frontend absent. Exécutez npm run build dans frontend/.", status_code=503)
@@ -193,8 +205,8 @@ async def on_error(request: Request, exc: Exception) -> Response:
         return result({"error": {"code": exc.code.value, "message": exc.message,
                                  "details": {k: v for k, v in exc.details.items() if k in SAFE_DETAILS}}}, status)
     if isinstance(exc, HTTPException):
-        return result({"error": {"code": "BAD_REQUEST" if exc.status_code < 500 else "NOT_FOUND",
-                                 "message": str(exc.detail), "details": {}}}, exc.status_code)
+        code = HTTP_ERROR_CODES.get(exc.status_code, "BAD_REQUEST" if exc.status_code < 500 else "INTERNAL_ERROR")
+        return result({"error": {"code": code, "message": str(exc.detail), "details": {}}}, exc.status_code)
     if isinstance(exc, (ValidationError, ValueError, TypeError)):
         return result({"error": {"code": "BAD_REQUEST", "message": "Données invalides", "details": {}}}, 400)
     return result({"error": {"code": "INTERNAL_ERROR", "message": "Une erreur est survenue", "details": {}}}, 500)
