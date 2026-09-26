@@ -798,6 +798,22 @@ class CompanyCaseView(Contract):
     banner_fr: str
 
 
+class GroundedNoteView(Contract):
+    """Officer-only, citation-checked synthesis over retrieved public passages.
+
+    Display data only: never a canonical fact, accepted evidence or score input,
+    and never an applicability decision. No prompt, response body or case data.
+    """
+
+    summary_fr: str
+    candidate_rule_ids: tuple[str, ...]
+    applicability_questions: tuple[str, ...] = ()
+    limitations: tuple[str, ...] = ()
+    provider_model: str | None = None
+    generation_mode: Mode
+    disclaimer_fr: str = "Synthèse indicative — l'applicabilité doit être vérifiée par l'agent."
+
+
 class OfficerCaseView(Contract):
     audience: Literal[Audience.OFFICER] = Audience.OFFICER
     case_id: str
@@ -820,6 +836,8 @@ class OfficerCaseView(Contract):
     responses: tuple[ClarificationResponse, ...] = ()
     proposals: tuple[EvidenceProposal, ...] = ()
     candidate_passages: tuple[RetrievedPassage, ...] = ()
+    reference_note: GroundedNoteView | None = None
+    """Officer-only; CompanyCaseView deliberately has no equivalent."""
     mode: Mode
     mode_by_node: dict[str, Mode] = Field(default_factory=dict)
     banner_fr: str

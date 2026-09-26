@@ -1,0 +1,23 @@
+[
+  {"id":"reason_fields","reason_code":"INVOICE_FIELDS_UNCONFIRMED","acceptable_ids":["TN-MOF-FAQ-952-INVOICE-NUMBER","TN-MOF-FAQ-952-CLIENT","TN-NC11-09-SELLER","TN-TVA23-18-CLIENT-ID"]},
+  {"id":"reason_amount","reason_code":"INVOICE_AMOUNT_CONFLICT","acceptable_ids":["TN-MOF-FAQ-952-VAT-RATE","TN-TVA23-18-TAX","TN-NC11-09-NON-VAT"]},
+  {"id":"reason_identity","reason_code":"INVOICE_LINE_IDENTITY_CONFLICT","acceptable_ids":["TN-MOF-FAQ-952-ITEM-PRICE","TN-TVA23-18-GOODS-PRICE","TN-NC11-09-GOODS-PRICE"]},
+  {"id":"reason_line_amount","reason_code":"INVOICE_LINE_AMOUNT_CONFLICT","acceptable_ids":["TN-MOF-FAQ-75-GOODS-PRICE","TN-MOF-FAQ-952-ITEM-PRICE","TN-TVA23-18-GOODS-PRICE"]},
+  {"id":"date_operation","query":"Quelle date doit figurer sur la pièce de vente ?","acceptable_ids":["TN-MOF-FAQ-952-OPERATION-DATE","TN-TVA23-18-DATE","TN-NC11-09-DATE"]},
+  {"id":"buyer_identification","query":"Comment identifier l'acheteur et son adresse sur une facture ?","acceptable_ids":["TN-MOF-FAQ-952-CLIENT","TN-TVA23-18-CLIENT-ID","TN-NC11-09-CLIENT"]},
+  {"id":"buyer_tax_number","query":"Quel identifiant fiscal du client est mentionné ?","acceptable_ids":["TN-TVA23-18-CLIENT-ID","TN-MOF-FAQ-75-BUYER-CONDITION"]},
+  {"id":"seller_tax_number","query":"Quel matricule fiscal du vendeur ou prestataire est requis ?","acceptable_ids":["TN-NC11-09-SELLER","TN-TVA23-18-SELLER-TAX-ID","TN-MOF-FAQ-75-SELLER"]},
+  {"id":"continuous_numbering","query":"Référence et numérotation continue des factures","acceptable_ids":["TN-MOF-FAQ-952-INVOICE-NUMBER","TN-MOF-FAQ-75-NUMBERING","TN-NC11-09-NUMBERING"],"compare_lexical":true},
+  {"id":"transport_record","query":"Quel justificatif accompagne la circulation des marchandises ?","acceptable_ids":["TN-MOF-FAQ-75-TRANSPORT","TN-MOF-FAQ-952-TRANSPORT"],"compare_lexical":true},
+  {"id":"goods_description","query":"Description des biens ou prestations vendus sur la facture","acceptable_ids":["TN-MOF-FAQ-952-ITEM-PRICE","TN-MOF-FAQ-75-GOODS-PRICE","TN-TVA23-18-GOODS-PRICE","TN-NC11-09-GOODS-PRICE"]},
+  {"id":"price_before_tax","query":"Montant de la ligne avant taxe sur la valeur ajoutée","acceptable_ids":["TN-MOF-FAQ-952-ITEM-PRICE","TN-MOF-FAQ-75-GOODS-PRICE","TN-TVA23-18-GOODS-PRICE"]},
+  {"id":"vat_amount","query":"Taux et montant de TVA indiqués sur le document","acceptable_ids":["TN-MOF-FAQ-952-VAT-RATE","TN-MOF-FAQ-75-TAX","TN-TVA23-18-TAX"]},
+  {"id":"vat_suspension","query":"Montant de taxe suspendue à porter sur la facture","acceptable_ids":["TN-TVA23-18-SUSPENSION"]},
+  {"id":"non_vat_exception","query":"Une personne non soumise à la TVA doit-elle afficher taux et montant ?","acceptable_ids":["TN-NC11-09-NON-VAT"],"compare_lexical":true},
+  {"id":"electronic_invoice","query":"Facture électronique et mentions obligatoires","acceptable_ids":["TN-TVA23-18-ELECTRONIC"]},
+  {"id":"invoice_obligation","query":"Une vente ou prestation exige-t-elle l'établissement d'une facture ?","acceptable_ids":["TN-MOF-FAQ-952-INVOICE-ISSUE","TN-TVA23-18-INVOICE-DUTY"]},
+  {"id":"delivery_slip","query":"Bon de livraison ou bon de sortie comme pièce de transport","acceptable_ids":["TN-MOF-FAQ-75-TRANSPORT"],"compare_lexical":true},
+  {"id":"series_no_gap","query":"Les numéros des pièces de facturation doivent-ils se suivre sans interruption ?","acceptable_ids":["TN-MOF-FAQ-952-INVOICE-NUMBER","TN-MOF-FAQ-75-NUMBERING","TN-NC11-09-NUMBERING"],"compare_lexical":true},
+  {"id":"client_address","query":"Adresse et identité du destinataire sur les documents commerciaux","acceptable_ids":["TN-MOF-FAQ-952-CLIENT","TN-TVA23-18-CLIENT-ID","TN-NC11-09-CLIENT"]},
+  {"id":"dematerialized_invoice","query":"Une copie dématérialisée remplace-t-elle la facture papier ?","acceptable_ids":["TN-TVA23-18-ELECTRONIC"],"compare_lexical":true}
+]

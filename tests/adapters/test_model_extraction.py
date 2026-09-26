@@ -58,3 +58,14 @@ def test_missing_key_does_not_call_provider():
     proposal = OpenAIInvoiceExtractor(api_key="", client=client).extract_fields(TEXT)
 
     assert proposal.mode is Mode.MANUAL
+
+
+def test_provider_outage_returns_deterministic_baseline():
+    client = httpx.Client(transport=httpx.MockTransport(lambda request: httpx.Response(503)))
+    extractor = OpenAIInvoiceExtractor(api_key="synthetic-test-key", client=client)
+
+    actual = extractor.extract_fields(TEXT)
+    expected = extractor.baseline.extract_fields(TEXT)
+
+    assert actual == expected
+    assert actual.mode is Mode.MANUAL
