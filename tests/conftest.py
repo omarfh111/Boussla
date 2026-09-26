@@ -10,7 +10,8 @@ import pytest
 
 from boussla.config import get_settings
 
-KEYS = ("OPENAI_API_KEY", "TYPESAFE_API_KEY", "LANGSMITH_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY")
+KEYS = ("OPENAI_API_KEY", "TYPESAFE_API_KEY", "LANGSMITH_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY",
+        "QDRANT_URL", "QDRANT_API_KEY")
 
 
 @pytest.fixture(autouse=True)
@@ -26,5 +27,16 @@ def hermetic_env(tmp_path_factory, monkeypatch):
                       ("UPLOAD_DIR", "uploads"), ("EVENT_LOG_PATH", "events.jsonl")):
         monkeypatch.setenv(key, str(runtime / name))
     get_settings.cache_clear()
+    _clear_reference_cache()
     yield
     get_settings.cache_clear()
+    _clear_reference_cache()
+
+
+def _clear_reference_cache():
+    """The public-reference retriever is cached per process; tests must not share it."""
+    try:
+        from boussla.retrieval.corpus import _cached_retriever
+    except ImportError:
+        return
+    _cached_retriever.cache_clear()
