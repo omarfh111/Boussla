@@ -23,6 +23,8 @@ def hermetic_env(tmp_path_factory, monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "manual")
     monkeypatch.setenv("LANGSMITH_TRACING", "false")
     monkeypatch.setenv("JEV_ENABLED", "false")
+    # The 12-enterprise portfolio is opt-in per test (it changes queue contents).
+    monkeypatch.setenv("BOUSSLA_PORTFOLIO", "false")
     monkeypatch.delenv("BOUSSLA_SERVICE", raising=False)
     for key, name in (("CASE_DB_PATH", "cases.sqlite"), ("CHECKPOINT_DB_PATH", "checkpoints.sqlite"),
                       ("UPLOAD_DIR", "uploads"), ("EVENT_LOG_PATH", "events.jsonl")):
@@ -31,7 +33,7 @@ def hermetic_env(tmp_path_factory, monkeypatch):
     # port so a test that opts into a (fake) key can never reach a real provider.
     # (Jev needs TYPESAFE_API_KEY and JEV_ENABLED, both disabled above; its tests assert its URL.)
     for module in ("boussla.adapters.model_extraction", "boussla.context.interpreter",
-                   "boussla.retrieval.grounded_rag"):
+                   "boussla.retrieval.grounded_rag", "boussla.investigator.selector"):
         try:
             monkeypatch.setattr(f"{module}.ENDPOINT", CLOSED_ENDPOINT)
         except (ImportError, AttributeError):

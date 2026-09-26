@@ -1,6 +1,7 @@
 """Final sprint (lane A): judge round-1 regressions, automatic bounded clarification,
 separate triage urgency, demo deadlines and the B/C integration contracts."""
-from datetime import date, timedelta
+from dataclasses import replace
+from datetime import timedelta
 
 import pytest
 from starlette.testclient import TestClient
@@ -9,8 +10,8 @@ from boussla.config import FIXTURE_ROOT, Settings
 from boussla.context.assistant import ContextConsistencyAssistant
 from boussla.context.interpreter import OpenAIContextInterpreter
 from boussla.contracts import (
-    Allocation, BousslaError, ClarificationStatus, CompanyHistorySignal, ErrorCode, HistorySignalKind,
-    InvestigatorBrief, InvestigatorBriefPoint, Mode, ProposalStatus, RequestStatus,
+    Allocation, BousslaError, ClarificationStatus, CompanyHistorySignal, ErrorCode, HistorySignalCode,
+    Mode, ProposalStatus, RequestStatus,
 )
 from boussla.playbook import MAX_QUESTIONS_PER_ROUND, QUESTIONS
 from boussla.security import ActorRegistry
@@ -308,21 +309,29 @@ def test_proposal_awaiting_decision_raises_triage_not_index(svc):
     assert view.score.review_index == 40 and view.triage.triage_priority == 50
 
 
+def signal(code, company="DEMO-BAT", sid="S"):
+    return CompanyHistorySignal(signal_id=sid, company_id=company, reason_code=code, period="2025-09/2025-10",
+                                metric="m", observed_value="2", explanation_fr="observation synthétique neutre",
+                                method="SYNTHETIC_HISTORY_V1", mode=Mode.LIVE)
+
+
 def test_triage_formula_is_transparent_and_capped(svc):
     now = utcnow()
     ev = svc.evaluate(CASE)
-    signals = tuple(CompanyHistorySignal(signal_id=f"S{i}", company_id="DEMO-BAT", kind=k, reason_code="X",
-                                         as_of=date.today(), summary_fr="s", mode=Mode.LIVE)
-                    for i, k in enumerate(HistorySignalKind))
+    signals = tuple(signal(c, sid=c.value) for c in HistorySignalCode)
     t = assess_triage(case_id=CASE, case_version=1, review_index=95, findings=ev.findings, deadlines=(),
                       proposals=(), history_signals=signals, now=now)
     assert t.triage_priority == 100 and t.review_index == 95 and t.not_fraud_probability
     assert t.components == {"REVIEW_INDEX_BASE": 95, "REVIEW_FINDING_PRESENT": 0, "ACTIVITY_GAP_NEEDS_REVIEW": 10,
-                            "HISTORICAL_DATA_GAP_NEEDS_REVIEW": 10, "TRANSACTION_INCONSISTENCY_NEEDS_REVIEW": 10}
+                            "HISTORICAL_DATA_GAP_NEEDS_REVIEW": 10, "TRANSACTION_INCONSISTENCY_NEEDS_REVIEW": 10,
+                            "HISTORY_PATTERN_CHANGE_NEEDS_REVIEW": 5}
+    quiet = assess_triage(case_id=CASE, case_version=1, review_index=0, findings=(), deadlines=(), proposals=(),
+                          history_signals=(signal(HistorySignalCode.NO_SIGNIFICANT_CHANGE),), now=now)
+    assert (quiet.triage_priority, quiet.reason_codes) == (0, ())
     assert clarification_deadlines((), now) == ()
 
 
-# ---------------------------------------------------------------- lane B / lane C contracts
+# ---------------------------------------------------------------- lane B / lane C wiring
 class Signals:
     def __init__(self, fail=False):
         self.fail = fail
@@ -330,11 +339,8 @@ class Signals:
     def signals(self, company_id, as_of):
         if self.fail:
             raise RuntimeError("history source down")
-        return [CompanyHistorySignal(signal_id="SIG-1", company_id=company_id, kind=HistorySignalKind.ACTIVITY_GAP,
-                                     reason_code="NO_PURCHASES_90_DAYS", as_of=as_of, summary_fr="Pas d'achat",
-                                     mode=Mode.LIVE),
-                CompanyHistorySignal(signal_id="SIG-X", company_id="DEMO-OTHER", kind=HistorySignalKind.HISTORICAL_DATA_GAP,
-                                     reason_code="X", as_of=as_of, summary_fr="autre", mode=Mode.LIVE)]
+        return [signal(HistorySignalCode.ACTIVITY_GAP, company_id, "SIG-1"),
+                signal(HistorySignalCode.REPEATED_INVOICE_CONFLICT, "DEMO-OTHER", "SIG-X")]
 
 
 def test_history_signals_raise_triage_only_and_failures_are_nonfatal(make):
@@ -349,33 +355,65 @@ def test_history_signals_raise_triage_only_and_failures_are_nonfatal(make):
     assert view.mode_by_node["history"] is Mode.ERROR and view.triage.triage_priority == 40
 
 
-class Brief:
-    def __init__(self, mutate=None, fail=False):
-        self.mutate, self.fail = mutate or {}, fail
+class Selector:
+    """Stands in for the OpenAI selector: returns IDs only."""
 
-    def brief(self, view):
+    def __init__(self, hypotheses=("SECOND_PROJECT_ALLOCATION",), questions=("Q-PROJECT-ALLOCATION",), fail=False):
+        self.value, self.fail, self.calls = (tuple(hypotheses), tuple(questions)), fail, 0
+
+    def select(self, data, eligible_hypotheses, eligible_questions):
+        self.calls += 1
         if self.fail:
             raise TimeoutError
-        finding = next(f.finding_id for f in view.findings if f.status.value == "UNRESOLVED")
-        data = {"brief_id": "BRIEF-1", "case_id": view.case_id, "case_version": view.case_version,
-                "points": (InvestigatorBriefPoint(text_fr="Écart de quantité à documenter.", cited_finding_ids=(finding,)),),
-                "suggested_question_ids": ("Q-PROJECT-ALLOCATION",), "mode": Mode.LIVE, **self.mutate}
-        return InvestigatorBrief(**data)
+        return self.value
 
 
-@pytest.mark.parametrize("provider,present,mode", [
-    (Brief(), True, Mode.LIVE),
-    (Brief({"case_version": 99}), False, Mode.ERROR),
-    (Brief({"suggested_question_ids": ("Q-FREE-TEXT",)}), False, Mode.ERROR),
-    (Brief({"points": (InvestigatorBriefPoint(text_fr="x", cited_finding_ids=("F-UNKNOWN",)),)}), False, Mode.ERROR),
-    (Brief(fail=True), False, Mode.ERROR),
+class Rogue:
+    """An investigator that ignores the catalogue: the service must drop its brief."""
+
+    def assess(self, data, audience):
+        from boussla.investigator import InvestigatorAssistant
+        result = InvestigatorAssistant().assess(data, audience=audience)
+        hyp = result.brief.top_hypotheses[0].__class__(
+            hypothesis_id="COMPANY_IS_FRAUDULENT", status=result.brief.top_hypotheses[0].status,
+            supporting_refs=(), contradicting_refs=(), missing_evidence=(), why_it_matters_fr="x")
+        return result.__class__(replace(result.brief, top_hypotheses=(hyp,)), result.mode)
+
+
+@pytest.mark.parametrize("selector,present,mode,first", [
+    (Selector(), True, Mode.LIVE, "SECOND_PROJECT_ALLOCATION"),
+    (Selector(hypotheses=("NOT_IN_CATALOGUE",)), True, Mode.TEMPLATE, "SECOND_PROJECT_ALLOCATION"),
+    (Selector(questions=("Q-FREE-TEXT",)), True, Mode.TEMPLATE, "SECOND_PROJECT_ALLOCATION"),
+    (Selector(fail=True), True, Mode.TEMPLATE, "SECOND_PROJECT_ALLOCATION"),  # model outage -> template
 ])
-def test_investigator_brief_is_validated_officer_only_and_nonfatal(make, provider, present, mode):
-    svc = make(investigator=provider)
+def test_investigator_brief_is_bounded_officer_only_and_nonfatal(make, selector, present, mode, first):
+    from boussla.investigator import InvestigatorAssistant
+    svc = make(investigator=InvestigatorAssistant(selector))
     view = svc.get_case(off(svc), CASE)
     assert (view.investigator_brief is not None) is present and view.mode_by_node["investigator"] is mode
     assert view.score.review_index == 40 and view.triage.triage_priority == 40
     if present:
-        assert view.investigator_brief.authoritative is False
+        brief = view.investigator_brief
+        assert brief.top_hypotheses[0].hypothesis_id == first and len(brief.top_hypotheses) <= 5
+        assert brief.label_fr == "Analyse assistée BOUSSLA" and brief.authoritative is False
+        assert brief.disclaimer_fr == "L'analyse assistée ne modifie pas l'indice de revue ni les faits du dossier."
+        assert set(brief.questions_proposed) <= set(QUESTIONS) and len(brief.questions_proposed) <= 3
+        assert all(h.name_fr and "fraude" not in h.name_fr.lower() for h in brief.top_hypotheses)
     assert "investigator_brief" not in svc.get_case(co(svc), CASE).model_dump()
+
+
+def test_investigator_is_cached_per_version_and_rogue_output_is_dropped(make):
+    from boussla.investigator import InvestigatorAssistant
+    selector = Selector()
+    svc = make(investigator=InvestigatorAssistant(selector))
+    for _ in range(3):
+        svc.get_case(off(svc), CASE)
+    assert selector.calls == 1
+    svc.submit_context(co(svc), CASE, CONTEXT, ver(svc), "ctx")  # new version -> recomputed once
+    svc.get_case(off(svc), CASE)
+    assert selector.calls == 2
+    rogue = make(investigator=Rogue())
+    view = rogue.get_case(off(rogue), CASE)  # rogue output dropped; deterministic template shown instead
+    assert view.mode_by_node["investigator"] is Mode.TEMPLATE
+    assert "COMPANY_IS_FRAUDULENT" not in view.investigator_brief.model_dump_json()
     assert make().get_case(off(svc), CASE).mode_by_node["investigator"] is Mode.NOT_RUN
