@@ -52,11 +52,16 @@ def test_template_brief_separates_sources_and_preserves_inputs():
     assert {o.kind for o in brief.key_observations} >= {
         ObservationKind.FACT, ObservationKind.DECLARATION,
         ObservationKind.MODEL_INTERPRETATION, ObservationKind.HYPOTHETICAL_SCENARIO,
+        ObservationKind.HYPOTHESIS,
     }
     assert brief.what_changed_since_previous_revision == ("REVISION_ADDED",)
     assert brief.reference_rule_ids == data.reference_rule_ids
     assert any("indice hypothétique calculé : 0" in o.text_fr for o in brief.key_observations)
     assert "ALLOCATION_REFERENCE" in brief.missing_information
+    assert any("Éléments contradictoires codés" in o.text_fr for o in brief.key_observations)
+    assert any("Résumé transactionnel codé : QUANTITY_MISMATCH" in o.text_fr
+               for o in brief.key_observations)
+    assert any("réponses codées STOCK_CLAIMED" in o.text_fr for o in brief.key_observations)
     assert len(brief.top_hypotheses) <= 5
     assert all(h.hypothesis_id in HYPOTHESIS_CATALOGUE for h in brief.top_hypotheses)
 
@@ -153,3 +158,12 @@ def test_no_finding_has_no_invented_hypothesis_or_score():
     assert result.brief.top_hypotheses == ()
     assert result.brief.suggested_question_ids == ()
     assert result.brief.reference_rule_ids == ()
+
+
+def test_bounded_many_findings_do_not_hide_scenario_or_reference_caveat():
+    base = case_input()
+    data = InvestigatorInput(findings=base.findings * 12, evidence_features=base.evidence_features,
+                             reference_rule_ids=base.reference_rule_ids, scenarios=base.scenarios)
+    brief = InvestigatorAssistant().assess(data).brief
+    assert any(o.kind is ObservationKind.HYPOTHETICAL_SCENARIO for o in brief.key_observations)
+    assert any("Passages publics candidats" in o.text_fr for o in brief.key_observations)

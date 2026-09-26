@@ -84,6 +84,19 @@ def _observations(data: InvestigatorInput) -> tuple[Observation, ...]:
             items.append(Observation(ObservationKind.FACT,
                                      "Pièces rapprochées pour ce constat : " + ", ".join(finding.evidence_refs),
                                      finding.evidence_refs))
+    for feature in data.evidence_features:
+        if feature.supporting_refs:
+            items.append(Observation(ObservationKind.FACT,
+                                     "Appuis codés pour l'hypothèse " + feature.hypothesis_id + " : " +
+                                     ", ".join(feature.supporting_refs) + ".", feature.supporting_refs))
+        if feature.contradicting_refs:
+            items.append(Observation(ObservationKind.FACT,
+                                     "Éléments contradictoires codés pour l'hypothèse " +
+                                     feature.hypothesis_id + " : " +
+                                     ", ".join(feature.contradicting_refs) + ".",
+                                     feature.contradicting_refs))
+    for code in data.transaction_summary_codes:
+        items.append(Observation(ObservationKind.FACT, "Résumé transactionnel codé : " + code + "."))
     if data.context:
         items.append(Observation(ObservationKind.DECLARATION,
                                  "Contexte déclaré : " + data.context.declared_purpose_code + ", "
@@ -91,10 +104,11 @@ def _observations(data: InvestigatorInput) -> tuple[Observation, ...]:
         items.append(Observation(ObservationKind.MODEL_INTERPRETATION,
                                  "Horizon interprété : " + data.context.interpreted_horizon_code +
                                  " ; cohérence calculée : " + data.context.consistency_code + "."))
-    if data.clarification.answered_question_ids:
+    if data.clarification.answered_question_ids or data.clarification.answer_codes:
         items.append(Observation(ObservationKind.DECLARATION,
-                                 "Réponses enregistrées pour : " +
-                                 ", ".join(data.clarification.answered_question_ids) + "."))
+                                 "Précisions déclarées : statut " + data.clarification.status.value +
+                                 " ; questions " + ", ".join(data.clarification.answered_question_ids) +
+                                 " ; réponses codées " + ", ".join(data.clarification.answer_codes) + "."))
     for code in data.history_signal_codes:
         items.append(Observation(ObservationKind.FACT, "Signal historique codé : " + code + "."))
     for scenario in data.scenarios:
@@ -107,7 +121,7 @@ def _observations(data: InvestigatorInput) -> tuple[Observation, ...]:
         items.append(Observation(ObservationKind.FACT,
                                  "Passages publics candidats à examiner : " +
                                  ", ".join(data.reference_rule_ids) + ".", data.reference_rule_ids))
-    return tuple(items[:30])
+    return tuple(items)
 
 
 class InvestigatorAssistant:
@@ -151,7 +165,12 @@ class InvestigatorAssistant:
             code for feature in data.evidence_features for code in feature.missing_evidence
             if code not in {m for finding in data.findings for m in finding.missing_evidence}
         ))
-        observations = _observations(data)
+        observations = _observations(data) + tuple(
+            Observation(ObservationKind.HYPOTHESIS,
+                        "Explication candidate " + h.hypothesis_id + " : " + h.status.value + ".",
+                        h.supporting_refs + h.contradicting_refs)
+            for h in hypotheses
+        )
         summary = (
             "Synthèse indicative pour l'agent : "
             f"{len(data.findings)} constat(s) déterministe(s), "
