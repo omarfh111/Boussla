@@ -31,19 +31,14 @@ counts and modes.
 Lane A wiring at the officer view boundary:
 
 ```python
-from boussla.contracts import Mode
 from boussla.retrieval.corpus import public_reference_retriever
-from boussla.retrieval.queries import candidate_passages_for_reasons
+from boussla.retrieval.queries import enrich_officer_view
 
 retriever = public_reference_retriever()  # cache once in the service process
-passages = candidate_passages_for_reasons(
-    retriever,
-    ((f.family, f.reason_code) for f in officer_findings),
-    as_of=case_cutoff_date,
-)
-# Set OfficerCaseView.candidate_passages=passages; keep score inputs unchanged.
-# retrieval_mode = {"QDRANT": Mode.LIVE, "LEXICAL": Mode.TEMPLATE,
-#                   "NOT_SUPPLIED": Mode.NOT_RUN}[retriever.backend_mode]
+officer_view = enrich_officer_view(officer_view, retriever, as_of=case_cutoff_date)
+# The helper calls candidate_passages_for_reasons(retriever,
+#   ((f.family, f.reason_code) for f in officer_view.findings), ...), then sets
+# OfficerCaseView.candidate_passages and mode_by_node["retrieval"].
 ```
 
 Only four allowlisted counterparty reason codes produce fixed queries. No raw
@@ -53,8 +48,11 @@ must verify the source, version, date and applicability before citing a passage.
 Do not show them as an automatic legal conclusion or add them to the review
 index. Because effective dates are unknown, the company audience receives no
 passages from this corpus. Lane A must place retrieval after deterministic
-checks in the officer view path and set its mode from the retriever's final
-`backend_mode` (a query failure may switch Qdrant to lexical).
+checks in the officer view path. `enrich_officer_view` maps the final backend
+mode to `LIVE`, `TEMPLATE` or `NOT_RUN` (a query failure may switch Qdrant to
+lexical) while leaving findings and score unchanged. The existing Streamlit
+officer dossier renders `candidate_passages`; Lane D should use the full label
+above in that view.
 
 `RetrievedPassage` currently carries the source URL, title, text and review
 status but not the stored source hash or source/effective dates. If these must

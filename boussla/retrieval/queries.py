@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Iterable
 
-from boussla.contracts import Audience, FindingFamily, ReferenceRetriever, RetrievedPassage
+from boussla.contracts import Audience, FindingFamily, Mode, OfficerCaseView, ReferenceRetriever, RetrievedPassage
 
 
 _QUERY_BY_REASON = {
@@ -42,3 +42,22 @@ def candidate_passages_for_reasons(
             if len(found) >= limit:
                 return tuple(found.values())
     return tuple(found.values())
+
+
+def enrich_officer_view(
+    view: OfficerCaseView, retriever: ReferenceRetriever, *, as_of: date,
+) -> OfficerCaseView:
+    """Add candidate references to an officer view without touching findings or score."""
+    passages = candidate_passages_for_reasons(
+        retriever, ((finding.family, finding.reason_code) for finding in view.findings),
+        as_of=as_of,
+    )
+    mode = {
+        "QDRANT": Mode.LIVE,
+        "LEXICAL": Mode.TEMPLATE,
+        "NOT_SUPPLIED": Mode.NOT_RUN,
+    }.get(getattr(retriever, "backend_mode", None), Mode.NOT_RUN)
+    return view.model_copy(update={
+        "candidate_passages": passages,
+        "mode_by_node": {**view.mode_by_node, "retrieval": mode},
+    })
