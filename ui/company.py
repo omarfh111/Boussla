@@ -98,8 +98,13 @@ def render_context(service, actor, case: CompanyCaseView) -> None:
     if case.inbox:
         st.markdown("#### Boîte de demandes")
         for request in case.inbox:
-            st.write(f"{request.request.request_id} · {request.request.status.value}")
-            st.write(request.text_fr)
+            status_fr = {
+                "PUBLISHED_IN_DEMO": "En attente de votre réponse",
+                "RESPONDED": "Réponse transmise",
+                "CLOSED": "Clôturée",
+            }.get(request.request.status.value, request.request.status.value)
+            st.markdown(f"**Demande {request.request.request_id}** · statut : `{status_fr}` ({request.request.status.value})")
+            st.info(request.text_fr)
             if request.request.status.value == "PUBLISHED_IN_DEMO":
                 with st.form(f"response_{request.request.request_id}"):
                     answer = st.text_area("Votre réponse", key=f"answer_{request.request.request_id}")

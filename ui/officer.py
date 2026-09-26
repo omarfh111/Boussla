@@ -178,6 +178,15 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
         st.write(f"Décision {revision.outcome} · version {revision.previous_version} → {revision.new_version} · {revision.mode.value}")
         before = revision.score_before.review_index if revision.score_before else None
         after = revision.score_after.review_index if revision.score_after else None
+
+        c_rev1, c_rev2 = st.columns(2)
+        with c_rev1:
+            st.metric("Priorité avant révision (v1)", before if before is not None else "N/D")
+        with c_rev2:
+            st.metric("Priorité après révision (v2)", after if after is not None else "0",
+                      delta=f"{after - before}" if (before is not None and after is not None) else None,
+                      delta_color="inverse")
+
         st.write(f"Priorité de revue : {before} → {after}")
         if revision.mode.value == "MOCK":
             st.caption("Valeurs recomputées par le service MOCK ; ne constituent pas une mesure des contrôles réels.")
@@ -195,10 +204,18 @@ def render_dossier(service, actor, case: OfficerCaseView) -> None:
 
 
 def render_diagnostics(case: OfficerCaseView) -> None:
-    st.subheader("Diagnostics")
-    st.write(f"Vue du dossier : {case.mode.value}")
+    st.subheader("Diagnostics et modes d'intégration")
+    st.write(f"**Mode global du dossier :** `{case.mode.value}`")
+    st.markdown("#### État par composant")
     for node, mode in case.mode_by_node.items():
-        st.write(f"{node} : {mode.value}")
+        st.write(f"• **{node}** : `{mode.value}`")
+    st.markdown("#### Comprendre les statuts")
+    st.caption(
+        "• **LIVE** : Exécuté avec les moteurs réels (base SQLite locale, calculs déterministes, modèle si configuré).\n\n"
+        "• **TEMPLATE** : Remplacement déterministe ou gabarit contrôlé en cas de repli.\n\n"
+        "• **MANUAL** : Mode manuel ou saisie utilisateur.\n\n"
+        "• **NOT_RUN** : Composant non exécuté dans ce flux (mention transparente, aucun résultat inventé)."
+    )
     if case.mode.value == "MOCK":
         st.info("Mesures de tests intégrés : NOT_RUN dans cette interface. Les chiffres du service MOCK sont des données de démonstration.")
     else:
