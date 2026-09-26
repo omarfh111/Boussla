@@ -209,7 +209,11 @@ def test_declared_horizon_defaults_to_unknown_and_is_never_derived():
 def test_model_payload_is_bounded_and_reference_expected_is_server_side():
     stub = ModelStub("CONSTRUCTION_PROJECT", "LONGER_HORIZON", "environ dix-huit mois", ["dépôt logistique"])
     svc = service(stub)
-    declare(svc, "i", declared_horizon="SHORT_HORIZON", reference_expected="true", project_reference="REF-X", **LONG)
+    v = ver(svc)
+    with pytest.raises(BousslaError) as e:  # trust fields are server-side: refused, never silently dropped
+        declare(svc, "i0", declared_horizon="SHORT_HORIZON", reference_expected="true", project_reference="REF-X", **LONG)
+    assert e.value.code is ErrorCode.INVALID_INPUT and ver(svc) == v
+    declare(svc, "i", declared_horizon="SHORT_HORIZON", **LONG)
     body = json.loads(stub.requests[-1]["input"][1]["content"])
     assert set(body) == {"purpose_text", "declared_purpose_category", "declared_horizon", "planned_start",
                          "planned_end", "stage"}

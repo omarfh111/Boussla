@@ -26,3 +26,11 @@ Only A approves and merges changes. Record: requester, proposed change, reason, 
 - **Reason:** C's context layer needs a company-confirmed horizon and a typed presentation contract for D.
 - **Consumers:** D (React: Déclaré / Interprété / Calculé / Cohérence). All fields additive with safe defaults; stored claims without the field load as UNKNOWN.
 - **Tests:** `tests/integration/test_context_service.py`.
+
+## CR-004 — final automation core: strict inputs, automatic clarification, triage (A, applied on `feat/final-automation-core`)
+
+- **Requester / decider:** A (final sprint; judge round 1 defects LJG-001..004), 2026-09-26.
+- **Change (additive, version `boussla-automation-1`):** `ErrorCode.INVALID_INPUT`; `ClarificationRequest.origin` (default `OFFICER`); new `ClarificationDeadlineView`, `TriageAssessment`, `HistorySignalKind`, `CompanyHistorySignal`, `InvestigatorBriefPoint`, `InvestigatorBrief`; protocols `CompanyHistorySignalProvider` (B) and `InvestigatorBriefProvider` (C); optional `OfficerCaseView.triage / clarification_deadlines / history_signals / investigator_brief`; optional `QueueItem.triage_priority / triage_reason_codes`.
+- **Behaviour:** documentless proposals cannot be accepted; context/response/allocation payloads are strict (typed errors, no silent drops); automatic neutral clarification in the submission's own revision; queue ordered by triage urgency. `review_index` unchanged in meaning and computation.
+- **Consumers:** B (implement `CompanyHistorySignalProvider`, pass it as `history_signal_provider=`), C (implement `InvestigatorBriefProvider`, pass as `investigator=`), D (optional: label `origin=AUTOMATIC` requests, show triage reasons, hide "Accepter" when `source_document_id` is null, label `FOLLOW_UP_DUE`). All fields optional with safe defaults; stored requests load as `OFFICER`.
+- **Tests:** `tests/backend/test_final_automation.py`; e2e `frontend/e2e/demo.spec.ts` now uses the automatic request.

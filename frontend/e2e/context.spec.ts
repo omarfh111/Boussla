@@ -1,13 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { capture, skipSplash } from "./support";
 
-// Context consistency on the real service: clarification only, never priority.
+// JOURNEY 2 — context inconsistency -> automatic questionnaire -> company response ->
+// investigator refresh. Clarification only: the review index never moves.
 // BOUSSLA_E2E_LIVE=1 when the server runs with a configured model (interpretation LIVE).
 const live = process.env.BOUSSLA_E2E_LIVE === "1";
-const shots = resolve("..", "docs", "screenshots", "react_ui");
 const purpose =
   "Construction d'un dépôt logistique prévue sur environ dix-huit mois";
+
+test.beforeEach(async ({ page }) => skipSplash(page));
 
 async function officerPriority(page: Page) {
   await page.getByRole("button", { name: "Agent", exact: true }).click();
@@ -34,16 +35,16 @@ async function declare(page: Page, horizon: string, stage: string) {
   ).toBeVisible();
 }
 
-test("context mismatch asks for clarification, correction becomes consistent, priority unchanged", async ({
+test("context mismatch -> automatic questionnaire -> response -> investigator refresh", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: "File de revue" }),
+    page.getByRole("heading", { name: "Portefeuille des entreprises" }),
   ).toBeVisible();
   const before = await officerPriority(page);
 
-  await declare(page, "SHORT_HORIZON", "");
+  await declare(page, "SHORT_HORIZON", "Gros œuvre");
   const tiles = page.locator(".context-grid .metric");
   await expect(tiles.nth(0)).toContainText("Horizon court");
   await expect(tiles.nth(1)).toContainText(
@@ -51,32 +52,53 @@ test("context mismatch asks for clarification, correction becomes consistent, pr
   );
   await expect(tiles.nth(2)).toContainText("546 jours · Horizon plus long");
   await expect(tiles.nth(3)).toContainText("Clarification nécessaire");
+  await expect(page.locator("body")).not.toContainText(/risque|fraude/i);
+
+  // The questionnaire arrived without any officer action.
+  await page.getByRole("button", { name: "Demandes" }).click();
+  const card = page
+    .locator(".stack > div")
+    .filter({ hasText: "Demande automatique BOUSSLA" })
+    .first();
+  await expect(card.getByText("Demande automatique BOUSSLA")).toBeVisible();
   await expect(
-    page.getByText(
-      "La période déclarée diffère de celle calculée depuis les dates.",
+    card.getByText(
+      "Précisions demandées automatiquement à partir des informations disponibles.",
     ),
   ).toBeVisible();
   await expect(
-    page.getByText(/n’affecte pas automatiquement la priorité de revue/),
+    card.getByText(/Cible de réponse de démonstration/),
   ).toBeVisible();
-  await expect(page.locator("body")).not.toContainText(/risque|fraude/i);
-  if (process.env.BOUSSLA_E2E_SCREENSHOTS === "1") {
-    mkdirSync(shots, { recursive: true });
-    await page
-      .locator(".panel", { has: page.locator(".context-grid") })
-      .evaluate((el) => el.scrollIntoView({ block: "start" }));
-    await page.screenshot({
-      path: resolve(shots, "03_context_consistency.png"),
-    });
-  }
-  expect(await officerPriority(page)).toBe(before);
+  await expect(card.locator(".question-list li")).toHaveCount(3);
+  await expect(card.locator(".question-list li").first()).toContainText(
+    "courte (90 jours ou moins) ou plus longue",
+  );
+  await capture(page, "05_context_auto_questionnaire.png", card);
 
-  await declare(page, "LONGER_HORIZON", "Gros œuvre");
+  // Company answers the fixed-choice confirmation (the enum value is sent).
+  await card.getByRole("button", { name: "Répondre à la demande" }).click();
+  await page
+    .locator(".response-form select:has(option[value=''])")
+    .first()
+    .selectOption("LONGER_HORIZON");
+  await page.getByRole("button", { name: "Transmettre la réponse" }).click();
+  await expect(
+    page.getByText("Réponse transmise à la revue de l’agent."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Contexte" }).click();
   await expect(tiles.nth(0)).toContainText("Horizon plus long");
   await expect(tiles.nth(3)).toContainText("Cohérent");
-  // Both declarations remain listed: the correction supersedes, it does not overwrite.
-  await expect(
-    page.locator(".record").filter({ hasText: purpose }),
-  ).toHaveCount(2);
+
+  // Officer: same review index; the assisted analysis reflects the new version.
   expect(await officerPriority(page)).toBe(before);
+  const brief = page.locator(".investigator-panel");
+  await expect(
+    brief.getByText("Changements depuis la version précédente"),
+  ).toBeVisible();
+  await expect(brief).toContainText("Réponse de l'entreprise reçue");
+  await expect(
+    brief.getByText(
+      "L'analyse assistée ne modifie pas l'indice de revue ni les faits du dossier.",
+    ),
+  ).toBeVisible();
 });

@@ -11,6 +11,8 @@ import type {
   RevisionResult,
   DocumentView,
   ResponseView,
+  AdminEnterprise,
+  AdminResult,
 } from "./types";
 
 export class ApiError extends Error {
@@ -65,7 +67,11 @@ export const api = {
       r,
       `/cases/${encodeURIComponent(id)}`,
     ),
-  queue: () => request<QueuePage>("OFFICER", "/officer/queue"),
+  queue: (cursor?: string) =>
+    request<QueuePage>(
+      "OFFICER",
+      `/officer/queue${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
   history: (r: Role, id: string) =>
     request<HistoryView>(r, `/cases/${encodeURIComponent(id)}/history`),
   post: <T>(
@@ -132,4 +138,32 @@ export const api = {
           action === "reject" ? "Pièce non retenue dans ce dossier" : undefined,
       },
     ),
+  /** Synthetic demo administration: DEMO_OPERATOR role only (server-enforced). */
+  admin: {
+    list: () =>
+      request<{ items: AdminEnterprise[]; notice_fr: string }>(
+        "OPERATOR",
+        "/admin/enterprises",
+      ),
+    seed: () => api.post<AdminResult>("OPERATOR", "/admin/portfolio/seed", {}),
+    reset: () =>
+      api.post<AdminResult>("OPERATOR", "/admin/portfolio/reset", {
+        confirm: "RESET",
+      }),
+    add: (display_name: string, sector: string) =>
+      api.post<AdminEnterprise>("OPERATOR", "/admin/enterprises", {
+        display_name,
+        sector,
+      }),
+    remove: (company_id: string) =>
+      request<AdminResult>(
+        "OPERATOR",
+        `/admin/enterprises/${encodeURIComponent(company_id)}`,
+        {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ confirm: company_id }),
+        },
+      ),
+  },
 };

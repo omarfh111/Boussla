@@ -56,6 +56,9 @@ class Settings:
     max_upload_bytes: int = 10 * 1024 * 1024
     max_pdf_pages: int = 5
     max_question_rounds: int = 2
+    portfolio_enabled: bool = True
+    """Load lane B's 12-enterprise synthetic portfolio into the case store at startup."""
+    portfolio_state_path: Path = REPO_ROOT / "runtime" / "portfolio.json"
     _secrets: dict[str, str] = field(default_factory=dict, compare=False)
 
     def secret(self, name: str) -> str | None:
@@ -114,5 +117,9 @@ def get_settings() -> Settings:
         max_upload_bytes=_int("MAX_UPLOAD_BYTES", 10 * 1024 * 1024),
         max_pdf_pages=_int("MAX_PDF_PAGES", 5),
         max_question_rounds=_int("MAX_QUESTION_ROUNDS", 2),
+        portfolio_enabled=_flag("BOUSSLA_PORTFOLIO", True),
+        portfolio_state_path=_resolve(os.environ.get("PORTFOLIO_STATE_PATH"),
+                                      _resolve(os.environ.get("CASE_DB_PATH"), REPO_ROOT / "runtime" / "cases.sqlite")
+                                      .parent / "portfolio.json"),
         _secrets=secrets,
     )

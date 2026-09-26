@@ -1,20 +1,26 @@
 ﻿import {
   Component,
+  useCallback,
   useRef,
   useState,
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Activity,
   ArrowRight,
   BookOpen,
+  Building2,
   Check,
   ChevronRight,
   CircleHelp,
   ClipboardList,
-  Compass,
+  Database,
   FileText,
   FolderOpen,
   History,
@@ -24,6 +30,18 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ApiError, api } from "./api/client";
+import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
+import { BousslaMark } from "./brand/BousslaMark";
+import {
+  Company360,
+  DemoAdmin,
+  HypothesisCards,
+  InvestigatorPanel,
+  InvoiceCompare,
+  Portfolio,
+  ScenarioCards,
+  triageLabel,
+} from "./portfolio/components";
 import type {
   Role,
   CompanyCaseView,
@@ -46,10 +64,12 @@ type Tab =
   | "requests"
   | "documents"
   | "queue"
+  | "company360"
   | "dossier"
   | "references"
   | "history"
-  | "diagnostics";
+  | "diagnostics"
+  | "admin";
 const companyTabs: [Tab, string, ReactNode][] = [
   ["overview", "Vue d’ensemble", <LayoutDashboard size={18} />],
   ["operations", "Opérations", <Activity size={18} />],
@@ -59,10 +79,14 @@ const companyTabs: [Tab, string, ReactNode][] = [
 ];
 const officerTabs: [Tab, string, ReactNode][] = [
   ["queue", "File de revue", <LayoutDashboard size={18} />],
+  ["company360", "Entreprise 360", <Building2 size={18} />],
   ["dossier", "Dossier", <Search size={18} />],
   ["references", "Références", <BookOpen size={18} />],
   ["history", "Historique", <History size={18} />],
   ["diagnostics", "Diagnostics", <Activity size={18} />],
+];
+const operatorTabs: [Tab, string, ReactNode][] = [
+  ["admin", "Données démo", <Database size={18} />],
 ];
 const status: Record<string, string> = {
   UNRESOLVED: "À clarifier",
@@ -97,6 +121,8 @@ const status: Record<string, string> = {
   BUYER_RECEIVED: "Copie reçue par l’acheteur",
   SELLER_ISSUED: "Émission du vendeur",
   INTERNAL_PURCHASE_ENTRY: "Écriture d’achat interne",
+  FOLLOW_UP_DUE: "Relance à prévoir",
+  ON_TRACK: "Dans la cible de démonstration",
 };
 const familyLabel: Record<string, string> = {
   COUNTERPARTY: "Concordance des observations",
@@ -158,6 +184,8 @@ const nodeLabel: Record<string, string> = {
   reference_note: "Synthèse de références",
   extractor: "Extraction des champs",
   planner: "Planification des questions",
+  history: "Signaux historiques (lot B)",
+  investigator: "Analyse assistée BOUSSLA",
 };
 const HORIZON_CONVENTION_FR =
   "Cette catégorie est une convention de démonstration BOUSSLA ; elle ne constitue pas une classification fiscale, comptable ou juridique.";
@@ -178,6 +206,13 @@ const money = (millimes: number | null) =>
 const date = (s: string | null) =>
   s ? new Date(s).toLocaleDateString("fr-FR") : "N/D";
 const short = (s: string) => (s.length > 20 ? `${s.slice(0, 16)}…` : s);
+/** Animate a new automatic request only the first time its stable ID is seen. */
+const seenRequests = new Set<string>();
+const firstSeen = (id: string) => {
+  if (seenRequests.has(id)) return false;
+  seenRequests.add(id);
+  return true;
+};
 const badge = (value: string) => (
   <span
     className={`badge ${["EXPLAINED", "LIVE", "ACCEPTED"].includes(value) ? "good" : ["UNRESOLVED", "PENDING", "PUBLISHED_IN_DEMO", "AWAITING_HUMAN_REVIEW"].includes(value) ? "warn" : ""}`}
@@ -347,8 +382,11 @@ function Revision({
 
 function AppInner() {
   const query = useQueryClient();
+  const [booting, setBooting] = useState(shouldShowBoot);
+  const endBoot = useCallback(() => setBooting(false), []);
   const [role, setRole] = useState<Role>("OFFICER");
   const [tab, setTab] = useState<Tab>("queue");
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState<RevisionResult | null>(null);
   const locked = useRef(false);
@@ -356,7 +394,10 @@ function AppInner() {
     queryKey: ["bootstrap", role],
     queryFn: () => api.bootstrap(role),
   });
-  const caseId = bootstrap.data?.case_ids[0];
+  const caseId =
+    selectedCaseId && bootstrap.data?.case_ids.includes(selectedCaseId)
+      ? selectedCaseId
+      : bootstrap.data?.case_ids[0];
   const caseQuery = useQuery({
     queryKey: ["case", role, caseId],
     queryFn: () => api.case(role, caseId!),
@@ -366,12 +407,16 @@ function AppInner() {
   const switchRole = (next: Role) => {
     if (next === role) return;
     setRole(next);
-    setTab(next === "COMPANY" ? "overview" : "queue");
+    setTab(
+      next === "COMPANY" ? "overview" : next === "OPERATOR" ? "admin" : "queue",
+    );
+    setSelectedCaseId(null);
     setNotice("");
     setRevision(null);
     query.removeQueries({ queryKey: ["case"] });
     query.removeQueries({ queryKey: ["history"] });
     query.removeQueries({ queryKey: ["queue"] });
+    query.removeQueries({ queryKey: ["admin"] });
   };
   const refresh = async () => {
     await query.invalidateQueries();
@@ -402,20 +447,31 @@ function AppInner() {
       locked.current = false;
     }
   };
-  const tabs = role === "COMPANY" ? companyTabs : officerTabs;
+  const tabs =
+    role === "COMPANY"
+      ? companyTabs
+      : role === "OPERATOR"
+        ? operatorTabs
+        : officerTabs;
   return (
     <div className="app-shell">
+      {booting && <BootSplash onDone={endBoot} />}
       <aside className="sidebar">
         <div className="brand">
           <span className="brand-mark">
-            <Compass size={22} />
+            <BousslaMark size={32} />
           </span>
           <span>
             BOUSSLA<small>Espace de revue</small>
           </span>
         </div>
         <div className="workspace-label">
-          ESPACE {role === "COMPANY" ? "ENTREPRISE" : "AGENT"}
+          ESPACE{" "}
+          {role === "COMPANY"
+            ? "ENTREPRISE"
+            : role === "OPERATOR"
+              ? "OPÉRATEUR DÉMO"
+              : "AGENT"}
         </div>
         <nav aria-label="Navigation principale">
           {tabs.map(([id, label, icon]) => (
@@ -470,6 +526,13 @@ function AppInner() {
               >
                 Agent
               </button>
+              <button
+                className={role === "OPERATOR" ? "active" : ""}
+                onClick={() => switchRole("OPERATOR")}
+                title="Administration de données synthétiques — démonstration locale."
+              >
+                Opérateur démo
+              </button>
             </div>
             <button
               className="icon-button"
@@ -493,7 +556,13 @@ function AppInner() {
               </button>
             </div>
           )}
-          {bootstrap.isLoading || caseQuery.isLoading ? (
+          {role === "OPERATOR" ? (
+            bootstrap.isLoading ? (
+              <Skeleton />
+            ) : (
+              <DemoAdmin enabled={!!bootstrap.data?.demo_admin?.can_list} />
+            )
+          ) : bootstrap.isLoading || caseQuery.isLoading ? (
             <Skeleton />
           ) : bootstrap.isError || caseQuery.isError ? (
             <div className="error-state">
@@ -508,7 +577,20 @@ function AppInner() {
           ) : current.audience === "COMPANY" ? (
             <Company caseView={current} tab={tab} act={act} />
           ) : (
-            <Officer caseView={current} tab={tab} act={act} setTab={setTab} />
+            <Officer
+              caseView={current}
+              tab={tab}
+              act={act}
+              setTab={setTab}
+              onSelectCase={(id) => {
+                if (!bootstrap.data?.case_ids.includes(id)) {
+                  setNotice("Ce dossier n’est pas assigné à ce rôle.");
+                  return;
+                }
+                setSelectedCaseId(id);
+                setTab("company360");
+              }}
+            />
           )}
         </main>
       </div>
@@ -615,7 +697,7 @@ function Company({
         <SectionHead
           label="ÉCHANGES"
           title="Demandes de précision"
-          detail="Les questions publiées par l’agent apparaissent ici."
+          detail="Les demandes disponibles pour ce dossier apparaissent ici."
         />
         <RequestInbox c={c} act={act} />
       </>
@@ -786,14 +868,16 @@ function ContextForm({
     if (pending) return;
     setPending(true);
     const data = new FormData(e.currentTarget);
+    const context: Record<string, FormDataEntryValue | null> =
+      Object.fromEntries([...data].filter(([, value]) => value !== ""));
+    if (
+      data.get("project_id") === "__GENERAL__" &&
+      c.capabilities?.supports_null_project_id
+    )
+      context.project_id = null;
     try {
       await act(
-        () =>
-          api.context(
-            c.case_id,
-            c.case_version,
-            Object.fromEntries([...data].filter(([, value]) => value !== "")),
-          ),
+        () => api.context(c.case_id, c.case_version, context),
         "Contexte déclaré et nouvelle version créée.",
       );
     } catch {
@@ -814,6 +898,11 @@ function ContextForm({
                   {p.label}
                 </option>
               ))}
+              {c.capabilities?.supports_null_project_id && (
+                <option value="__GENERAL__">
+                  Aucun projet / usage général de l’entreprise
+                </option>
+              )}
             </select>
           </label>
           <label>
@@ -824,7 +913,9 @@ function ContextForm({
               </option>
               <option value="RESALE">Revente</option>
               <option value="OPERATING_USE">Usage d’exploitation</option>
-              <option value="LONG_LIVED_ASSET">Actif durable</option>
+              <option value="LONG_LIVED_ASSET">
+                Actif durable (ex. achat de véhicule)
+              </option>
               <option value="OTHER_OR_UNKNOWN">Autre / à préciser</option>
             </select>
           </label>
@@ -867,7 +958,13 @@ function ContextForm({
             Fin prévue
             <input name="planned_end" type="date" />
           </label>
-          <button className="primary wide" disabled={pending}>
+          <button
+            className="primary wide"
+            disabled={
+              pending ||
+              (!c.projects.length && !c.capabilities?.supports_null_project_id)
+            }
+          >
             {pending ? "Enregistrement…" : "Enregistrer la déclaration"}
           </button>
         </form>
@@ -1005,6 +1102,12 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                       {d.document.acquisition_channel.replaceAll("_", " ")}
                     </dd>
                   </div>
+                  {d.document.origin_group_id && (
+                    <div>
+                      <dt>Groupe d’origine</dt>
+                      <dd>{d.document.origin_group_id}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt>SHA-256</dt>
                     <dd className="mono">{short(d.document.sha256)}</dd>
@@ -1040,42 +1143,93 @@ function RequestInbox({
     <div className="stack">
       {c.inbox.length ? (
         c.inbox.map((r) => (
-          <Panel
-            key={r.request.request_id}
-            eyebrow={`DEMANDE ${r.request.request_id}`}
-            title="Précisions attendues"
-            action={badge(r.request.status)}
-          >
-            <p className="muted">
-              Publiée le {date(r.request.published_at)} · Pièces attendues :{" "}
-              {r.request.allowed_document_types
-                .map((kind) => status[kind] || kind)
-                .join(", ") || "à préciser"}
-            </p>
-            <p>{r.text_fr}</p>
-            <ul className="question-list">
-              {r.questions.map((q) => (
-                <li key={q.question_id}>{q.text_fr}</li>
-              ))}
-            </ul>
-            {r.request.status === "PUBLISHED_IN_DEMO" &&
-              (selected === r.request.request_id ? (
-                <ResponseComposer c={c} request={r} act={act} />
-              ) : (
-                <button
-                  className="primary"
-                  onClick={() => setSelected(r.request.request_id)}
-                >
-                  Répondre à la demande <ArrowRight size={16} />
-                </button>
-              ))}
-            <p className="footnote">Déclaration seule ≠ preuve acceptée.</p>
-          </Panel>
+          <AutoRequestFrame key={r.request.request_id} request={r}>
+            <Panel
+              eyebrow={`DEMANDE ${r.request.request_id}`}
+              title="Précisions attendues"
+              action={badge(r.request.status)}
+            >
+              <p className="muted">
+                Publiée le {date(r.request.published_at)} · Pièces attendues :{" "}
+                {r.request.allowed_document_types
+                  .map((kind) => status[kind] || kind)
+                  .join(", ") || "à préciser"}
+              </p>
+              <RequestMeta request={r} />
+              <p>{r.text_fr}</p>
+              <ul className="question-list staggered">
+                {r.questions.map((q, i) => (
+                  <li
+                    key={q.question_id}
+                    style={{ animationDelay: `${120 + i * 80}ms` }}
+                  >
+                    {q.text_fr}
+                  </li>
+                ))}
+              </ul>
+              {r.request.status === "PUBLISHED_IN_DEMO" &&
+                (selected === r.request.request_id ? (
+                  <ResponseComposer c={c} request={r} act={act} />
+                ) : (
+                  <button
+                    className="primary"
+                    onClick={() => setSelected(r.request.request_id)}
+                  >
+                    Répondre à la demande <ArrowRight size={16} />
+                  </button>
+                ))}
+              <p className="footnote">Déclaration seule ≠ preuve acceptée.</p>
+            </Panel>
+          </AutoRequestFrame>
         ))
       ) : (
         <Empty>Aucune demande publiée pour ce dossier.</Empty>
       )}
     </div>
+  );
+}
+
+/** One-time entrance for a NEW automatic request (stable ID; never replays on rerender). */
+function AutoRequestFrame({
+  request,
+  children,
+}: {
+  request: RequestView;
+  children: ReactNode;
+}) {
+  const [animate] = useState(
+    () =>
+      request.request.origin === "AUTOMATIC" &&
+      firstSeen(request.request.request_id),
+  );
+  return (
+    <div className={animate ? "auto-request-enter" : undefined}>{children}</div>
+  );
+}
+
+/** Origin, reason, demo target and follow-up state exactly as supplied by the service. */
+function RequestMeta({ request: r }: { request: RequestView }) {
+  return (
+    <>
+      {r.request.origin === "AUTOMATIC" && (
+        <div className="auto-request-banner">
+          <span className="auto-badge">Demande automatique BOUSSLA</span>
+          <span>
+            Précisions demandées automatiquement à partir des informations
+            disponibles.
+          </span>
+        </div>
+      )}
+      {r.request.target_response_at && (
+        <p className="muted">
+          Cible de réponse de démonstration :{" "}
+          {date(r.request.target_response_at)}
+          {r.request.overdue_state === "FOLLOW_UP_DUE" && (
+            <span className="badge warn follow-up">Relance à prévoir</span>
+          )}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -1356,13 +1510,16 @@ function Officer({
   tab,
   act,
   setTab,
+  onSelectCase,
 }: {
   caseView: OfficerCaseView;
   tab: Tab;
   act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
   setTab: (tab: Tab) => void;
+  onSelectCase: (caseId: string) => void;
 }) {
-  if (tab === "queue") return <Queue setTab={setTab} />;
+  if (tab === "queue") return <Queue onSelectCase={onSelectCase} />;
+  if (tab === "company360") return <Company360Tab c={c} />;
   if (tab === "references") return <References c={c} />;
   if (tab === "history") return <HistoryPanel c={c} />;
   if (tab === "diagnostics") return <Diagnostics c={c} />;
@@ -1414,12 +1571,30 @@ function Officer({
                 "N/D"}
             </strong>
           </div>
+          <div className="triage-metric">
+            <span>Urgence de traitement (triage)</span>
+            <strong>{format(c.triage?.triage_priority)}</strong>
+            <small>Distincte de l’indice de revue</small>
+          </div>
         </div>
       </div>
+      {c.triage && c.triage.reason_codes.length > 0 && (
+        <div className="tags triage-reasons" aria-label="Raisons du triage">
+          {c.triage.reason_codes.map((code) => (
+            <span className="badge" key={code}>
+              {triageLabel[code] || code}
+            </span>
+          ))}
+        </div>
+      )}
       <p className="hero-caption">
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
-        les contrôles déterministes — pas une probabilité de fraude.
+        les contrôles déterministes.
       </p>
+      <InvestigatorPanel
+        brief={c.investigator_brief}
+        passages={c.candidate_passages}
+      />
       <div className="two-col">
         <QuantityStory c={c} />
         <Clarification c={c} act={act} />
@@ -1429,125 +1604,65 @@ function Officer({
         <Proposals c={c} act={act} />
       </div>
       <div className="two-col">
-        <Observations c={c} />
-        <Panel eyebrow="HYPOTHÈSES" title="Pistes examinées">
-          {c.hypotheses.length ? (
-            c.hypotheses.map((h) => (
-              <div className="list-row" key={h.hypothesis_id}>
-                <div>
-                  <strong>{h.hypothesis_id}</strong>
-                  <small>{h.scope}</small>
-                  <small>
-                    Pièces attendues :{" "}
-                    {h.missing_evidence_types.length
-                      ? h.missing_evidence_types
-                          .map((kind) => status[kind] || kind)
-                          .join(", ")
-                      : "aucune indiquée"}
-                  </small>
-                </div>
-                {badge(h.status)}
-              </div>
-            ))
-          ) : (
-            <Empty>Aucune hypothèse disponible.</Empty>
-          )}
-        </Panel>
+        <InvoiceCompare
+          observations={c.invoice_observations}
+          comparisons={c.invoice_comparisons}
+        />
+        <HypothesisCards
+          hypotheses={c.investigator_brief?.top_hypotheses ?? []}
+        />
       </div>
       <ContextAssessment ctx={c.context_assessment} />
-      <Panel eyebrow="SIMULATION HYPOTHÉTIQUE" title="Scénarios de sensibilité">
-        <p className="footnote">
-          Ces scénarios n’altèrent pas l’état canonique du dossier.
-        </p>
-        {c.scenarios.map((s) => (
-          <div className="list-row" key={s.scenario_id}>
-            <strong>{s.label}</strong>
-            <span className="mono">
-              {Object.entries(s.outputs)
-                .map(
-                  ([key, value]) =>
-                    `${scenarioLabel[key] || key}: ${status[String(value)] || String(value)}`,
-                )
-                .join(" · ")}
-            </span>
-          </div>
-        ))}
-      </Panel>
+      <ScenarioCards
+        reviewIndex={c.score?.review_index}
+        scenarios={c.scenarios}
+      />
     </>
   );
 }
 
-function Queue({ setTab }: { setTab: (tab: Tab) => void }) {
-  const q = useQuery({ queryKey: ["queue"], queryFn: api.queue });
+function Queue({ onSelectCase }: { onSelectCase: (caseId: string) => void }) {
+  const q = useInfiniteQuery({
+    queryKey: ["queue"],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => api.queue(pageParam),
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+  });
   return (
     <>
-      <SectionHead
-        label="PRIORISATION"
-        title="File de revue"
-        detail="Les dossiers sont ordonnés selon les contrôles déterministes disponibles."
-      />
-      <Panel
-        eyebrow="DOSSIERS ASSIGNÉS"
-        title="À examiner"
-        action={
-          <span className="badge">{q.data?.items.length ?? "—"} dossiers</span>
-        }
-      >
-        {q.isLoading ? (
-          <Skeleton />
-        ) : q.isError ? (
-          <p role="alert">File indisponible : {q.error.message}</p>
-        ) : !q.data?.items.length ? (
-          <Empty>Aucun dossier assigné.</Empty>
-        ) : (
-          <div className="queue-list">
-            {q.data.items.map((item) => (
-              <button
-                className="queue-item"
-                key={item.case_id}
-                onClick={() => setTab("dossier")}
-              >
-                <div className="queue-company">
-                  <span className="queue-icon">
-                    <FolderOpen size={21} />
-                  </span>
-                  <div>
-                    <strong>{item.company_display_name}</strong>
-                    <small>
-                      {item.case_id} · v{item.case_version}
-                    </small>
-                  </div>
-                </div>
-                <div>
-                  <small>Priorité de revue</small>
-                  <strong className="priority-number">
-                    {format(item.review_index)}
-                  </strong>
-                </div>
-                <div>
-                  <small>Couverture des preuves</small>
-                  <strong>
-                    {format(item.evidence_coverage)}
-                    {item.evidence_coverage ? " %" : ""}
-                  </strong>
-                </div>
-                <div>
-                  <small>Constats actifs</small>
-                  <strong>{item.active_finding_count}</strong>
-                </div>
-                <div>{badge(item.clarification_status)}</div>
-                <ChevronRight size={19} />
-              </button>
-            ))}
-          </div>
-        )}
-      </Panel>
-      <p className="footnote">
-        <CircleHelp size={14} /> Indice de priorisation documentaire calculé par
-        les contrôles déterministes — pas une probabilité de fraude.
-      </p>
+      {q.isLoading ? (
+        <Skeleton />
+      ) : q.isError ? (
+        <p role="alert">File indisponible : {q.error.message}</p>
+      ) : (
+        <>
+          <Portfolio
+            items={q.data?.pages.flatMap((page) => page.items) ?? []}
+            onOpen={onSelectCase}
+          />
+          {q.hasNextPage && (
+            <button
+              className="secondary"
+              disabled={q.isFetchingNextPage}
+              onClick={() => q.fetchNextPage()}
+            >
+              {q.isFetchingNextPage
+                ? "Chargement…"
+                : "Charger plus de dossiers"}
+            </button>
+          )}
+        </>
+      )}
     </>
   );
+}
+
+function Company360Tab({ c }: { c: OfficerCaseView }) {
+  const history = useQuery({
+    queryKey: ["history", "OFFICER", c.case_id],
+    queryFn: () => api.history("OFFICER", c.case_id),
+  });
+  return <Company360 c={c} history={history.data ?? null} />;
 }
 
 function QuantityStory({ c }: { c: OfficerCaseView }) {
@@ -1700,7 +1815,7 @@ function Clarification({
     }
   };
   return (
-    <Panel eyebrow="ACTION HUMAINE" title="Demande de précision">
+    <Panel eyebrow="CLARIFICATION" title="Demande de précision">
       {draft ? (
         <>
           <p>{draft.text_fr}</p>
@@ -1726,7 +1841,8 @@ function Clarification({
       ) : (
         <>
           <p className="muted">
-            Préparer une demande neutre à partir des constats actuels.
+            Les demandes neutres sont publiées automatiquement après chaque
+            dépôt de l’entreprise. Une demande supplémentaire reste possible.
           </p>
           <button
             className="secondary"
@@ -1748,7 +1864,23 @@ function Clarification({
           <strong>Demandes existantes</strong>
           {c.requests.map((r) => (
             <div className="list-row" key={r.request.request_id}>
-              <span className="mono">{r.request.request_id}</span>
+              <span>
+                <span className="mono">{r.request.request_id}</span>
+                {r.request.origin === "AUTOMATIC" && (
+                  <span className="auto-badge small">
+                    Demande automatique BOUSSLA
+                  </span>
+                )}
+                {r.request.target_response_at && (
+                  <small>
+                    Cible de réponse de démonstration :{" "}
+                    {date(r.request.target_response_at)}
+                  </small>
+                )}
+                {r.request.overdue_state === "FOLLOW_UP_DUE" && (
+                  <small className="follow-up">Relance à prévoir</small>
+                )}
+              </span>
               {badge(r.request.status)}
             </div>
           ))}

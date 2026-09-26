@@ -31,6 +31,12 @@ POLICY: dict[str, frozenset[Role]] = {
     "get_history": frozenset({Role.COMPANY, Role.OFFICER}),
     "export_dossier": frozenset({Role.OFFICER}),
     "reset_demo": frozenset({Role.DEMO_OPERATOR}),
+    # Synthetic data administration: local demo operator only (never COMPANY or OFFICER).
+    "admin_list_enterprises": frozenset({Role.DEMO_OPERATOR}),
+    "admin_seed_portfolio": frozenset({Role.DEMO_OPERATOR}),
+    "admin_reset_portfolio": frozenset({Role.DEMO_OPERATOR}),
+    "admin_add_enterprise": frozenset({Role.DEMO_OPERATOR}),
+    "admin_delete_enterprise": frozenset({Role.DEMO_OPERATOR}),
 }
 
 
@@ -64,6 +70,12 @@ class ActorRegistry:
         if case_id not in officer.assigned_case_ids:
             self.actors[officer_id] = officer.model_copy(
                 update={"assigned_case_ids": (*officer.assigned_case_ids, case_id)})
+
+    def unassign(self, case_id: str) -> None:
+        for actor_id, actor in list(self.actors.items()):
+            if case_id in actor.assigned_case_ids:
+                self.actors[actor_id] = actor.model_copy(update={
+                    "assigned_case_ids": tuple(c for c in actor.assigned_case_ids if c != case_id)})
 
 
 def authorize(registry: ActorRegistry, claimed: Actor, action: str,

@@ -227,6 +227,20 @@ class CaseStore:
         return [CaseEvent(event_id=f"EV-{r[0]:05d}", case_id=case_id, kind=r[1], actor_id=r[2], at=r[3],
                           case_version=r[4], summary=r[5], fact_ids=tuple(json.loads(r[6]))) for r in rows]
 
+    def delete_case(self, case_id: str) -> None:
+        """Remove one case entirely (synthetic demo administration only; callers enforce
+        DEMO_OPERATOR authority and portfolio membership). Uploaded originals are
+        content-addressed and shared, so they are left in place."""
+        with self._connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                for table in ("facts", "case_versions", "action_receipts", "events", "artifacts", "cases"):
+                    conn.execute(f"DELETE FROM {table} WHERE case_id=?", (case_id,))  # noqa: S608 - fixed names
+                conn.execute("COMMIT")
+            except BaseException:
+                conn.execute("ROLLBACK")
+                raise
+
     # ------------------------------------------------------------ artifacts
     def put_artifact(self, case_id: str, kind: str, artifact_id: str, case_version: int, model: BaseModel) -> None:
         """Version-bound working artifact (e.g. an unpublished draft). Not a case fact:

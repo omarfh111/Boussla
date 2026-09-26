@@ -1,0 +1,14 @@
+{
+  "SYN-OP-001": {"archetype": "clean stable company", "signal_codes": ["NO_SIGNIFICANT_CHANGE"], "last_review_index": 0},
+  "SYN-OP-002": {"archetype": "buyer/seller invoice amount conflict", "signal_codes": ["REPEATED_INVOICE_CONFLICT"], "last_review_index": 35},
+  "SYN-OP-003": {"archetype": "invoice line quantity conflict", "signal_codes": ["NO_SIGNIFICANT_CHANGE"], "last_review_index": 35},
+  "SYN-OP-004": {"archetype": "missing seller-side view; vehicles without a project", "signal_codes": ["NO_SIGNIFICANT_CHANGE"], "last_review_index": 0},
+  "SYN-OP-005": {"archetype": "delayed document activity and two-month gap", "signal_codes": ["ACTIVITY_GAP", "LATE_DOCUMENT_ACTIVITY", "VOLUME_DROP"], "last_review_index": 0},
+  "SYN-OP-006": {"archetype": "sudden transaction-volume increase", "signal_codes": ["VOLUME_SPIKE"], "last_review_index": 0},
+  "SYN-OP-007": {"archetype": "sudden volume decrease; vehicles without a project", "signal_codes": ["VOLUME_DROP"], "last_review_index": 0},
+  "SYN-OP-008": {"archetype": "partial settlement with unknown terms", "signal_codes": ["PAYMENT_PATTERN_CHANGE"], "last_review_index": 0},
+  "SYN-OP-009": {"archetype": "multiple-project allocation discrepancy", "signal_codes": ["NO_SIGNIFICANT_CHANGE"], "last_review_index": 32},
+  "SYN-OP-010": {"archetype": "stock explanation with warehouse allocation", "signal_codes": ["NO_SIGNIFICANT_CHANGE"], "last_review_index": 0},
+  "SYN-OP-011": {"archetype": "accepted credit note and reversed payment", "signal_codes": ["PAYMENT_PATTERN_CHANGE"], "last_review_index": 0},
+  "SYN-OP-012": {"archetype": "overlapping invoice, settlement and project inconsistencies", "signal_codes": ["COUNTERPARTY_CONCENTRATION_CHANGE", "PAYMENT_PATTERN_CHANGE", "REPEATED_INVOICE_CONFLICT"], "last_review_index": 67}
+}

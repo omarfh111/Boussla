@@ -1,10 +1,114 @@
-export type Role = "COMPANY" | "OFFICER";
+/** Local role simulation headers (the server maps each to one roster actor). */
+export type Role = "COMPANY" | "OFFICER" | "OPERATOR";
 export type Mode =
   "LIVE" | "CACHED" | "MANUAL" | "TEMPLATE" | "NOT_RUN" | "ERROR" | "MOCK";
 export interface Bootstrap {
-  role: Role;
+  role: "COMPANY" | "OFFICER" | "DEMO_OPERATOR";
   case_ids: string[];
   banner_fr: string;
+  demo_admin?: DemoAdminCapabilities;
+}
+export interface DemoAdminCapabilities {
+  can_list: boolean;
+  can_seed: boolean;
+  can_reset: boolean;
+  can_add: boolean;
+  can_delete: boolean;
+}
+/** Mirrors boussla.contracts.EnterpriseProfileView (officer only, synthetic). */
+export interface EnterpriseProfile {
+  company_id: string;
+  display_name: string;
+  synthetic_identifier: string;
+  sector: string;
+  created_on: string;
+  activity_start: string | null;
+  activity_end: string | null;
+  portfolio_member: boolean;
+  data_kind: "SYNTHETIC";
+}
+export interface PaymentTimelineEntry {
+  payment_id: string;
+  transaction_id: string | null;
+  occurred_at: string;
+  amount_millimes: number;
+  currency: string;
+  status: string;
+  origin_group_id: string;
+}
+export interface MonthlyActivityEntry {
+  month: string;
+  transaction_count: number;
+  invoice_observation_count: number;
+  settled_outflow_millimes: number;
+  source_label: string;
+}
+/** Lane B synthetic authorized snapshot: context only, no bank access, no proof. */
+export interface FinancialSnapshot {
+  label_fr: string;
+  data_kind: "SYNTHETIC";
+  as_of: string;
+  currency: string;
+  observed_outflows_millimes: number;
+  observed_settlements_millimes: number;
+  documented_payable_millimes: number;
+  outstanding_documented_payable_millimes: number;
+  inflows_millimes: null;
+  scope: string;
+  statement_fr: string;
+  source_count: number;
+}
+/** Lane B neutral history observation (review context, never a finding). */
+export interface HistorySignal {
+  signal_id: string;
+  company_id: string;
+  reason_code: string;
+  period: string;
+  metric: string;
+  observed_value: string;
+  baseline_value: string | null;
+  baseline_periods: string[];
+  evidence_source_ids: string[];
+  explanation_fr: string;
+  method: string;
+  mode: Mode;
+  affects_review_index: false;
+}
+/** Server-computed queue urgency; React never derives it. */
+export interface TriageAssessment {
+  triage_priority: number;
+  review_index: number | null;
+  reason_codes: string[];
+  components: Record<string, number>;
+  formula_version: string;
+  note_fr: string;
+  not_fraud_probability: true;
+}
+export interface ClarificationDeadline {
+  request_id: string;
+  origin: "OFFICER" | "AUTOMATIC";
+  status: string;
+  target_response_at: string | null;
+  target_kind: string;
+  overdue: boolean;
+  overdue_days: number;
+  note_fr: string;
+}
+export interface AdminEnterprise {
+  company_id: string;
+  display_name: string;
+  sector: string;
+  synthetic_identifier: string;
+  case_id: string;
+  case_version: number | null;
+  transaction_count: number;
+  data_kind: "SYNTHETIC";
+}
+export interface AdminResult {
+  action: "SEED" | "RESET" | "ADD" | "DELETE";
+  enterprise_count: number;
+  case_ids: string[];
+  notice_fr: string;
 }
 export interface DocumentView {
   document: {
@@ -13,6 +117,7 @@ export interface DocumentView {
     sha256: string;
     page_count: number | null;
     acquisition_channel: string;
+    origin_group_id?: string | null;
     received_at: string;
     extraction_status: string;
     processing_limitations: string[];
@@ -45,6 +150,7 @@ export interface Allocation {
 export type Horizon = "SHORT_HORIZON" | "LONGER_HORIZON" | "UNKNOWN";
 export interface ContextClaim {
   claim_id: string;
+  project_id?: string | null;
   purpose_category: string;
   purpose_text: string;
   beneficiary_type: string;
@@ -84,6 +190,13 @@ export interface RequestView {
     status: string;
     published_at: string | null;
     allowed_document_types: string[];
+    origin?: "AUTOMATIC" | "OFFICER";
+    reason_codes?: string[];
+    reason_text_fr?: string | null;
+    target_response_at?: string | null;
+    target_kind?: string;
+    /** Read-time follow-up state computed by the service. */
+    overdue_state?: "ON_TRACK" | "FOLLOW_UP_DUE" | null;
   };
   questions: Question[];
   text_fr: string;
@@ -100,7 +213,7 @@ export interface ResponseView {
   case_version: number;
 }
 export interface BaseCase {
-  audience: Role;
+  audience: "COMPANY" | "OFFICER";
   case_id: string;
   company_id: string;
   company_display_name: string;
@@ -113,6 +226,7 @@ export interface BaseCase {
   context_assessment: ContextAssessmentView | null;
   mode: Mode;
   banner_fr: string;
+  capabilities?: { supports_null_project_id: boolean };
 }
 export interface CompanyCaseView extends BaseCase {
   audience: "COMPANY";
@@ -129,6 +243,7 @@ export interface Finding {
   finding_id: string;
   family: string;
   status: string;
+  transaction_id?: string;
   reason_code: string | null;
   quantity_difference: string | null;
   unit: string | null;
@@ -145,7 +260,72 @@ export interface Hypothesis {
 export interface Scenario {
   scenario_id: string;
   label: string;
-  outputs: Record<string, unknown>;
+  inputs: Record<string, string>;
+  outputs: Record<string, string>;
+  hypothetical: true;
+}
+/** One fixed-catalogue candidate explanation. Status is a label, never a probability. */
+export interface BriefHypothesis {
+  hypothesis_id: string;
+  name_fr: string;
+  status: "SUPPORTED" | "PLAUSIBLE" | "WEAK" | "CONTRADICTED" | "INSUFFICIENT";
+  supporting_refs: string[];
+  contradicting_refs: string[];
+  missing_evidence: string[];
+  why_it_matters_fr: string;
+}
+/** Mirrors boussla.contracts.InvestigatorBriefView (officer only). */
+export interface InvestigatorBrief {
+  case_id: string;
+  case_version: number;
+  summary_fr: string;
+  key_observations: { kind: string; text_fr: string; source_codes: string[] }[];
+  top_hypotheses: BriefHypothesis[];
+  missing_information: string[];
+  changes_since_previous_version: string[];
+  questions_proposed: string[];
+  questions_already_asked: string[];
+  reference_rule_ids: string[];
+  history_signal_codes: string[];
+  limitations: string[];
+  mode: Mode;
+  authoritative: false;
+  label_fr: string;
+  disclaimer_fr: string;
+}
+export interface InvoiceObservation {
+  observation_id: string;
+  document_id: string;
+  transaction_id: string | null;
+  perspective: string;
+  issuer_company_id: string | null;
+  buyer_company_id: string | null;
+  invoice_number: string;
+  invoice_version: string | null;
+  issued_on: string;
+  currency: string;
+  net_millimes: number;
+  tax_millimes: number;
+  gross_millimes: number;
+  origin_group_id: string;
+  lines: {
+    line_id: string;
+    item_description: string | null;
+    quantity: string;
+    unit: string;
+    unit_price_millimes: number;
+    line_net_millimes: number;
+  }[];
+}
+/** Pair-scoped buyer/seller comparison computed by the service. */
+export interface InvoiceComparison {
+  transaction_id: string;
+  buyer_observation_id: string | null;
+  seller_observation_id: string | null;
+  status: "CONCORDANT" | "DIFFERENCES" | "SINGLE_OBSERVATION";
+  label_fr: string;
+  difference_fields: string[];
+  counterparty_reason_code: string | null;
 }
 export interface ScoreSnapshot {
   review_index: number | null;
@@ -200,17 +380,16 @@ export interface OfficerCaseView extends BaseCase {
   candidate_passages: RetrievedPassage[];
   reference_note: GroundedNoteView | null;
   mode_by_node: Record<string, Mode>;
-  invoice_observations: {
-    document_id: string;
-    perspective: string;
-    issuer_company_id: string | null;
-    buyer_company_id: string | null;
-    invoice_number: string;
-    issued_on: string;
-    gross_millimes: number;
-    origin_group_id: string;
-    lines: { line_id: string; quantity: string; unit: string }[];
-  }[];
+  invoice_observations: InvoiceObservation[];
+  invoice_comparisons: InvoiceComparison[];
+  investigator_brief: InvestigatorBrief | null;
+  triage: TriageAssessment | null;
+  clarification_deadlines: ClarificationDeadline[];
+  history_signals: HistorySignal[];
+  enterprise_profile: EnterpriseProfile | null;
+  monthly_activity: MonthlyActivityEntry[];
+  payment_timeline: PaymentTimelineEntry[];
+  financial_snapshot: FinancialSnapshot | null;
   quantity_references: {
     reference_id: string;
     quantity: string;
@@ -220,13 +399,23 @@ export interface OfficerCaseView extends BaseCase {
 }
 export interface QueueItem {
   case_id: string;
+  company_id: string;
   company_display_name: string;
   case_version: number;
   review_index: number | null;
   evidence_coverage: string | null;
+  coverage_complete: boolean;
   active_finding_count: number;
   clarification_status: string;
   scope_note: string;
+  /** Queue urgency computed by the service (0..100); never the review index. */
+  triage_priority: number | null;
+  triage_reason_codes: string[];
+  sector: string | null;
+  synthetic_identifier: string | null;
+  last_activity_at: string | null;
+  history_signal_codes: string[];
+  history_anomaly: boolean | null;
 }
 export interface QueuePage {
   items: QueueItem[];

@@ -1,5 +1,7 @@
 # BOUSSLA React interface
 
+Final portfolio UI contract assumptions and integration fields: [PORTFOLIO_INTEGRATION.md](PORTFOLIO_INTEGRATION.md).
+
 The React application displays the existing `BousslaAppService` views. All case facts, checks, scores, permissions, and revisions remain in Python. The role switch is a **local simulation**, not production authentication.
 
 ## Local development
@@ -48,4 +50,4 @@ $env:BOUSSLA_E2E_URL='http://127.0.0.1:8000'
 npm.cmd run test:e2e
 ```
 
-The browser test writes synthetic jury screenshots to `docs/screenshots/react_ui/`. On Windows, the test/build may need permission to let Vite/esbuild read its config and to launch the browser.
+The browser test writes the synthetic release screenshots to `docs/screenshots/final_release/` when `BOUSSLA_E2E_SCREENSHOTS=1`. On Windows, the test/build may need permission to let Vite/esbuild read its config and to launch the browser.
