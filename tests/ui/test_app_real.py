@@ -62,6 +62,10 @@ def version(at: AppTest) -> int:
 
 def publish_request(at: AppTest) -> str:
     switch(at, "Agent")
+    pending = [r for r in svc(at).get_case(svc(at).registry.actors["DEMO-OFFICER"], CASE).requests
+               if r.request.status is RequestStatus.PUBLISHED_IN_DEMO]
+    if pending:  # the company's submission already triggered the automatic clarification
+        return pending[-1].request.request_id
     at.button(key="prepare_request").click().run()
     at.button(key="publish_request").click().run()
     assert not at.exception, at.exception
