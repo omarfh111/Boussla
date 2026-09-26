@@ -46,6 +46,7 @@ def test_long_interpretation_uses_exact_span_and_only_bounded_payload_fields():
         }
         assert "PRIVATE" not in request.content.decode()
         assert "beneficiary_type" not in request.content.decode()
+        assert "explicit_duration_text must be copied exactly from purpose_text" in payload["input"][0]["content"]
         return httpx.Response(200, json=provider_response())
 
     result = interpreter(handler).interpret(context())
@@ -85,6 +86,27 @@ def test_fabricated_span_or_invalid_structured_output_degrades_to_unknown(bad):
     assert result.suggested_horizon is HorizonBucket.UNKNOWN
     assert result.suggested_purpose_category is PurposeCategory.OTHER_OR_UNKNOWN
     assert result.mode is Mode.TEMPLATE
+
+
+def test_non_unknown_horizon_without_explicit_duration_span_is_rejected():
+    body = provider_response()
+    data = json.loads(body["output"][0]["content"][0]["text"])
+    data["explicit_duration_text"] = None
+    body["output"][0]["content"][0]["text"] = json.dumps(data)
+    result = interpreter(lambda request: httpx.Response(200, json=body)).interpret(context())
+    assert result.mode is Mode.TEMPLATE and result.suggested_horizon is HorizonBucket.UNKNOWN
+
+
+def test_exact_explicit_duration_is_added_to_supporting_spans_when_separate():
+    body = provider_response()
+    data = json.loads(body["output"][0]["content"][0]["text"])
+    data["supporting_spans"] = ["Construction d'un dépôt logistique"]
+    body["output"][0]["content"][0]["text"] = json.dumps(data)
+    result = interpreter(lambda request: httpx.Response(200, json=body)).interpret(context())
+    assert result.mode is Mode.LIVE
+    assert result.supporting_spans == (
+        "Construction d'un dépôt logistique", "environ dix-huit mois",
+    )
 
 
 def test_provider_outage_and_missing_key_are_nonfatal():

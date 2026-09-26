@@ -59,6 +59,9 @@ class OpenAIContextInterpreter:
                     "Return a candidate purpose category and short/long/unknown horizon. "
                     "The horizon is a BOUSSLA demo convention, not legal, tax, accounting or risk advice. "
                     "Do not calculate days or infer dates. Copy exact supporting substrings from purpose_text. "
+                    "When suggested_horizon is SHORT_HORIZON or LONGER_HORIZON, "
+                    "explicit_duration_text must be copied exactly from purpose_text. "
+                    "If no explicit duration phrase exists, use UNKNOWN and null. "
                     "The declared fields are context, not proof and not values to copy when prose lacks support. "
                     "Use UNKNOWN and OTHER_OR_UNKNOWN when the prose does not support a conclusion. "
                     "Do not invent projects, beneficiaries, quantities, law, invoice or payment facts."
@@ -97,11 +100,14 @@ class OpenAIContextInterpreter:
                     or not all(isinstance(a, str) and 1 <= len(a) <= 80 for a in ambiguities)
                     or (explicit is not None and (
                         not isinstance(explicit, str) or explicit not in context.purpose_text
-                        or explicit not in spans
                     ))
                     or (horizon is not HorizonBucket.UNKNOWN and not explicit)
                     or (category is not PurposeCategory.OTHER_OR_UNKNOWN and not spans)):
                 raise ValueError("unsupported semantic conclusion")
+            if explicit and explicit not in spans:
+                if len(spans) == 4:
+                    raise ValueError("too many supporting spans")
+                spans = [*spans, explicit]
             return ContextInterpretation(
                 suggested_purpose_category=category, suggested_horizon=horizon,
                 explicit_duration_text=explicit, supporting_spans=tuple(spans),
