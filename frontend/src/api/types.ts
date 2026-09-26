@@ -5,6 +5,43 @@ export interface Bootstrap {
   role: Role;
   case_ids: string[];
   banner_fr: string;
+  demo_admin?: DemoAdminCapabilities;
+}
+/** Additive contract fields expected from lanes A/B/C. Absent fields stay unknown. */
+export interface DemoAdminCapabilities {
+  can_list: boolean;
+  can_seed: boolean;
+  can_reset: boolean;
+  can_add: boolean;
+  can_delete: boolean;
+}
+export interface EnterpriseProfile {
+  display_name: string;
+  sector: string | null;
+  synthetic_identifier: string | null;
+  activity_period: { start: string | null; end: string | null } | null;
+}
+export interface PaymentTimelineEntry {
+  payment_id: string;
+  occurred_at: string | null;
+  amount_millimes: number | null;
+  currency: string | null;
+  status: string;
+  origin_group_id: string | null;
+}
+export interface MonthlyActivityEntry {
+  month: string;
+  transaction_count: number;
+  inflow_millimes: number | null;
+  outflow_millimes: number | null;
+  source_label: string;
+}
+export interface FinancialActivity {
+  observed_settlements_millimes: number | null;
+  inflow_millimes: number | null;
+  outflow_millimes: number | null;
+  currency: string;
+  source_label: string;
 }
 export interface DocumentView {
   document: {
@@ -13,6 +50,8 @@ export interface DocumentView {
     sha256: string;
     page_count: number | null;
     acquisition_channel: string;
+    perspective?: string | null;
+    origin_group_id?: string | null;
     received_at: string;
     extraction_status: string;
     processing_limitations: string[];
@@ -84,6 +123,12 @@ export interface RequestView {
     status: string;
     published_at: string | null;
     allowed_document_types: string[];
+    origin?: "AUTOMATIC" | "OFFICER";
+    reason_codes?: string[];
+    reason_text_fr?: string | null;
+    target_response_at?: string | null;
+    target_kind?: string;
+    overdue_state?: string | null;
   };
   questions: Question[];
   text_fr: string;
@@ -113,6 +158,11 @@ export interface BaseCase {
   context_assessment: ContextAssessmentView | null;
   mode: Mode;
   banner_fr: string;
+  enterprise_profile?: EnterpriseProfile | null;
+  payment_timeline?: PaymentTimelineEntry[];
+  monthly_activity?: MonthlyActivityEntry[];
+  financial_activity?: FinancialActivity | null;
+  capabilities?: { supports_null_project_id: boolean };
 }
 export interface CompanyCaseView extends BaseCase {
   audience: "COMPANY";
@@ -141,11 +191,52 @@ export interface Hypothesis {
   status: string;
   scope: string;
   missing_evidence_types: string[];
+  name_fr?: string;
+  support_index?: number | null;
+  supporting_refs?: EvidenceRef[];
+  contradicting_refs?: EvidenceRef[];
 }
 export interface Scenario {
   scenario_id: string;
   label: string;
   outputs: Record<string, unknown>;
+  hypothetical?: boolean;
+}
+export interface InvestigatorBrief {
+  summary_fr: string | null;
+  key_observations: { text_fr: string; evidence_refs: EvidenceRef[] }[];
+  top_hypotheses: Hypothesis[];
+  missing_information: string[];
+  changes_since_last_version: string[];
+  questions_proposed: string[];
+  questions_already_asked: string[];
+  candidate_public_references: RetrievedPassage[];
+  mode: Mode;
+}
+export interface InvoiceObservation {
+  document_id: string;
+  transaction_id?: string | null;
+  perspective: string;
+  issuer_company_id: string | null;
+  buyer_company_id: string | null;
+  invoice_number: string;
+  issued_on: string;
+  currency?: string | null;
+  net_millimes?: number | null;
+  tax_millimes?: number | null;
+  gross_millimes: number;
+  origin_group_id: string;
+  lines: {
+    line_id: string;
+    item_description?: string | null;
+    quantity: string;
+    unit: string;
+  }[];
+}
+export interface InvoiceComparison {
+  status: string;
+  reason_code: string | null;
+  difference_fields: string[];
 }
 export interface ScoreSnapshot {
   review_index: number | null;
@@ -200,17 +291,9 @@ export interface OfficerCaseView extends BaseCase {
   candidate_passages: RetrievedPassage[];
   reference_note: GroundedNoteView | null;
   mode_by_node: Record<string, Mode>;
-  invoice_observations: {
-    document_id: string;
-    perspective: string;
-    issuer_company_id: string | null;
-    buyer_company_id: string | null;
-    invoice_number: string;
-    issued_on: string;
-    gross_millimes: number;
-    origin_group_id: string;
-    lines: { line_id: string; quantity: string; unit: string }[];
-  }[];
+  invoice_observations: InvoiceObservation[];
+  invoice_comparison?: InvoiceComparison | null;
+  investigator_brief?: InvestigatorBrief | null;
   quantity_references: {
     reference_id: string;
     quantity: string;
@@ -227,6 +310,14 @@ export interface QueueItem {
   active_finding_count: number;
   clarification_status: string;
   scope_note: string;
+  company_id?: string;
+  sector?: string | null;
+  synthetic_identifier?: string | null;
+  triage?: { label_fr: string; rank: number; level: string } | null;
+  coverage_complete?: boolean | null;
+  last_activity_at?: string | null;
+  historical_signals?: { label_fr: string; status: string }[];
+  history_anomaly?: boolean | null;
 }
 export interface QueuePage {
   items: QueueItem[];

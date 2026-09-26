@@ -5,16 +5,22 @@
   type FormEvent,
   type ReactNode,
 } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   Activity,
   ArrowRight,
   BookOpen,
+  Building2,
   Check,
   ChevronRight,
   CircleHelp,
   ClipboardList,
   Compass,
+  Database,
   FileText,
   FolderOpen,
   History,
@@ -24,6 +30,15 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ApiError, api } from "./api/client";
+import {
+  Company360,
+  DemoAdmin,
+  HypothesisCards,
+  InvestigatorPanel,
+  InvoiceCompare,
+  Portfolio,
+  ScenarioCards,
+} from "./portfolio/components";
 import type {
   Role,
   CompanyCaseView,
@@ -46,10 +61,12 @@ type Tab =
   | "requests"
   | "documents"
   | "queue"
+  | "company360"
   | "dossier"
   | "references"
   | "history"
-  | "diagnostics";
+  | "diagnostics"
+  | "admin";
 const companyTabs: [Tab, string, ReactNode][] = [
   ["overview", "Vue d’ensemble", <LayoutDashboard size={18} />],
   ["operations", "Opérations", <Activity size={18} />],
@@ -59,10 +76,12 @@ const companyTabs: [Tab, string, ReactNode][] = [
 ];
 const officerTabs: [Tab, string, ReactNode][] = [
   ["queue", "File de revue", <LayoutDashboard size={18} />],
+  ["company360", "Entreprise 360", <Building2 size={18} />],
   ["dossier", "Dossier", <Search size={18} />],
   ["references", "Références", <BookOpen size={18} />],
   ["history", "Historique", <History size={18} />],
   ["diagnostics", "Diagnostics", <Activity size={18} />],
+  ["admin", "Données démo", <Database size={18} />],
 ];
 const status: Record<string, string> = {
   UNRESOLVED: "À clarifier",
@@ -349,6 +368,7 @@ function AppInner() {
   const query = useQueryClient();
   const [role, setRole] = useState<Role>("OFFICER");
   const [tab, setTab] = useState<Tab>("queue");
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [revision, setRevision] = useState<RevisionResult | null>(null);
   const locked = useRef(false);
@@ -356,7 +376,10 @@ function AppInner() {
     queryKey: ["bootstrap", role],
     queryFn: () => api.bootstrap(role),
   });
-  const caseId = bootstrap.data?.case_ids[0];
+  const caseId =
+    selectedCaseId && bootstrap.data?.case_ids.includes(selectedCaseId)
+      ? selectedCaseId
+      : bootstrap.data?.case_ids[0];
   const caseQuery = useQuery({
     queryKey: ["case", role, caseId],
     queryFn: () => api.case(role, caseId!),
@@ -367,6 +390,7 @@ function AppInner() {
     if (next === role) return;
     setRole(next);
     setTab(next === "COMPANY" ? "overview" : "queue");
+    setSelectedCaseId(null);
     setNotice("");
     setRevision(null);
     query.removeQueries({ queryKey: ["case"] });
@@ -508,7 +532,20 @@ function AppInner() {
           ) : current.audience === "COMPANY" ? (
             <Company caseView={current} tab={tab} act={act} />
           ) : (
-            <Officer caseView={current} tab={tab} act={act} setTab={setTab} />
+            <Officer
+              caseView={current}
+              tab={tab}
+              act={act}
+              setTab={setTab}
+              onSelectCase={(id) => {
+                if (!bootstrap.data?.case_ids.includes(id)) {
+                  setNotice("Ce dossier n’est pas assigné à ce rôle.");
+                  return;
+                }
+                setSelectedCaseId(id);
+                setTab("company360");
+              }}
+            />
           )}
         </main>
       </div>
@@ -615,7 +652,7 @@ function Company({
         <SectionHead
           label="ÉCHANGES"
           title="Demandes de précision"
-          detail="Les questions publiées par l’agent apparaissent ici."
+          detail="Les demandes disponibles pour ce dossier apparaissent ici."
         />
         <RequestInbox c={c} act={act} />
       </>
@@ -786,14 +823,16 @@ function ContextForm({
     if (pending) return;
     setPending(true);
     const data = new FormData(e.currentTarget);
+    const context: Record<string, FormDataEntryValue | null> =
+      Object.fromEntries([...data].filter(([, value]) => value !== ""));
+    if (
+      data.get("project_id") === "__GENERAL__" &&
+      c.capabilities?.supports_null_project_id
+    )
+      context.project_id = null;
     try {
       await act(
-        () =>
-          api.context(
-            c.case_id,
-            c.case_version,
-            Object.fromEntries([...data].filter(([, value]) => value !== "")),
-          ),
+        () => api.context(c.case_id, c.case_version, context),
         "Contexte déclaré et nouvelle version créée.",
       );
     } catch {
@@ -814,6 +853,11 @@ function ContextForm({
                   {p.label}
                 </option>
               ))}
+              {c.capabilities?.supports_null_project_id && (
+                <option value="__GENERAL__">
+                  Aucun projet / usage général de l’entreprise
+                </option>
+              )}
             </select>
           </label>
           <label>
@@ -824,7 +868,9 @@ function ContextForm({
               </option>
               <option value="RESALE">Revente</option>
               <option value="OPERATING_USE">Usage d’exploitation</option>
-              <option value="LONG_LIVED_ASSET">Actif durable</option>
+              <option value="LONG_LIVED_ASSET">
+                Actif durable (ex. achat de véhicule)
+              </option>
               <option value="OTHER_OR_UNKNOWN">Autre / à préciser</option>
             </select>
           </label>
@@ -867,7 +913,13 @@ function ContextForm({
             Fin prévue
             <input name="planned_end" type="date" />
           </label>
-          <button className="primary wide" disabled={pending}>
+          <button
+            className="primary wide"
+            disabled={
+              pending ||
+              (!c.projects.length && !c.capabilities?.supports_null_project_id)
+            }
+          >
             {pending ? "Enregistrement…" : "Enregistrer la déclaration"}
           </button>
         </form>
@@ -1005,6 +1057,21 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                       {d.document.acquisition_channel.replaceAll("_", " ")}
                     </dd>
                   </div>
+                  {d.document.perspective && (
+                    <div>
+                      <dt>Perspective</dt>
+                      <dd>
+                        {status[d.document.perspective] ||
+                          d.document.perspective}
+                      </dd>
+                    </div>
+                  )}
+                  {d.document.origin_group_id && (
+                    <div>
+                      <dt>Groupe d’origine</dt>
+                      <dd>{d.document.origin_group_id}</dd>
+                    </div>
+                  )}
                   <div>
                     <dt>SHA-256</dt>
                     <dd className="mono">{short(d.document.sha256)}</dd>
@@ -1052,6 +1119,30 @@ function RequestInbox({
                 .map((kind) => status[kind] || kind)
                 .join(", ") || "à préciser"}
             </p>
+            {r.request.origin === "AUTOMATIC" && (
+              <p className="auto-request-banner">
+                BOUSSLA a demandé automatiquement des précisions
+              </p>
+            )}
+            {(r.request.reason_text_fr || r.request.reason_codes?.length) && (
+              <p>
+                Pourquoi cette demande :{" "}
+                {r.request.reason_text_fr ||
+                  r.request.reason_codes?.join(" · ")}
+              </p>
+            )}
+            {r.request.target_response_at && (
+              <p>
+                Date cible de réponse (démonstration) :{" "}
+                {date(r.request.target_response_at)}
+              </p>
+            )}
+            {r.request.overdue_state && (
+              <p>
+                État de suivi :{" "}
+                {status[r.request.overdue_state] || r.request.overdue_state}
+              </p>
+            )}
             <p>{r.text_fr}</p>
             <ul className="question-list">
               {r.questions.map((q) => (
@@ -1356,16 +1447,20 @@ function Officer({
   tab,
   act,
   setTab,
+  onSelectCase,
 }: {
   caseView: OfficerCaseView;
   tab: Tab;
   act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
   setTab: (tab: Tab) => void;
+  onSelectCase: (caseId: string) => void;
 }) {
-  if (tab === "queue") return <Queue setTab={setTab} />;
+  if (tab === "queue") return <Queue onSelectCase={onSelectCase} />;
+  if (tab === "company360") return <Company360Tab c={c} />;
   if (tab === "references") return <References c={c} />;
   if (tab === "history") return <HistoryPanel c={c} />;
   if (tab === "diagnostics") return <Diagnostics c={c} />;
+  if (tab === "admin") return <AdminTab />;
   return (
     <>
       <SectionHead
@@ -1418,8 +1513,9 @@ function Officer({
       </div>
       <p className="hero-caption">
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
-        les contrôles déterministes — pas une probabilité de fraude.
+        les contrôles déterministes.
       </p>
+      <InvestigatorPanel brief={c.investigator_brief} />
       <div className="two-col">
         <QuantityStory c={c} />
         <Clarification c={c} act={act} />
@@ -1429,125 +1525,74 @@ function Officer({
         <Proposals c={c} act={act} />
       </div>
       <div className="two-col">
-        <Observations c={c} />
-        <Panel eyebrow="HYPOTHÈSES" title="Pistes examinées">
-          {c.hypotheses.length ? (
-            c.hypotheses.map((h) => (
-              <div className="list-row" key={h.hypothesis_id}>
-                <div>
-                  <strong>{h.hypothesis_id}</strong>
-                  <small>{h.scope}</small>
-                  <small>
-                    Pièces attendues :{" "}
-                    {h.missing_evidence_types.length
-                      ? h.missing_evidence_types
-                          .map((kind) => status[kind] || kind)
-                          .join(", ")
-                      : "aucune indiquée"}
-                  </small>
-                </div>
-                {badge(h.status)}
-              </div>
-            ))
-          ) : (
-            <Empty>Aucune hypothèse disponible.</Empty>
-          )}
-        </Panel>
+        <InvoiceCompare
+          observations={c.invoice_observations}
+          finding={c.findings.find((f) => f.family === "COUNTERPARTY") ?? null}
+          comparison={c.invoice_comparison ?? null}
+        />
+        <HypothesisCards
+          hypotheses={c.investigator_brief?.top_hypotheses ?? c.hypotheses}
+        />
       </div>
       <ContextAssessment ctx={c.context_assessment} />
-      <Panel eyebrow="SIMULATION HYPOTHÉTIQUE" title="Scénarios de sensibilité">
-        <p className="footnote">
-          Ces scénarios n’altèrent pas l’état canonique du dossier.
-        </p>
-        {c.scenarios.map((s) => (
-          <div className="list-row" key={s.scenario_id}>
-            <strong>{s.label}</strong>
-            <span className="mono">
-              {Object.entries(s.outputs)
-                .map(
-                  ([key, value]) =>
-                    `${scenarioLabel[key] || key}: ${status[String(value)] || String(value)}`,
-                )
-                .join(" · ")}
-            </span>
-          </div>
-        ))}
-      </Panel>
+      <ScenarioCards
+        reviewIndex={c.score?.review_index}
+        scenarios={c.scenarios}
+      />
     </>
   );
 }
 
-function Queue({ setTab }: { setTab: (tab: Tab) => void }) {
-  const q = useQuery({ queryKey: ["queue"], queryFn: api.queue });
+function Queue({ onSelectCase }: { onSelectCase: (caseId: string) => void }) {
+  const q = useInfiniteQuery({
+    queryKey: ["queue"],
+    initialPageParam: undefined as string | undefined,
+    queryFn: ({ pageParam }) => api.queue(pageParam),
+    getNextPageParam: (page) => page.next_cursor ?? undefined,
+  });
   return (
     <>
-      <SectionHead
-        label="PRIORISATION"
-        title="File de revue"
-        detail="Les dossiers sont ordonnés selon les contrôles déterministes disponibles."
-      />
-      <Panel
-        eyebrow="DOSSIERS ASSIGNÉS"
-        title="À examiner"
-        action={
-          <span className="badge">{q.data?.items.length ?? "—"} dossiers</span>
-        }
-      >
-        {q.isLoading ? (
-          <Skeleton />
-        ) : q.isError ? (
-          <p role="alert">File indisponible : {q.error.message}</p>
-        ) : !q.data?.items.length ? (
-          <Empty>Aucun dossier assigné.</Empty>
-        ) : (
-          <div className="queue-list">
-            {q.data.items.map((item) => (
-              <button
-                className="queue-item"
-                key={item.case_id}
-                onClick={() => setTab("dossier")}
-              >
-                <div className="queue-company">
-                  <span className="queue-icon">
-                    <FolderOpen size={21} />
-                  </span>
-                  <div>
-                    <strong>{item.company_display_name}</strong>
-                    <small>
-                      {item.case_id} · v{item.case_version}
-                    </small>
-                  </div>
-                </div>
-                <div>
-                  <small>Priorité de revue</small>
-                  <strong className="priority-number">
-                    {format(item.review_index)}
-                  </strong>
-                </div>
-                <div>
-                  <small>Couverture des preuves</small>
-                  <strong>
-                    {format(item.evidence_coverage)}
-                    {item.evidence_coverage ? " %" : ""}
-                  </strong>
-                </div>
-                <div>
-                  <small>Constats actifs</small>
-                  <strong>{item.active_finding_count}</strong>
-                </div>
-                <div>{badge(item.clarification_status)}</div>
-                <ChevronRight size={19} />
-              </button>
-            ))}
-          </div>
-        )}
-      </Panel>
-      <p className="footnote">
-        <CircleHelp size={14} /> Indice de priorisation documentaire calculé par
-        les contrôles déterministes — pas une probabilité de fraude.
-      </p>
+      {q.isLoading ? (
+        <Skeleton />
+      ) : q.isError ? (
+        <p role="alert">File indisponible : {q.error.message}</p>
+      ) : (
+        <>
+          <Portfolio
+            items={q.data?.pages.flatMap((page) => page.items) ?? []}
+            onOpen={onSelectCase}
+          />
+          {q.hasNextPage && (
+            <button
+              className="secondary"
+              disabled={q.isFetchingNextPage}
+              onClick={() => q.fetchNextPage()}
+            >
+              {q.isFetchingNextPage
+                ? "Chargement…"
+                : "Charger plus de dossiers"}
+            </button>
+          )}
+        </>
+      )}
     </>
   );
+}
+
+function Company360Tab({ c }: { c: OfficerCaseView }) {
+  const history = useQuery({
+    queryKey: ["history", "OFFICER", c.case_id],
+    queryFn: () => api.history("OFFICER", c.case_id),
+  });
+  return <Company360 c={c} history={history.data ?? null} />;
+}
+
+function AdminTab() {
+  const queue = useQuery({
+    queryKey: ["queue", "admin"],
+    queryFn: () => api.queue(),
+  });
+  return <DemoAdmin items={queue.data?.items ?? []} />;
 }
 
 function QuantityStory({ c }: { c: OfficerCaseView }) {
@@ -1748,7 +1793,26 @@ function Clarification({
           <strong>Demandes existantes</strong>
           {c.requests.map((r) => (
             <div className="list-row" key={r.request.request_id}>
-              <span className="mono">{r.request.request_id}</span>
+              <span>
+                <span className="mono">{r.request.request_id}</span>
+                {r.request.origin === "AUTOMATIC" && (
+                  <small>Demande automatique de BOUSSLA</small>
+                )}
+                {r.request.reason_text_fr && (
+                  <small>{r.request.reason_text_fr}</small>
+                )}
+                {r.request.target_response_at && (
+                  <small>
+                    Date cible de démo : {date(r.request.target_response_at)}
+                  </small>
+                )}
+                {r.request.overdue_state && (
+                  <small>
+                    Suivi :{" "}
+                    {status[r.request.overdue_state] || r.request.overdue_state}
+                  </small>
+                )}
+              </span>
               {badge(r.request.status)}
             </div>
           ))}
