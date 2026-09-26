@@ -62,7 +62,9 @@ test("context mismatch asks for clarification, correction becomes consistent, pr
   await expect(page.locator("body")).not.toContainText(/risque|fraude/i);
   if (process.env.BOUSSLA_E2E_SCREENSHOTS === "1") {
     mkdirSync(shots, { recursive: true });
-    await page.locator(".context-grid").scrollIntoViewIfNeeded();
+    await page
+      .locator(".panel", { has: page.locator(".context-grid") })
+      .evaluate((el) => el.scrollIntoView({ block: "start" }));
     await page.screenshot({
       path: resolve(shots, "03_context_consistency.png"),
     });

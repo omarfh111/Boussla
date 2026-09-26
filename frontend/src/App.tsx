@@ -150,6 +150,15 @@ const choiceLabel: Record<string, string> = {
   LONGER_HORIZON: "Projet à horizon plus long",
   ...purposeLabel,
 };
+const nodeLabel: Record<string, string> = {
+  checks: "Contrôles déterministes",
+  retrieval: "Recherche de références publiques",
+  router: "Routage des pièces (Jev)",
+  context: "Interprétation du contexte",
+  reference_note: "Synthèse de références",
+  extractor: "Extraction des champs",
+  planner: "Planification des questions",
+};
 const HORIZON_CONVENTION_FR =
   "Cette catégorie est une convention de démonstration BOUSSLA ; elle ne constitue pas une classification fiscale, comptable ou juridique.";
 const scenarioLabel: Record<string, string> = {
@@ -874,7 +883,8 @@ function ContextForm({
                 </div>
                 <strong>{claim.purpose_text}</strong>
                 <p>
-                  {claim.beneficiary_type} · {format(claim.stage)}
+                  {claim.beneficiary_type} · {format(claim.stage)} ·{" "}
+                  {horizonLabel[claim.declared_horizon] || "Non précisé"}
                 </p>
               </div>
             ))}
@@ -1970,7 +1980,7 @@ function Diagnostics({ c }: { c: OfficerCaseView }) {
         <div className="diag-grid">
           {Object.entries(modes).map(([name, mode]) => (
             <div className="diag-row" key={name}>
-              <span>{name}</span>
+              <span>{nodeLabel[name] || name}</span>
               {badge(mode)}
             </div>
           ))}
