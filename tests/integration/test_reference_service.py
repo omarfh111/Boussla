@@ -215,3 +215,13 @@ def test_build_service_wires_assistant_hermetically():
     assert svc.reference_assistant is not None and svc.reference_assistant.generator is None
     assert svc.reference_assistant.retriever.backend_mode == "LEXICAL"
     assert officer(svc, BRICKS).mode_by_node["retrieval"] is Mode.TEMPLATE
+
+
+def test_unexpected_generator_exception_keeps_passages(base):
+    """Any generator error type (not only httpx/ValueError) must only drop the note."""
+    class Exploding:
+        def generate(self, reasons, passages):
+            raise RuntimeError("unexpected provider client failure")
+    view = officer(with_assistant(base, ReferenceAssistant(qdrant_retriever(), Exploding())))
+    assert view.candidate_passages and view.reference_note is None
+    assert view.mode_by_node["retrieval"] is Mode.LIVE and view.mode_by_node["reference_note"] is Mode.NOT_RUN

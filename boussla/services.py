@@ -60,6 +60,22 @@ def _validated(model, **fields):
 FOLLOW_UP_DAYS = 7
 
 
+class _GuardedNoteGenerator:
+    """Any note-generation error only drops the note; retrieved passages always survive."""
+
+    def __init__(self, inner) -> None:
+        self._inner = inner
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    def generate(self, reasons, passages):
+        try:
+            return self._inner.generate(reasons, passages)
+        except Exception:  # noqa: BLE001 - provider/client failure is never fatal or a finding
+            return None
+
+
 @dataclass(frozen=True)
 class Evaluation:
     """Deterministic analysis of one case version (derived, never stored as fact)."""
@@ -92,6 +108,9 @@ class BousslaAppService:
         # once per service/process. Enrichment runs AFTER deterministic evaluation and
         # never feeds findings, hypotheses, scores, acceptance or revisions.
         self.reference_assistant = reference_assistant
+        generator = getattr(reference_assistant, "generator", None)
+        if generator is not None and not isinstance(generator, _GuardedNoteGenerator):
+            reference_assistant.generator = _GuardedNoteGenerator(generator)
         self._reference_cache: dict[tuple, tuple] = {}
 
     # ================================================================ helpers
