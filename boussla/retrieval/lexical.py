@@ -16,7 +16,7 @@ class ReferenceRecord:
     source_url: str
     source_hash: str
     document_title: str
-    source_date: date
+    source_date: date | None
     page: int | None
     article: str | None
     language: str
