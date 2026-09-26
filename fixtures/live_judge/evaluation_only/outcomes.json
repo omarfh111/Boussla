@@ -195,7 +195,13 @@
   },
   "JUDGE-048": {
     "invariant": "LIVE EXTRACTION",
-    "phase": 1
+    "phase": 1,
+    "normalized_money": {
+      "net_millimes": "4000000",
+      "tax_millimes": "760000",
+      "gross_millimes": "4760000",
+      "line_unit_price_millimes": "2000"
+    }
   },
   "JUDGE-049": {
     "invariant": "LIVE PLANNER",

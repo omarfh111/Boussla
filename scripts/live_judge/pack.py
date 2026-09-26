@@ -226,6 +226,9 @@ def generate() -> dict:
                 "invoice-fr.pdf": "INVOICE", "credit-note.pdf": "CREDIT_NOTE", "payment.pdf": "PAYMENT_RECORD",
                 "delivery.pdf": "DELIVERY_RECORD", "allocation-reference.pdf": "ALLOCATION_REFERENCE",
                 "allocation-response.pdf": "ALLOCATION_RESPONSE", "ambiguous.pdf": "OTHER_OR_UNKNOWN"}
+        if handler == "live" and variant == "extraction":
+            expectations[sid]["normalized_money"] = {"net_millimes": "4000000", "tax_millimes": "760000",
+                "gross_millimes": "4760000", "line_unit_price_millimes": "2000"}
     (PACK / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     (PACK / "evaluation_only" / "outcomes.json").write_text(
         json.dumps(expectations, indent=2) + "\n", encoding="utf-8")
