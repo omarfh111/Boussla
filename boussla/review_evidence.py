@@ -13,13 +13,17 @@ from boussla.review_progress import ProgressEvidence
 CAUSE_QUESTIONS = {
     FindingFamily.QUANTITY: frozenset({"Q-PROJECT-ALLOCATION", "Q-STOCK"}),
     FindingFamily.COUNTERPARTY: frozenset({"Q-COUNTERPART-RECORD"}),
-    FindingFamily.SETTLEMENT: frozenset(),
+    FindingFamily.SETTLEMENT: frozenset({"Q-PAYMENT-DETAILS", "Q-PAYMENT-AMOUNT", "Q-PAYMENT-DATE"}),
 }
 
 
 def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, list],
                              previous_snapshot: object | None) -> tuple[ProgressEvidence, ...]:
     requests = {v.request.request_id: v.request for v in facts.get("request", ())}
+    question_scopes = {v.request.request_id: {q.question_id: set(q.related_fact_ids) for q in v.questions}
+                       for v in facts.get("request", ())}
+    file_questions = {v.request.request_id: {q.question_id for q in v.questions
+                      if q.answer_kind in ("DOCUMENT", "TEXT_WITH_FILE")} for v in facts.get("request", ())}
     proposals = {p.source_response_id: p for p in facts.get("proposal", ()) if p.source_response_id}
     documents = {d.document_id for d in facts.get("document", ())}
     extractions = {e.document_id: e for e in facts.get("extraction", ())}
@@ -45,17 +49,25 @@ def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, lis
             scoped_proposal = (proposal is not None
                                and proposal.transaction_id == transaction_id
                                and family is FindingFamily.QUANTITY)
-            answered = {q for q, value in response.answers.items() if value.strip()}
+            scopes = question_scopes.get(response.request_id, {})
+            answered = {q for q, value in response.answers.items() if value.strip()
+                        and (not scopes.get(q) or transaction_id in scopes[q] or bool(scopes[q] & refs))}
+            from boussla.playbook import QUESTION_FAMILY
+            file_linked = bool(response.document_ids and any(
+                QUESTION_FAMILY.get(qid) == family and transaction_id in scopes.get(qid, set())
+                for qid in file_questions.get(response.request_id, ())))
             scoped_question = (family is FindingFamily.QUANTITY
                                and "Q-PROJECT-ALLOCATION" in answered
                                and bool(set(request.fact_ids) & refs))
             linked = bool(set(request.fact_ids) & (refs | {transaction_id} |
                                                     {f.finding_id for f in related}))
-            scoped_reason = (linked and bool(reason_codes & set(request.reason_codes))
-                             and bool(answered & CAUSE_QUESTIONS[family]))
+            family_answers = answered & CAUSE_QUESTIONS[family]
+            scoped_reason = (bool(family_answers) and (
+                linked and bool(reason_codes & set(request.reason_codes))
+                or any(transaction_id in scopes.get(qid, set()) for qid in family_answers)))
             if proposal is not None and not scoped_proposal:
                 continue  # A structured allocation cannot also resolve another cause.
-            if not (scoped_proposal or scoped_question or scoped_reason):
+            if not (scoped_proposal or scoped_question or scoped_reason or file_linked):
                 continue
             document_id = next((d for d in response.document_ids if d in documents), None)
             if proposal is not None and scoped_proposal and proposal.source_document_id in documents:

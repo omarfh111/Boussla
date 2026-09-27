@@ -289,7 +289,7 @@ def test_public_transcription_api_reaches_coherence_and_persists_recalculation(s
                            json=payload).status_code == 403
     assert service.get_case(officer, CASE).score.review_index == 10
     snapshot = service.store.revisions(CASE)[-1].score_snapshot
-    assert snapshot.review_index == 10 and snapshot.engine_version == "progressive-review-2"
+    assert snapshot.review_index == 10 and snapshot.engine_version == "progressive-review-3"
     # A correction outside the actual source cannot keep the old corroborating span.
     service.confirm_transcription(company, CASE, extraction.proposal_id,
         {**fields, "allocation.P2.quantity": "800"}, version(service), "real-correct")
@@ -354,3 +354,15 @@ def test_upload_analysis_is_persisted_idempotently_and_internal_causes_are_offic
     assert all(d.analysis is None for d in service.get_case(company,CASE).documents)
     assert len([e for e in service.store.events(CASE) if e.kind == "DOCUMENT_ANALYZED"]) == 1
     assert view.score.review_index == 20
+
+
+def test_identical_pending_request_is_reused_without_duplicate_event(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    draft = service.prepare_clarification(officer,CASE,version(service))
+    first = service.publish_clarification(officer,CASE,draft.draft_id,version(service),"first")
+    draft = service.prepare_clarification(officer,CASE,version(service))
+    before = version(service)
+    repeated = service.publish_clarification(officer,CASE,draft.draft_id,before,"repeat")
+    assert repeated.request.request_id == first.request.request_id and version(service) == before
+    assert service.publish_clarification(officer,CASE,draft.draft_id,before,"repeat") == repeated
+    assert len([e for e in service.store.events(CASE) if e.kind == "REQUEST_PUBLISHED"]) == 1

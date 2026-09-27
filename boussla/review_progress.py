@@ -10,7 +10,7 @@ from boussla.contracts import (
 )
 from boussla.scoring import WEIGHTS
 
-RULE_VERSION = "progressive-review-2"
+RULE_VERSION = "progressive-review-3"
 
 FACTORS = {
     ProgressStage.UNRESOLVED: Decimal("1"),

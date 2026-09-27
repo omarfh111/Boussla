@@ -1427,6 +1427,7 @@ function ResponseComposer({
       {request.questions.map((q, i) => (
         <label key={q.question_id}>
           {q.text_fr}
+          {q.scope_note_fr && <small>{q.scope_note_fr}</small>}
           {q.answer_kind === "CHOICE" && q.choices?.length ? (
             <select
               required={i === 0}
@@ -1442,10 +1443,20 @@ function ResponseComposer({
                 </option>
               ))}
             </select>
+          ) : q.answer_kind === "NUMBER" || q.answer_kind === "DATE" ? (
+            <input
+              type={q.answer_kind === "DATE" ? "date" : "number"}
+              step={q.answer_kind === "NUMBER" ? "any" : undefined}
+              min={q.answer_kind === "NUMBER" ? "0" : undefined}
+              value={answers[q.question_id] || ""}
+              onChange={(e) =>
+                setAnswers({ ...answers, [q.question_id]: e.target.value })
+              }
+            />
           ) : (
             <textarea
               rows={3}
-              required={i === 0}
+              required={i === 0 && q.answer_kind !== "DOCUMENT"}
               value={answers[q.question_id] || ""}
               onChange={(e) =>
                 setAnswers({ ...answers, [q.question_id]: e.target.value })

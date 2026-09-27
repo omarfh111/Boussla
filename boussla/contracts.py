@@ -691,9 +691,11 @@ class TransactionInputs(Contract):
 class Question(Contract):
     question_id: str
     text_fr: str
-    answer_kind: Literal["TEXT", "PROJECT", "DATE_RANGE", "QUANTITY", "DOCUMENT", "CHOICE"] = "TEXT"
+    answer_kind: Literal["TEXT", "PROJECT", "DATE_RANGE", "QUANTITY", "DOCUMENT", "CHOICE", "NUMBER", "DATE", "TEXT_WITH_FILE"] = "TEXT"
     choices: tuple[str, ...] = ()
     related_fact_ids: tuple[str, ...] = ()
+    scope_note_fr: str | None = None
+    rule_version: str = "question-policy-2"
 
 
 class ClarificationRequest(Contract):

@@ -233,6 +233,8 @@ export interface ContextAssessmentView {
   horizon_convention_fr: string;
 }
 export interface Question {
+  scope_note_fr?: string | null;
+  related_fact_ids?: string[];
   question_id: string;
   text_fr: string;
   answer_kind: string;

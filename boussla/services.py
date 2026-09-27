@@ -41,7 +41,7 @@ from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
     merge_question_plan,
     ALLOWED_RESPONSE_DOCUMENTS, AUTO_REQUEST_TEXT_FR, MAX_QUESTIONS_PER_ROUND, QUESTIONS, REQUEST_TEXT_FR,
-    deterministic_plan,
+    deterministic_plan, scoped_questions, fully_asked_questions,
 )
 from boussla.security import DEMO_BANNER_FR, ActorRegistry, authorize
 from boussla.seed import load_enterprises, seed_demo_case
@@ -1379,7 +1379,7 @@ class BousslaAppService(_DemoAdministration):
         return AnalysisView(
             analysis_id=f"AN-{case_id}-v{meta['version']}-{actor.role.value[:3]}", case_id=case_id,
             case_version=meta["version"], audience=Audience.OFFICER if officer else Audience.COMPANY, status=status,
-            questions=() if officer else tuple(QUESTIONS[q] for q in question_ids), question_round=rounds,
+            questions=() if officer else scoped_questions(question_ids, ev.findings), question_round=rounds,
             findings=ev.findings if officer else (), hypotheses=ev.hypotheses if officer else (),
             scenarios=ev.scenarios if officer else (), score=ev.score if officer else None,
             mode_by_node=modes, mode=Mode.LIVE)
@@ -1404,7 +1404,9 @@ class BousslaAppService(_DemoAdministration):
     def answer_questions(self, actor: Actor, case_id: str, analysis_id: str, answers: dict[str, str],
                          expected_version: int, request_id: str) -> AnalysisView:
         actor, meta = self._open(actor, case_id, "answer_questions")
-        answers = {str(k): str(v)[:2000] for k, v in answers.items()}
+        if len(answers) > MAX_QUESTIONS_PER_ROUND or any(
+                not isinstance(k, str) or not isinstance(v, str) or len(v) > 2000 for k, v in answers.items()):
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Réponses hors du schéma ou du budget de questions")
         unknown = set(answers) - set(QUESTIONS)
         if unknown:
             raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE, "Question inconnue", question_ids=sorted(unknown))
@@ -1423,6 +1425,8 @@ class BousslaAppService(_DemoAdministration):
                     tx.put("context_claim", claim.claim_id, claim)
                     ids.append(claim.claim_id)
                 superseding = self._superseding_context_claim(actor, meta["company_id"], case_id, answers, ihash)
+                from boussla.questionnaire import validate_answers
+                validate_answers([QUESTIONS[q] for q in answers], answers)
                 if superseding is not None:
                     tx.put("context_claim", superseding.claim_id, superseding)
                     ids.append(superseding.claim_id)
@@ -1496,7 +1500,7 @@ class BousslaAppService(_DemoAdministration):
         published = [r for r in requests if r.request.status is not RequestStatus.DRAFT]
         if len(published) >= self.settings.max_question_rounds:
             return []  # configured round budget exhausted
-        asked = self._answered_question_ids(facts) | {q for r in published for q in r.request.question_ids}
+        asked = self._answered_question_ids(facts) | fully_asked_questions(ev.findings, published)
         has_claim = any(not c.purpose_text.startswith("[Q-") for c in facts["context_claim"])
         return merge_question_plan(context_codes, self._planner_ids(ev, has_claim, asked, case_id), asked)
 
@@ -1518,6 +1522,8 @@ class BousslaAppService(_DemoAdministration):
             qids = self._automatic_question_ids(ev, facts_after, context_codes, case_id)
             meta.update(mode="PUBLISHED" if qids else "SKIPPED", question_count=len(qids),
                         finding_count=sum(f.status is FindingStatus.UNRESOLVED for f in ev.findings))
+        questions = scoped_questions(qids, ev.findings, facts_after["request"])
+        qids = [q.question_id for q in questions]
         if not qids:
             return None
         reasons = tuple(dict.fromkeys([str(getattr(c, "value", c)) for c in context_codes] + [
@@ -1533,7 +1539,7 @@ class BousslaAppService(_DemoAdministration):
             allowed_document_types=ALLOWED_RESPONSE_DOCUMENTS, target_response_at=now + timedelta(days=FOLLOW_UP_DAYS),
             status=RequestStatus.PUBLISHED_IN_DEMO, approved_by=None, published_at=now, available_in_inbox_at=now,
             origin="AUTOMATIC", reason_codes=reasons, reason_text_fr=AUTO_REASON_TEXT_FR)
-        view = RequestView(request=req, questions=tuple(QUESTIONS[q] for q in qids), text_fr=AUTO_REQUEST_TEXT_FR,
+        view = RequestView(request=req, questions=questions, text_fr=AUTO_REQUEST_TEXT_FR,
                            mode=Mode.TEMPLATE)
         tx.put("request", req.request_id, view)
         return view
@@ -1558,14 +1564,18 @@ class BousslaAppService(_DemoAdministration):
         ev = self._evaluate(case_id, meta["company_id"], meta["version"], facts)
         # Same global merge policy as start_analysis: context contradictions first, one cap of 3.
         _, context_codes, _ = self._context_assessment(case_id, meta["company_id"], meta["version"], facts)
-        qids = (merge_question_plan(context_codes, self._planner_ids(ev, True, set(), case_id), set())
-                or ["Q-SUPPORTING-DOC"])
+        # An officer may deliberately request a follow-up after a response/rejection.
+        # Duplicate open publications are reused or refused below; automatic reminders stay deduplicated.
+        qids = merge_question_plan(context_codes, self._planner_ids(ev, True, set(), case_id), set())
+        questions = scoped_questions(qids, ev.findings)
+        if not questions:
+            raise BousslaError(ErrorCode.INVALID_STATE, "Aucune nouvelle question pertinente à publier")
         fact_ids = tuple(dict.fromkeys(
             r.source_record_id or r.document_id for f in ev.findings if f.status is FindingStatus.UNRESOLVED
             for r in f.evidence_refs if (r.source_record_id or r.document_id)))
         draft = ClarificationDraft(
             draft_id=f"DRAFT-{uuid.uuid4().hex[:8].upper()}", case_id=case_id, company_id=meta["company_id"],
-            case_version=meta["version"], questions=tuple(QUESTIONS[q] for q in qids), fact_ids=fact_ids,
+            case_version=meta["version"], questions=questions, fact_ids=fact_ids,
             allowed_document_types=ALLOWED_RESPONSE_DOCUMENTS,
             target_response_at=utcnow() + timedelta(days=FOLLOW_UP_DAYS), text_fr=REQUEST_TEXT_FR, mode=Mode.TEMPLATE)
         self.store.put_artifact(case_id, "draft", draft.draft_id, meta["version"], draft)
@@ -1585,6 +1595,17 @@ class BousslaAppService(_DemoAdministration):
             draft_version, draft = stored
             if draft_version != expected_version:
                 raise BousslaError(ErrorCode.STALE_REVISION, "Brouillon lié à une ancienne version ; préparez-en un nouveau")
+            existing = self.store.facts(case_id, "request", RequestView)
+            pending = next((r for r in existing if r.request.status in PENDING_STATUSES), None)
+            if pending is not None:
+                if pending.questions == draft.questions:
+                    tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="publish_clarification",
+                        case_id=case_id, actor_id=actor.actor_id, input_hash=ihash,
+                        resulting_version=expected_version, result_hash=stable_hash(pending.model_dump(mode="json"))), pending)
+                    return pending
+                raise BousslaError(ErrorCode.INVALID_STATE, "Une demande est déjà en attente de réponse")
+            if not 0 < len(draft.questions) <= MAX_QUESTIONS_PER_ROUND:
+                raise BousslaError(ErrorCode.INVALID_INPUT, "Nombre de questions invalide")
             now = utcnow()
             req = ClarificationRequest(
                 request_id=f"REQ-{draft_id[6:]}", case_id=case_id, company_id=meta["company_id"],
@@ -1613,7 +1634,9 @@ class BousslaAppService(_DemoAdministration):
         raw_answers, raw_docs = payload.get("answers") or {}, payload.get("document_ids") or ()
         if not isinstance(raw_answers, dict) or not isinstance(raw_docs, (list, tuple)):
             raise BousslaError(ErrorCode.INVALID_INPUT, "Réponse : answers (objet) et document_ids (liste) attendus")
-        answers = {str(k): str(v)[:2000] for k, v in raw_answers.items()}
+        if any(not isinstance(k, str) or not isinstance(v, str) or len(v) > 2000 for k, v in raw_answers.items()):
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Les réponses doivent être des textes de 2000 caractères maximum")
+        answers = dict(raw_answers)
         doc_ids = tuple(str(d) for d in raw_docs)
         alloc = self._allocation_input(payload.get("allocation"))
         ihash = self._input_hash(actor, "submit_response", [request_id, answers, doc_ids, alloc, expected_version])
@@ -1640,6 +1663,8 @@ class BousslaAppService(_DemoAdministration):
                 raise BousslaError(ErrorCode.INVALID_STATE, "Aucune demande publiée correspondante")
             if not set(answers) <= set(rv.request.question_ids):
                 raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE, "Réponse à une question non posée")
+            from boussla.questionnaire import validate_answers
+            validate_answers(rv.questions, answers)
             docs = {d.document_id: d for d in self.store.facts(case_id, "document", Document)}
             for d in doc_ids:
                 if d not in docs or docs[d].subject_company_id != meta["company_id"]:

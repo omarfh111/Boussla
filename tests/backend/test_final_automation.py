@@ -202,7 +202,11 @@ def test_company_context_publishes_one_neutral_automatic_request(svc):
     assert req.request.origin == "AUTOMATIC" and req.request.approved_by is None
     assert req.request.status is RequestStatus.PUBLISHED_IN_DEMO and req.request.request_id.startswith("REQ-AUTO-")
     assert 0 < len(req.questions) <= MAX_QUESTIONS_PER_ROUND
-    assert all(QUESTIONS[q.question_id] == q for q in req.questions)  # fixed catalogue, verbatim
+    assert all(QUESTIONS[q.question_id].text_fr == q.text_fr
+               and QUESTIONS[q.question_id].answer_kind == q.answer_kind
+               and QUESTIONS[q.question_id].choices == q.choices for q in req.questions)
+    assert all(q.related_fact_ids == ("TX-001",) for q in req.questions
+               if q.question_id in {"Q-PROJECT-ALLOCATION", "Q-SUPPORTING-DOC", "Q-STOCK"})
     assert req.request.target_kind == "DEMO_SERVICE_TARGET"
     text = (req.text_fr + " ".join(q.text_fr for q in req.questions)).lower()
     assert not any(w in text for w in ("fraude", "risque", "sanction", "infraction", "pénal"))
