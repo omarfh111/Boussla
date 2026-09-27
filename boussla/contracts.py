@@ -179,6 +179,14 @@ class FindingStatus(str, Enum):
     NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
+class ProgressStage(str, Enum):
+    UNRESOLVED = "UNRESOLVED"
+    EXPLANATION_RECEIVED = "EXPLANATION_RECEIVED"
+    EVIDENCE_RECEIVED = "EVIDENCE_RECEIVED"
+    EVIDENCE_COHERENT = "EVIDENCE_COHERENT"
+    RESOLVED = "RESOLVED"
+
+
 class HypothesisStatus(str, Enum):
     SUPPORTED = "SUPPORTED"
     CONTRADICTED = "CONTRADICTED"
@@ -609,6 +617,17 @@ class ScoreResult(Contract):
     contributions: dict[str, DecimalStr] = Field(default_factory=dict)
     method: str
     not_fraud_probability: Literal[True] = True
+
+
+class CauseProgress(Contract):
+    transaction_id: str
+    family: FindingFamily
+    raw_contribution: DecimalStr
+    current_contribution: DecimalStr
+    stage: ProgressStage
+    provisional: bool
+    reason_code: str | None = None
+    source_ids: tuple[str, ...] = ()
 
 
 class ScoreSnapshot(Contract):
