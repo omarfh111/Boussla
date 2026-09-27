@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { capture, skipSplash } from "./support";
 
 // JOURNEY 3 — brick case: automatic clarification -> evidence upload -> officer
-// accepts -> review index 40 -> 0 -> previous revision preserved.
+// accepts -> provisional review index 20 -> 0 -> previous revision preserved.
 const pdf = resolve(
   "..",
   "docs",
@@ -16,7 +16,7 @@ const officerHeaders = { "X-Boussla-Demo-Role": "OFFICER" };
 
 test.beforeEach(async ({ page }) => skipSplash(page));
 
-test("brick case: automatic request, evidence, human acceptance 40 to 0", async ({
+test("brick case: automatic request, provisional evidence, human acceptance", async ({
   page,
 }) => {
   await page.goto("/");
@@ -108,6 +108,10 @@ test("brick case: automatic request, evidence, human acceptance 40 to 0", async 
   // Human decision: the officer accepts document-backed evidence (double click = one revision).
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Dossier", exact: true }).click();
+  await expect(page.locator(".priority-ring strong")).toHaveText("20");
+  await expect(page.getByText("Contributions au score")).toBeVisible();
+  await expect(page.locator(".cause-value")).toHaveText("40 → 20");
+  await expect(page.getByText("Réduction provisoire")).toBeVisible();
   const accept = page.getByRole("button", { name: "Accepter dans ce dossier" });
   await expect(accept).toBeEnabled();
   await capture(
@@ -119,12 +123,12 @@ test("brick case: automatic request, evidence, human acceptance 40 to 0", async 
   await expect(
     page.getByRole("dialog", { name: "Nouvelle révision" }),
   ).toBeVisible();
-  await expect(page.locator(".revision-grid")).toContainText("40");
+  await expect(page.locator(".revision-grid")).toContainText("20");
   await expect(page.locator(".priority-ring strong")).toHaveText("0");
   await page.locator(".revision-card").evaluate(async (el) => {
     await Promise.all(el.getAnimations().map((a) => a.finished));
   });
-  await capture(page, "10_revision_40_to_0.png");
+  await capture(page, "10_revision_20_to_0.png");
 
   const caseView = await (
     await page.request.get("/api/cases/CASE-BRICKS-001", {

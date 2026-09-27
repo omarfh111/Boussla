@@ -1,5 +1,20 @@
 # BOUSSLA final release — integration evidence
 
+## Mise à jour du 27 septembre 2026 — livraison 1 du parcours progressif
+
+La branche `feat/progressive-review` apporte un moteur de revue documentaire **par cause**, sans toucher au calcul des constats ni convertir l'indice en probabilité de fraude. Les états sont `UNRESOLVED`, `EXPLANATION_RECEIVED`, `EVIDENCE_RECEIVED`, `EVIDENCE_COHERENT` et `RESOLVED` (facteurs 100/75/50/25/0 %). Une cause de poids 40 suit donc 40 → 30 → 20 → 10 → 0. Les trois baisses avant décision humaine sont provisoires ; une preuve contradictoire ou rejetée revient au poids brut. Une pièce jointe sans lien explicite avec la réponse et la cause ne réduit rien. Les réponses et dépôts conservent leur score dans les révisions versionnées ; le frontend n'en déduit aucun palier.
+
+Le dossier agent expose score courant, contribution brute et courante par cause, couverture des preuves, urgence de triage, et des emplacements distincts pour signal historique et confiance opérationnelle. Ces deux derniers sont renvoyés `null` / `INSUFFICIENT_DATA` par l'API et affichés comme tels ; leur calcul est prévu après cette livraison. Le triage garde la contribution documentaire brute comme base tant qu'une baisse est provisoire, et affiche cette composante. La vue entreprise ne reçoit ni score ni ces indicateurs internes.
+
+Vérifications exécutées sur cette branche :
+
+- `python -m pytest -q -x -p no:cacheprovider` : 506 tests collectés, suite passée sans échec.
+- `npm --prefix frontend run test` : 21/21 tests ; `typecheck`, `format:check` et `build` : passés.
+- `npm --prefix frontend run test:e2e -- demo.spec.ts` : 1/1 parcours Playwright sur un serveur hors ligne et une base de test vierge, montrant 40 → 20 provisoire → 0 après décision agent.
+- Tests d'intégration : 40 → 30 → 20 → 10 → 0, contradiction 10 → 40, rejet 20 → 40, idempotence, historique versionné et isolation entreprise.
+
+Limite explicite : le palier 10 repose ici sur des champs d'extraction confirmés, complets et sourcés dans le test ; le traitement automatique exhaustif des documents et les moteurs de confiance/historique sont des lots ultérieurs. Les chiffres de la section historique ci-dessous correspondent à la livraison précédente, pas à cette branche.
+
 Branch `integration/final-release` from main `b33ae94`, merging lanes A (`874c718`), B (`07fdd00`), C (`2083312`) and D (`4559a7a`) with `--no-ff`. Synthetic data only.
 
 ## Judge gauntlet — round 2 (harness `test/live-judge-gauntlet` @ `159ef7b`, run against this branch)
