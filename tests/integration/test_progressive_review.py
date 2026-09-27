@@ -233,3 +233,32 @@ def test_source_backed_coherence_and_contradiction_are_reversible(service):
     accepted = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "accept")
     assert accepted.score_before.review_index == 10
     assert accepted.score_after.review_index == 0
+
+
+def test_empty_explanation_does_not_earn_provisional_reduction(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company = service.registry.actors["DEMO-COMPANY-BAT"]
+    draft = service.prepare_clarification(officer, CASE, version(service))
+    request = service.publish_clarification(officer, CASE, draft.draft_id, version(service), "blank-publish")
+    service.submit_response(company, CASE, request.request.request_id,
+                            {"answers": {"Q-PROJECT-ALLOCATION": "   "}}, version(service), "blank-answer")
+    assert service.get_case(officer, CASE).score.review_index == 40
+
+
+def test_progress_snapshots_identify_engine_causes_and_human_resolution(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                            version(service), "meta-upload", response_id=response.response.response_id)
+    before = service.get_case(officer, CASE).score
+    result = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "meta-accept")
+    cause = result.score_after.cause_progress[0]
+    assert cause.cause_id == before.cause_progress[0].cause_id
+    assert cause.initial_weight == "40" and cause.current_contribution == "0"
+    assert cause.resolved_by == officer.actor_id and cause.resolved_at is not None
+    assert cause.rule_version and cause.evidence_ids and cause.explanation_ids
+    snapshot = service.store.revisions(CASE)[-1].score_snapshot
+    assert snapshot.calculated_at == snapshot.cutoff
+    assert snapshot.engine_version and snapshot.rules_version
+    assert snapshot.cause_ids == tuple(c.cause_id for c in snapshot.cause_progress)
+    assert service.evaluate(CASE, version=result.new_version).score == snapshot

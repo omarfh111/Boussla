@@ -347,6 +347,9 @@ export interface InvoiceComparison {
   counterparty_reason_code: string | null;
 }
 export interface ScoreSnapshot {
+  calculated_at?: string | null;
+  engine_version?: string;
+  cause_ids?: string[];
   review_index: number | null;
   raw_review_index: number | null;
   decisive_transaction_id: string | null;
@@ -358,6 +361,13 @@ export interface ScoreSnapshot {
   coverage_complete: boolean;
 }
 export interface CauseProgress {
+  cause_id?: string;
+  initial_weight?: string | null;
+  evidence_ids?: string[];
+  explanation_ids?: string[];
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  rule_version?: string;
   transaction_id: string;
   family: "COUNTERPARTY" | "SETTLEMENT" | "QUANTITY";
   raw_contribution: string;

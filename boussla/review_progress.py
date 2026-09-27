@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
+from pydantic import AwareDatetime
 
 from boussla.contracts import (
     Contract, CauseProgress, DecimalStr, Finding, FindingFamily, FindingStatus, ProgressStage,
 )
 from boussla.scoring import WEIGHTS
+
+RULE_VERSION = "progressive-review-2"
 
 FACTORS = {
     ProgressStage.UNRESOLVED: Decimal("1"),
@@ -29,6 +32,9 @@ class ProgressEvidence(Contract):
     rejected: bool = False
     contradiction_reason: str | None = None
     prior_raw_contribution: DecimalStr | None = None
+    initial_weight: DecimalStr | None = None
+    resolved_by: str | None = None
+    resolved_at: AwareDatetime | None = None
 
 
 def calculate_progress(findings: tuple[Finding, ...],
@@ -54,7 +60,7 @@ def calculate_progress(findings: tuple[Finding, ...],
         if unresolved:
             selected = max(unresolved, key=lambda f: Decimal(f.severity))
             raw = WEIGHTS[family] * Decimal(selected.severity)
-            if source is None or source.rejected or source.contradiction_reason:
+            if source is None or source.rejected or source.contradiction_reason or source.officer_accepted:
                 stage = ProgressStage.UNRESOLVED
             elif source.response_id is None:
                 stage = ProgressStage.UNRESOLVED
@@ -76,7 +82,19 @@ def calculate_progress(findings: tuple[Finding, ...],
         if source is not None:
             refs.extend(x for x in (source.response_id, source.document_id, source.proposal_id) if x)
         reason = (source.contradiction_reason if source is not None else None) or selected.reason_code
+        if source is not None and source.officer_accepted and unresolved:
+            reason = "ACCEPTED_EVIDENCE_RESIDUAL"
+        elif source is not None and source.rejected:
+            reason = "EVIDENCE_REJECTED"
         causes.append(CauseProgress(
+            cause_id=f"{selected.case_id}:{transaction_id}:{family.value}",
+            initial_weight=(source.initial_weight or source.prior_raw_contribution
+                            if source is not None else None) or _decimal_str(raw),
+            evidence_ids=(source.document_id,) if source and source.document_id else (),
+            explanation_ids=(source.response_id,) if source and source.response_id else (),
+            resolved_by=source.resolved_by if source and stage is ProgressStage.RESOLVED else None,
+            resolved_at=source.resolved_at if source and stage is ProgressStage.RESOLVED else None,
+            rule_version=RULE_VERSION,
             transaction_id=transaction_id, family=family,
             raw_contribution=_decimal_str(raw),
             current_contribution=_decimal_str(raw * FACTORS[stage]),

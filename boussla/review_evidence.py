@@ -45,11 +45,14 @@ def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, lis
             scoped_proposal = (proposal is not None
                                and proposal.transaction_id == transaction_id
                                and family is FindingFamily.QUANTITY)
+            answered = {q for q, value in response.answers.items() if value.strip()}
             scoped_question = (family is FindingFamily.QUANTITY
-                               and "Q-PROJECT-ALLOCATION" in response.answers
+                               and "Q-PROJECT-ALLOCATION" in answered
                                and bool(set(request.fact_ids) & refs))
-            scoped_reason = (bool(reason_codes & set(request.reason_codes))
-                             and bool(set(response.answers) & CAUSE_QUESTIONS[family]))
+            linked = bool(set(request.fact_ids) & (refs | {transaction_id} |
+                                                    {f.finding_id for f in related}))
+            scoped_reason = (linked and bool(reason_codes & set(request.reason_codes))
+                             and bool(answered & CAUSE_QUESTIONS[family]))
             if not (scoped_proposal or scoped_question or scoped_reason):
                 continue
             document_id = next((d for d in response.document_ids if d in documents), None)
@@ -70,6 +73,9 @@ def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, lis
             technically_consistent=coherence is True,
             contradiction_reason="DOCUMENT_ALLOCATION_CONTRADICTION" if coherence is False else None,
             prior_raw_contribution=previous.raw_contribution if previous is not None else None,
+            initial_weight=previous.initial_weight if previous is not None else None,
+            resolved_by=proposal.decided_by if proposal else None,
+            resolved_at=proposal.decided_at if proposal else None,
         ))
     return tuple(result)
 

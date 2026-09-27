@@ -1636,7 +1636,25 @@ function Officer({
                   <small>{cause.transaction_id}</small>
                   <small>{cause.reason_code || "Cause documentée"}</small>
                   <span>{progressLabel[cause.stage] || cause.stage}</span>
-                  {cause.provisional && <em>Réduction provisoire</em>}
+                  {cause.provisional && (
+                    <>
+                      <em>Réduction provisoire</em>
+                      <small>Validation agent requise</small>
+                    </>
+                  )}
+                  <small>
+                    Cause initiale : +
+                    {cause.initial_weight ?? cause.raw_contribution} ·
+                    Contribution actuelle : +{cause.current_contribution}
+                  </small>
+                  {cause.resolved_by && (
+                    <small>
+                      Résolue par {cause.resolved_by} · {cause.resolved_at}
+                    </small>
+                  )}
+                  {cause.rule_version && (
+                    <small>Règle : {cause.rule_version}</small>
+                  )}
                 </div>
                 <strong className="cause-value">
                   {cause.raw_contribution} → {cause.current_contribution}

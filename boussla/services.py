@@ -49,7 +49,7 @@ from boussla.store import CaseStore, ReceiptNote, stable_hash, utcnow
 from boussla.observability import traced
 from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clarification_deadlines
 from boussla.review_evidence import derive_progress_evidence
-from boussla.review_progress import calculate_progress, transaction_progress_index
+from boussla.review_progress import RULE_VERSION, calculate_progress, transaction_progress_index
 from boussla.historical_indicator import calculate_historical_indicator
 from boussla.operational_confidence import calculate_operational_confidence
 from boussla.monthly_context import build_monthly_context
@@ -377,7 +377,9 @@ class BousslaAppService(_DemoAdministration):
     def _evaluate(self, case_id: str, company_id: str, version: int, facts: dict[str, list],
                   previous_snapshot: ScoreSnapshot | None = None,
                   as_of: datetime | None = None) -> Evaluation:
-        effective_as_of = as_of or utcnow()
+        recorded = next((r for r in self.store.revisions(case_id) if r.version == version), None)
+        effective_as_of = as_of or (recorded.score_snapshot.cutoff if recorded and recorded.score_snapshot
+                                    else recorded.created_at if recorded else self.clock())
         findings: list[Finding] = []
         hypotheses: list[Hypothesis] = []
         scenarios: list[Scenario] = []
@@ -421,7 +423,9 @@ class BousslaAppService(_DemoAdministration):
                 contributions[fam] = str(max(Decimal(val), Decimal(contributions.get(fam, "0"))))
         score = ScoreSnapshot(
             company_id=company_id, case_version=version, cutoff=effective_as_of,
-            method_id=tx_scores[0].method if tx_scores else "NONE", rules_version=getattr(self.checks, "calculation_version", "B"),
+            calculated_at=effective_as_of, engine_version=RULE_VERSION,
+            cause_ids=tuple(c.cause_id for c in cause_progress),
+            method_id="PROGRESSIVE_REVIEW_V2", rules_version=f"{getattr(self.checks, 'calculation_version', 'B')}+{RULE_VERSION}",
             review_index=index, raw_review_index=raw_index, cause_progress=cause_progress,
             decisive_transaction_id=decisive_transaction_id,
             evidence_coverage=str(coverage.quantize(Decimal("0.01"))) if coverage is not None else None,
@@ -438,7 +442,13 @@ class BousslaAppService(_DemoAdministration):
         """Deterministic evaluation of a case version (used by the workflow graph)."""
         meta = self.store.case_meta(case_id)
         v = version or meta["version"]
-        return self._evaluate(case_id, meta["company_id"], v, self._facts(case_id, v))
+        result = self._evaluate(case_id, meta["company_id"], v, self._facts(case_id, v))
+        if version is not None:
+            recorded = next((r.score_snapshot for r in self.store.revisions(case_id)
+                             if r.version == version and r.score_snapshot is not None), None)
+            if recorded is not None:
+                return Evaluation(result.version, result.findings, result.hypotheses, result.scenarios, recorded)
+        return result
 
     def _summaries(self, facts: dict[str, list]) -> tuple[TransactionSummary, ...]:
         out = []
@@ -1709,11 +1719,11 @@ class BousslaAppService(_DemoAdministration):
                     old = next((x for x in facts["allocation"] if x.allocation_id == a.allocation_id), None)
                     if old != a:
                         tx.put("allocation", a.allocation_id, a)
-            tx.put("proposal", proposal_id, proposal.model_copy(update={
-                "status": ProposalStatus.ACCEPTED if accept else ProposalStatus.REJECTED}))
+            decision = {"status": ProposalStatus.ACCEPTED if accept else ProposalStatus.REJECTED,
+                        "decided_by": actor.actor_id, "decided_at": self.clock(), "decision_reason": reason}
+            tx.put("proposal", proposal_id, proposal.model_copy(update=decision))
             after_facts = {**facts, "allocation": new_allocations,
-                           "proposal": [p if p.proposal_id != proposal_id else p.model_copy(update={
-                               "status": ProposalStatus.ACCEPTED if accept else ProposalStatus.REJECTED})
+                           "proposal": [p if p.proposal_id != proposal_id else p.model_copy(update=decision)
                                         for p in facts["proposal"]]}
             after = self._evaluate(case_id, meta["company_id"], previous + 1, after_facts, before.score)
             v = tx.commit_version(("Pièce acceptée dans ce dossier : " if accept else "Pièce rejetée : ")

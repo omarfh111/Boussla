@@ -620,6 +620,13 @@ class ScoreResult(Contract):
 
 
 class CauseProgress(Contract):
+    cause_id: str = ""
+    initial_weight: DecimalStr | None = None
+    evidence_ids: tuple[str, ...] = ()
+    explanation_ids: tuple[str, ...] = ()
+    resolved_by: str | None = None
+    resolved_at: AwareDatetime | None = None
+    rule_version: str = "progressive-review-1"
     transaction_id: str
     family: FindingFamily
     raw_contribution: DecimalStr
@@ -631,6 +638,9 @@ class CauseProgress(Contract):
 
 
 class ScoreSnapshot(Contract):
+    calculated_at: AwareDatetime | None = None
+    engine_version: str = "legacy"
+    cause_ids: tuple[str, ...] = ()
     company_id: str
     case_version: int
     cutoff: AwareDatetime
@@ -740,6 +750,9 @@ class EvidenceProposal(Contract):
     line_id: str
     unit: str
     budget_quantity: DecimalStr
+    decided_by: str | None = None
+    decided_at: AwareDatetime | None = None
+    decision_reason: str | None = None
     changes: tuple[AllocationChange, ...]
     status: ProposalStatus
 
