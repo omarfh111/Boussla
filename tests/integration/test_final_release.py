@@ -95,6 +95,21 @@ def test_historical_indicator_is_separate_explained_and_scoped(svc):
     assert "history_signal_index" not in company
 
 
+def test_operational_confidence_is_unknown_without_interactions_and_officer_only(svc):
+    officer_view = svc.get_case(officer(svc), BRICKS)
+    assert officer_view.operational_confidence_index is None
+    assert officer_view.operational_confidence_status == "INSUFFICIENT_DATA"
+    assert officer_view.operational_confidence_observation_count == 0
+    company_view = svc.get_case(actor(svc, "DEMO-COMPANY-BAT"), BRICKS).model_dump()
+    assert "operational_confidence_index" not in company_view
+    api = TestClient(create_app(svc), raise_server_exceptions=False)
+    agent_body = api.get(f"/api/cases/{BRICKS}", headers={"X-Boussla-Demo-Role": "OFFICER"}).json()
+    assert agent_body["operational_confidence_status"] == "INSUFFICIENT_DATA"
+    assert "operational_confidence_factors" in agent_body
+    company_body = api.get(f"/api/cases/{BRICKS}", headers={"X-Boussla-Demo-Role": "COMPANY"}).json()
+    assert "operational_confidence_factors" not in company_body
+
+
 def test_buyer_seller_comparison_is_field_level_and_neutral(svc):
     view = svc.get_case(officer(svc), "SYN-OP-003-CASE")
     diff = [c for c in view.invoice_comparisons if c.status == "DIFFERENCES"]

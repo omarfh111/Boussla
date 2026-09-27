@@ -51,6 +51,7 @@ from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clari
 from boussla.review_evidence import derive_progress_evidence
 from boussla.review_progress import calculate_progress, transaction_progress_index
 from boussla.historical_indicator import calculate_historical_indicator
+from boussla.operational_confidence import calculate_operational_confidence
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -519,12 +520,21 @@ class BousslaAppService(_DemoAdministration):
         context_view, _, context_mode = self._context_assessment(case_id, company, v, facts)
         triage, deadlines, signals, history_mode = self._triage(case_id, company, v, ev, facts)
         historical = calculate_historical_indicator(signals)
+        confidence = calculate_operational_confidence(view.requests, view.responses, view.proposals,
+                                                      signals, self.clock(), ev.score.cause_progress)
         view = view.model_copy(update={"context_assessment": context_view, "triage": triage,
                                        "clarification_deadlines": deadlines, "history_signals": signals,
                                        "history_signal_index": historical.index,
                                        "history_signal_status": historical.status,
                                        "history_signal_factors": historical.factors,
                                        "history_signal_method": historical.method,
+                                       "operational_confidence_index": confidence.index,
+                                       "operational_confidence_uncapped_index": confidence.uncapped_index,
+                                       "operational_confidence_status": confidence.status,
+                                       "operational_confidence_baseline": confidence.baseline,
+                                       "operational_confidence_factors": confidence.factors,
+                                       "operational_confidence_observation_count": confidence.observation_count,
+                                       "operational_confidence_method": confidence.method,
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())

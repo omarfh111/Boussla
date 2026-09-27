@@ -886,6 +886,25 @@ class GroundedNoteView(Contract):
     disclaimer_fr: str = "Synthèse indicative — l'applicabilité doit être vérifiée par l'agent."
 
 
+class OperationalConfidenceFactor(Contract):
+    code: Literal["TIMELY_RESPONSE", "LATE_RESPONSE", "UNANSWERED_REQUEST", "ACCEPTED_PROOF",
+                  "REJECTED_PROOF", "REPEATED_ANOMALY", "DOCUMENT_COHERENT",
+                  "DOCUMENT_CONTRADICTORY", "HISTORY_STABILITY"]
+    contribution: int = Field(ge=-100, le=100)
+    source_ids: tuple[str, ...]
+    explanation_fr: str
+
+
+class OperationalConfidence(Contract):
+    index: int | None = Field(default=None, ge=0, le=100)
+    uncapped_index: int | None = None
+    status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    baseline: int = 70
+    factors: tuple[OperationalConfidenceFactor, ...] = ()
+    observation_count: int = 0
+    method: str = "OPERATIONAL_CONFIDENCE_V1"
+
+
 class OfficerCaseView(Contract):
     audience: Literal[Audience.OFFICER] = Audience.OFFICER
     case_id: str
@@ -920,7 +939,12 @@ class OfficerCaseView(Contract):
     history_signal_factors: tuple["HistoricalFactor", ...] = ()
     history_signal_method: str | None = None
     operational_confidence_index: int | None = None
+    operational_confidence_uncapped_index: int | None = None
     operational_confidence_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
+    operational_confidence_baseline: int = 70
+    operational_confidence_factors: tuple[OperationalConfidenceFactor, ...] = ()
+    operational_confidence_observation_count: int = 0
+    operational_confidence_method: str = "OPERATIONAL_CONFIDENCE_V1"
     investigator_brief: "InvestigatorBriefView | None" = None
     enterprise_profile: "EnterpriseProfileView | None" = None
     monthly_activity: tuple["MonthlyActivityView", ...] = ()
@@ -1201,6 +1225,8 @@ class EnterpriseProfileView(Contract):
     activity_end: str | None = None
     portfolio_member: bool = False
     data_kind: Literal["SYNTHETIC"] = "SYNTHETIC"
+
+
 
 
 class MonthlyActivityView(Contract):
