@@ -915,6 +915,10 @@ class OfficerCaseView(Contract):
     """Officer-only queue urgency, separate from ``score.review_index``."""
     clarification_deadlines: tuple["ClarificationDeadlineView", ...] = ()
     history_signals: tuple["CompanyHistorySignal", ...] = ()
+    history_signal_index: int | None = None
+    history_signal_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
+    operational_confidence_index: int | None = None
+    operational_confidence_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
     investigator_brief: "InvestigatorBriefView | None" = None
     enterprise_profile: "EnterpriseProfileView | None" = None
     monthly_activity: tuple["MonthlyActivityView", ...] = ()

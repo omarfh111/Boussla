@@ -359,6 +359,10 @@ const officer = {
     source_count: 2,
   },
   quantity_references: [],
+  history_signal_index: null,
+  history_signal_status: "INSUFFICIENT_DATA",
+  operational_confidence_index: null,
+  operational_confidence_status: "INSUFFICIENT_DATA",
 } satisfies OfficerCaseView;
 
 it("renders Company 360 from server data with synthetic, neutral provenance", () => {

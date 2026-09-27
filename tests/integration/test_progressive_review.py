@@ -138,7 +138,15 @@ def test_officer_score_and_revision_follow_progressive_stages(service):
     assert uploaded.cause_progress[0].stage is ProgressStage.EVIDENCE_RECEIVED
     assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
     assert service.list_queue(officer, datetime.now(timezone.utc), 10).items[0].review_index == 20
-    assert service.get_case(company, CASE).model_dump().get("score") is None
+    officer_view = service.get_case(officer, CASE)
+    assert officer_view.operational_confidence_index is None
+    assert officer_view.operational_confidence_status == "INSUFFICIENT_DATA"
+    assert officer_view.history_signal_index is None
+    assert officer_view.history_signal_status == "INSUFFICIENT_DATA"
+    company_view = service.get_case(company, CASE).model_dump()
+    assert "score" not in company_view
+    assert "operational_confidence_index" not in company_view
+    assert "history_signal_index" not in company_view
     result = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "accept")
     assert result.score_before.review_index == 20
     assert result.score_after.review_index == 0

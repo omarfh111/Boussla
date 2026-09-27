@@ -129,6 +129,17 @@ const familyLabel: Record<string, string> = {
   SETTLEMENT: "Règlement observé",
   QUANTITY: "Affectation des quantités",
 };
+const progressLabel: Record<string, string> = {
+  UNRESOLVED: "Non expliquée",
+  EXPLANATION_RECEIVED: "Réponse reçue",
+  EVIDENCE_RECEIVED: "Pièce reçue, analyse en attente",
+  EVIDENCE_COHERENT: "Pièce cohérente, validation en attente",
+  RESOLVED: "Résolue après décision agent",
+};
+const indicator = (value: number | null, state: string) =>
+  state === "INSUFFICIENT_DATA" || value === null
+    ? "Données insuffisantes"
+    : format(value);
 const horizonLabel: Record<string, string> = {
   SHORT_HORIZON: "Horizon court",
   LONGER_HORIZON: "Horizon plus long",
@@ -1576,6 +1587,21 @@ function Officer({
             <strong>{format(c.triage?.triage_priority)}</strong>
             <small>Distincte de l’indice de revue</small>
           </div>
+          <div>
+            <span>Signal historique</span>
+            <strong className="text-value">
+              {indicator(c.history_signal_index, c.history_signal_status)}
+            </strong>
+          </div>
+          <div>
+            <span>Confiance opérationnelle</span>
+            <strong className="text-value">
+              {indicator(
+                c.operational_confidence_index,
+                c.operational_confidence_status,
+              )}
+            </strong>
+          </div>
         </div>
       </div>
       {c.triage && c.triage.reason_codes.length > 0 && (
@@ -1591,6 +1617,31 @@ function Officer({
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
         les contrôles déterministes.
       </p>
+      <Panel title="Contributions au score" eyebrow="EXPLICATION PAR CAUSE">
+        {c.score?.cause_progress.length ? (
+          <div className="cause-list">
+            {c.score.cause_progress.map((cause) => (
+              <article
+                className="cause-row"
+                key={`${cause.transaction_id}:${cause.family}`}
+              >
+                <div>
+                  <strong>{familyLabel[cause.family] || cause.family}</strong>
+                  <small>{cause.transaction_id}</small>
+                  <small>{cause.reason_code || "Cause documentée"}</small>
+                  <span>{progressLabel[cause.stage] || cause.stage}</span>
+                  {cause.provisional && <em>Réduction provisoire</em>}
+                </div>
+                <strong className="cause-value">
+                  {cause.raw_contribution} → {cause.current_contribution}
+                </strong>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>Aucune contribution chiffrée pour ce dossier.</p>
+        )}
+      </Panel>
       <InvestigatorPanel
         brief={c.investigator_brief}
         passages={c.candidate_passages}

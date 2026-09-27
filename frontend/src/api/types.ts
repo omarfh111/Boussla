@@ -329,11 +329,29 @@ export interface InvoiceComparison {
 }
 export interface ScoreSnapshot {
   review_index: number | null;
+  raw_review_index: number | null;
+  decisive_transaction_id: string | null;
+  cause_progress: CauseProgress[];
   evidence_coverage: string | null;
   clarification_status: string;
   scope_note: string;
   rules_version: string;
   coverage_complete: boolean;
+}
+export interface CauseProgress {
+  transaction_id: string;
+  family: "COUNTERPARTY" | "SETTLEMENT" | "QUANTITY";
+  raw_contribution: string;
+  current_contribution: string;
+  stage:
+    | "UNRESOLVED"
+    | "EXPLANATION_RECEIVED"
+    | "EVIDENCE_RECEIVED"
+    | "EVIDENCE_COHERENT"
+    | "RESOLVED";
+  provisional: boolean;
+  reason_code: string | null;
+  source_ids: string[];
 }
 export interface EvidenceProposal {
   proposal_id: string;
@@ -386,6 +404,10 @@ export interface OfficerCaseView extends BaseCase {
   triage: TriageAssessment | null;
   clarification_deadlines: ClarificationDeadline[];
   history_signals: HistorySignal[];
+  history_signal_index: number | null;
+  history_signal_status: "INSUFFICIENT_DATA" | "AVAILABLE";
+  operational_confidence_index: number | null;
+  operational_confidence_status: "INSUFFICIENT_DATA" | "AVAILABLE";
   enterprise_profile: EnterpriseProfile | null;
   monthly_activity: MonthlyActivityEntry[];
   payment_timeline: PaymentTimelineEntry[];

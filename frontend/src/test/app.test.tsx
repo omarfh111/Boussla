@@ -39,6 +39,9 @@ const officer: OfficerCaseView = {
   audience: "OFFICER",
   score: {
     review_index: 40,
+    raw_review_index: 40,
+    cause_progress: [],
+    decisive_transaction_id: "TX-001",
     evidence_coverage: "75.00",
     clarification_status: "NOT_REQUESTED",
     scope_note: "Documentaire",
@@ -80,6 +83,10 @@ const officer: OfficerCaseView = {
   },
   clarification_deadlines: [],
   history_signals: [],
+  history_signal_index: null,
+  history_signal_status: "INSUFFICIENT_DATA",
+  operational_confidence_index: null,
+  operational_confidence_status: "INSUFFICIENT_DATA",
   enterprise_profile: null,
   monthly_activity: [],
   payment_timeline: [],
@@ -209,6 +216,52 @@ it("switches scoped views and never shows officer priority to the company", asyn
   ).toBeInTheDocument();
   expect(screen.queryByText("Priorité de revue")).not.toBeInTheDocument();
   expect(screen.queryByText("Constats")).not.toBeInTheDocument();
+});
+
+it("shows backend-provided cause contributions and separates the five indicators", async () => {
+  const view: OfficerCaseView = {
+    ...officer,
+    score: {
+      ...officer.score!,
+      review_index: 20,
+      raw_review_index: 40,
+      cause_progress: [
+        {
+          transaction_id: "TX-001",
+          family: "QUANTITY",
+          raw_contribution: "40",
+          current_contribution: "20",
+          stage: "EVIDENCE_RECEIVED",
+          provisional: true,
+          reason_code: "PROJECT_ALLOCATION_EXCEEDS_REFERENCE",
+          source_ids: ["RESP-1", "DOC-1"],
+        },
+      ],
+    },
+  };
+  mockApi(view);
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  expect(await screen.findByText("Contributions au score")).toBeInTheDocument();
+  expect(screen.getByText("40 → 20")).toBeInTheDocument();
+  expect(screen.getByText("Réduction provisoire")).toBeInTheDocument();
+  expect(
+    screen.getByText("PROJECT_ALLOCATION_EXCEEDS_REFERENCE"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Signal historique")).toBeInTheDocument();
+  expect(screen.getByText("Confiance opérationnelle")).toBeInTheDocument();
+  expect(screen.getAllByText("Données insuffisantes")).toHaveLength(2);
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  await screen.findByText("Votre dossier, en un regard");
+  expect(screen.queryByText("Contributions au score")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Confiance opérationnelle"),
+  ).not.toBeInTheDocument();
 });
 
 it("shows an empty reference state and only officer-side synthesis", async () => {
