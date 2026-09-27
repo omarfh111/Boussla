@@ -85,8 +85,15 @@ const officer: OfficerCaseView = {
   history_signals: [],
   history_signal_index: null,
   history_signal_status: "INSUFFICIENT_DATA",
+  history_signal_factors: [],
+  history_signal_method: null,
   operational_confidence_index: null,
+  operational_confidence_uncapped_index: null,
   operational_confidence_status: "INSUFFICIENT_DATA",
+  operational_confidence_baseline: 70,
+  operational_confidence_factors: [],
+  operational_confidence_observation_count: 0,
+  operational_confidence_method: "OPERATIONAL_CONFIDENCE_V1",
   enterprise_profile: null,
   monthly_activity: [],
   payment_timeline: [],
@@ -261,6 +268,56 @@ it("shows backend-provided cause contributions and separates the five indicators
   expect(screen.queryByText("Contributions au score")).not.toBeInTheDocument();
   expect(
     screen.queryByText("Confiance opérationnelle"),
+  ).not.toBeInTheDocument();
+});
+
+it("shows attributed history and confidence factors only to the officer", async () => {
+  mockApi({
+    ...officer,
+    history_signal_index: 25,
+    history_signal_status: "AVAILABLE",
+    history_signal_method: "HISTORY_CONTEXT_V1",
+    history_signal_factors: [
+      {
+        reason_code: "REPEATED_INVOICE_CONFLICT",
+        contribution: 25,
+        source_signal_ids: ["SIG-1"],
+        explanation_fr: "Conflit répété de factures",
+      },
+    ],
+    operational_confidence_index: 55,
+    operational_confidence_uncapped_index: 55,
+    operational_confidence_status: "AVAILABLE",
+    operational_confidence_observation_count: 2,
+    operational_confidence_factors: [
+      {
+        code: "REJECTED_PROOF",
+        contribution: -15,
+        source_ids: ["PROP-1"],
+        explanation_fr: "Pièce rejetée par l’agent",
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  expect(
+    await screen.findByText("Conflit répété de factures"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Pièce rejetée par l’agent")).toBeInTheDocument();
+  expect(screen.getByText("SIG-1")).toBeInTheDocument();
+  expect(screen.getByText("PROP-1")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  await screen.findByText("Votre dossier, en un regard");
+  expect(
+    screen.queryByText("Conflit répété de factures"),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Pièce rejetée par l’agent"),
   ).not.toBeInTheDocument();
 });
 

@@ -1642,6 +1642,99 @@ function Officer({
           <p>Aucune contribution chiffrée pour ce dossier.</p>
         )}
       </Panel>
+      <div className="two-col indicator-explanations">
+        <Panel
+          title="Facteurs historiques"
+          eyebrow="CONTEXTE · SÉPARÉ DU SCORE"
+        >
+          {c.history_signal_status === "AVAILABLE" ? (
+            <>
+              <p>
+                Indice historique : {format(c.history_signal_index)}/100 ·{" "}
+                {c.history_signal_method}
+              </p>
+              {c.history_signal_factors.length ? (
+                <div className="indicator-factor-list">
+                  {c.history_signal_factors.map((factor) => (
+                    <article
+                      className="indicator-factor"
+                      key={factor.reason_code}
+                    >
+                      <strong>
+                        {factor.reason_code} · +{factor.contribution}
+                      </strong>
+                      <span>{factor.explanation_fr}</span>
+                      <small>{factor.source_signal_ids.join(", ")}</small>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p>
+                  Aucune variation significative sur les périodes couvertes.
+                </p>
+              )}
+            </>
+          ) : (
+            <p>
+              Données insuffisantes pour comparer l’entreprise à son historique.
+            </p>
+          )}
+        </Panel>
+        <Panel
+          title="Facteurs de confiance"
+          eyebrow="INTERACTIONS · SÉPARÉE DU SCORE"
+        >
+          {c.operational_confidence_status === "AVAILABLE" ? (
+            <>
+              <p>
+                Indice : {format(c.operational_confidence_index)}/100 · base{" "}
+                {c.operational_confidence_baseline} ·{" "}
+                {c.operational_confidence_observation_count} observations
+              </p>
+              <p>
+                Avant plafonnement :{" "}
+                {format(c.operational_confidence_uncapped_index)} ·{" "}
+                {c.operational_confidence_method}
+              </p>
+              <div className="indicator-factor-list">
+                {c.operational_confidence_factors.map((factor, index) => (
+                  <article
+                    className="indicator-factor"
+                    key={`${factor.code}:${index}`}
+                  >
+                    <strong>
+                      {factor.code} · {factor.contribution > 0 ? "+" : ""}
+                      {factor.contribution}
+                    </strong>
+                    <span>{factor.explanation_fr}</span>
+                    <small>{factor.source_ids.join(", ")}</small>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p>Données insuffisantes sur les interactions de l’entreprise.</p>
+          )}
+        </Panel>
+      </div>
+      <Panel title="Comportement sur 12 mois" eyebrow="HISTORIQUE COUVERT">
+        {c.monthly_activity.length ? (
+          <div className="monthly-context">
+            {c.monthly_activity.slice(-12).map((month) => (
+              <article key={month.month}>
+                <strong>{month.month}</strong>
+                <span>
+                  {month.transaction_count} transactions ·{" "}
+                  {month.invoice_observation_count} observations de factures
+                </span>
+                <small>{month.source_label}</small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p>Données insuffisantes pour la vue sur 12 mois.</p>
+        )}
+      </Panel>
       <InvestigatorPanel
         brief={c.investigator_brief}
         passages={c.candidate_passages}

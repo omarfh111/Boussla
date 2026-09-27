@@ -74,6 +74,18 @@ export interface HistorySignal {
   mode: Mode;
   affects_review_index: false;
 }
+export interface HistoricalFactor {
+  reason_code: string;
+  contribution: number;
+  source_signal_ids: string[];
+  explanation_fr: string;
+}
+export interface OperationalConfidenceFactor {
+  code: string;
+  contribution: number;
+  source_ids: string[];
+  explanation_fr: string;
+}
 /** Server-computed queue urgency; React never derives it. */
 export interface TriageAssessment {
   triage_priority: number;
@@ -406,8 +418,15 @@ export interface OfficerCaseView extends BaseCase {
   history_signals: HistorySignal[];
   history_signal_index: number | null;
   history_signal_status: "INSUFFICIENT_DATA" | "AVAILABLE";
+  history_signal_factors: HistoricalFactor[];
+  history_signal_method: string | null;
   operational_confidence_index: number | null;
+  operational_confidence_uncapped_index: number | null;
   operational_confidence_status: "INSUFFICIENT_DATA" | "AVAILABLE";
+  operational_confidence_baseline: number;
+  operational_confidence_factors: OperationalConfidenceFactor[];
+  operational_confidence_observation_count: number;
+  operational_confidence_method: string;
   enterprise_profile: EnterpriseProfile | null;
   monthly_activity: MonthlyActivityEntry[];
   payment_timeline: PaymentTimelineEntry[];

@@ -139,8 +139,10 @@ def test_officer_score_and_revision_follow_progressive_stages(service):
     assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
     assert service.list_queue(officer, datetime.now(timezone.utc), 10).items[0].review_index == 20
     officer_view = service.get_case(officer, CASE)
-    assert officer_view.operational_confidence_index is None
-    assert officer_view.operational_confidence_status == "INSUFFICIENT_DATA"
+    assert officer_view.operational_confidence_index == 80
+    assert officer_view.operational_confidence_status == "AVAILABLE"
+    assert officer_view.operational_confidence_observation_count == 2
+    assert {f.code for f in officer_view.operational_confidence_factors} == {"TIMELY_RESPONSE"}
     assert officer_view.history_signal_index is None
     assert officer_view.history_signal_status == "INSUFFICIENT_DATA"
     company_view = service.get_case(company, CASE).model_dump()
@@ -151,6 +153,9 @@ def test_officer_score_and_revision_follow_progressive_stages(service):
     assert result.score_before.review_index == 20
     assert result.score_after.review_index == 0
     assert result.score_after.cause_progress[0].stage is ProgressStage.RESOLVED
+    accepted_view = service.get_case(officer, CASE)
+    assert accepted_view.operational_confidence_index > officer_view.operational_confidence_index
+    assert "ACCEPTED_PROOF" in {f.code for f in accepted_view.operational_confidence_factors}
     assert service.store.revisions(CASE)[-1].score_snapshot.cause_progress[0].stage is ProgressStage.RESOLVED
     assert service.evaluate(CASE, version=result.previous_version).score.review_index == 20
 
