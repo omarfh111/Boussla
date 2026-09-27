@@ -828,3 +828,42 @@ it("renders the brand mark and a time-bounded boot splash once per session", asy
     screen.getByText("Portefeuille des entreprises", { selector: "h1" }),
   ).toBeInTheDocument();
 });
+
+it("renders backend indicator explanations without inventing missing values", async () => {
+  mockApi({
+    ...officer,
+    indicators: {
+      operational_confidence: {
+        value: null,
+        status: "INSUFFICIENT_DATA",
+        factors: [],
+        explanation: "Échantillon trop faible pour une estimation.",
+        calculated_at: "2026-09-27T00:00:00Z",
+        rule_version: "confidence-test-rule",
+        sample_size: 2,
+      },
+      document_review: {
+        value: "37",
+        status: "PROVISIONAL",
+        factors: [],
+        explanation: "Valeur calculée par le serveur.",
+        calculated_at: "2026-09-27T00:00:00Z",
+        rule_version: "review-test-rule",
+        sample_size: 1,
+      },
+    },
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  fireEvent.click(await screen.findByText("Comprendre les cinq indicateurs"));
+  expect(screen.getByText("Indice de revue : 37")).toBeInTheDocument();
+  expect(
+    screen.getByText("Confiance opérationnelle : Données insuffisantes"),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/confidence-test-rule/)).toBeInTheDocument();
+});

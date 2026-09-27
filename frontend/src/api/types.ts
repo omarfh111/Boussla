@@ -425,7 +425,23 @@ export interface GroundedNoteView {
   generation_mode: Mode;
   disclaimer_fr: string;
 }
+export interface CaseIndicator {
+  value: string | null;
+  status: string;
+  factors: {
+    code: string;
+    value: string | null;
+    contribution: string | null;
+    source_ids: string[];
+    explanation: string;
+  }[];
+  explanation: string;
+  calculated_at: string;
+  rule_version: string;
+  sample_size: number;
+}
 export interface OfficerCaseView extends BaseCase {
+  indicators?: Record<string, CaseIndicator>;
   audience: "OFFICER";
   score: ScoreSnapshot | null;
   findings: Finding[];

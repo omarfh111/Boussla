@@ -300,3 +300,23 @@ def test_public_transcription_api_reaches_coherence_and_persists_recalculation(s
     assert service.get_case(officer, CASE).score.review_index == 10
     accepted = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "real-accept")
     assert accepted.score_after.review_index == 0
+
+
+def test_five_indicators_expose_separate_metadata_without_company_leakage(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company = service.registry.actors["DEMO-COMPANY-BAT"]
+    view = service.get_case(officer, CASE)
+    assert set(view.indicators) == {"document_review", "evidence_coverage", "historical_signal",
+                                     "urgency", "operational_confidence"}
+    assert view.indicators["document_review"].value == str(view.score.review_index)
+    assert view.indicators["evidence_coverage"].value == view.score.evidence_coverage
+    assert view.indicators["urgency"].value == str(view.triage.triage_priority)
+    assert view.indicators["operational_confidence"].value is None
+    for indicator in view.indicators.values():
+        assert indicator.rule_version and indicator.calculated_at.tzinfo
+        assert indicator.explanation and indicator.sample_size >= 0
+    assert "indicators" not in service.get_case(company, CASE).model_dump()
+    request_and_answer(service)
+    advanced = service.get_case(officer, CASE)
+    assert advanced.indicators["document_review"].status == "PROVISIONAL"
+    assert advanced.indicators["document_review"].value == "30"

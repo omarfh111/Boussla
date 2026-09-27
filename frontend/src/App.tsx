@@ -1638,6 +1638,40 @@ function Officer({
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
         les contrôles déterministes.
       </p>
+      {c.indicators && (
+        <details className="panel">
+          <summary>Comprendre les cinq indicateurs</summary>
+          {Object.entries(c.indicators).map(([code, value]) => (
+            <article className="indicator-factor" key={code}>
+              <strong>
+                {(
+                  {
+                    document_review: "Indice de revue",
+                    evidence_coverage: "Couverture des preuves",
+                    historical_signal: "Signal historique",
+                    urgency: "Urgence",
+                    operational_confidence: "Confiance opérationnelle",
+                  } as Record<string, string>
+                )[code] ?? code}{" "}
+                : {value.value ?? "Données insuffisantes"}
+              </strong>
+              <p>{value.explanation}</p>
+              <small>
+                Échantillon : {value.sample_size} · Calcul :{" "}
+                {date(value.calculated_at)} · Règle : {value.rule_version}
+              </small>
+              {value.factors.map((factor) => (
+                <p key={factor.code}>
+                  {factor.explanation}
+                  {factor.contribution !== null
+                    ? ` · Contribution : ${factor.contribution}`
+                    : ""}
+                </p>
+              ))}
+            </article>
+          ))}
+        </details>
+      )}
       <Panel title="Contributions au score" eyebrow="EXPLICATION PAR CAUSE">
         {c.score?.cause_progress.length ? (
           <div className="cause-list">

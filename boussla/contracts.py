@@ -943,7 +943,26 @@ class ConfidenceHistoryEntry(Contract):
     factor_deltas: tuple[ConfidenceFactorDelta, ...] = ()
 
 
+class IndicatorFactor(Contract):
+    code: str
+    value: DecimalStr | None = None
+    contribution: DecimalStr | None = None
+    source_ids: tuple[str, ...] = ()
+    explanation: str
+
+
+class CaseIndicator(Contract):
+    value: DecimalStr | None = None
+    status: Literal["AVAILABLE", "PROVISIONAL", "PARTIAL", "INSUFFICIENT_DATA", "LIMITED_DATA"]
+    factors: tuple[IndicatorFactor, ...] = ()
+    explanation: str
+    calculated_at: AwareDatetime
+    rule_version: str
+    sample_size: int = Field(ge=0)
+
+
 class OfficerCaseView(Contract):
+    indicators: dict[str, CaseIndicator] = Field(default_factory=dict)
     audience: Literal[Audience.OFFICER] = Audience.OFFICER
     case_id: str
     company_id: str

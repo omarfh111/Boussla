@@ -60,3 +60,7 @@ The additional fields are backward-compatible defaults for old saved records. Th
 - Public API regression proves 20 → 10 → 20 → 10 → 0, source recovery, company/officer isolation and idempotent retry. The existing quantity workflow proves 40 → 30 → 20. Pure tests cover 10 → 20 → 30 → 40; these are not a claim that all rollback actions already have UI controls.
 - `npm test -- --reporter=dot`: 23 passed; TypeScript/build passed. `BOUSSLA_E2E_URL=http://127.0.0.1:8018 npm run test:e2e -- demo.spec.ts`: 1 passed, including visible 20 → 10 → 0 through company confirmation and officer acceptance.
 - Limitations: allocation native layout only; no universal PDF/OCR or authenticity guarantee. Settlement/counterparty evidence replacement and broad document analysis remain later roadmap work. Existing Streamlit timeout needs monitoring on a warm complete rerun.
+
+## Five-indicator contract
+
+The officer API now exposes `indicators` with exactly document review, evidence coverage, historical signal, urgency and operational confidence. Each provides value/status/factors/explanation/calculated_at/rule_version/sample_size. Existing numeric fields remain compatible; no new blended score is introduced. Company responses do not contain this object. French urgency factors identify their source requests, proposals or history signals. Backend integration: 27 passed, plus 13 passed after source-label refinement. TypeScript passed.

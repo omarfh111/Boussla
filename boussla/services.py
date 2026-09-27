@@ -557,6 +557,8 @@ class BousslaAppService(_DemoAdministration):
                                        "operational_confidence_method": confidence.method,
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
+        from boussla.indicators import case_indicators
+        view = view.model_copy(update={"indicators": case_indicators(view, self.clock())})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())
         return self._with_investigator_brief(view, facts)
 
