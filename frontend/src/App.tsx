@@ -727,6 +727,21 @@ function Company({
         detail="Chaque document conserve son origine et son empreinte."
       />
       <Upload c={c} act={act} />
+      {c.documents
+        .filter(
+          (d) =>
+            d.extraction?.status === "PROPOSED" &&
+            d.extraction.proposal_id &&
+            d.extraction.candidates?.length,
+        )
+        .map((d) => (
+          <TranscriptionForm
+            key={`${d.document.document_id}:${c.case_version}`}
+            c={c}
+            document={d}
+            act={act}
+          />
+        ))}
       <Documents c={c} />
     </>
   );
@@ -2391,5 +2406,82 @@ export default function App() {
     <ErrorBoundary>
       <AppInner />
     </ErrorBoundary>
+  );
+}
+
+function TranscriptionForm({
+  c,
+  document,
+  act,
+}: {
+  c: CompanyCaseView;
+  document: DocumentView;
+  act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+}) {
+  const proposal = document.extraction!;
+  const [fields, setFields] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (proposal.candidates ?? []).map((field) => [
+        field.field_name,
+        field.normalized_value ?? field.raw_value ?? "",
+      ]),
+    ),
+  );
+  const [pending, setPending] = useState(false);
+  const labels: Record<string, string> = {
+    "allocation.transaction_id": "Transaction",
+    "allocation.line_id": "Ligne de facture",
+    "allocation.company_id": "Entreprise",
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    try {
+      await act(
+        () =>
+          api.confirmTranscription(
+            c.case_id,
+            proposal.proposal_id!,
+            c.case_version,
+            fields,
+          ),
+        "Champs vérifiés. Analyse mise à jour ; validation de l’agent requise.",
+      );
+    } catch {
+      /* App displays the typed error. */
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Panel
+      title="Vérifier les champs du document"
+      eyebrow={document.document.original_filename}
+    >
+      <p>
+        Comparez les valeurs avec votre pièce. Cette confirmation porte sur la
+        transcription ; la décision appartient à l’agent.
+      </p>
+      <form className="context-form transcription-form" onSubmit={submit}>
+        {Object.entries(fields).map(([name, value]) => (
+          <label key={name}>
+            {labels[name] ??
+              (name.startsWith("allocation.")
+                ? `Quantité · ${name.split(".")[1]}`
+                : name)}
+            <input
+              value={value}
+              onChange={(event) =>
+                setFields({ ...fields, [name]: event.target.value })
+              }
+            />
+          </label>
+        ))}
+        <button className="primary" disabled={pending}>
+          {pending ? "Vérification…" : "Confirmer les champs"}
+        </button>
+      </form>
+    </Panel>
   );
 }

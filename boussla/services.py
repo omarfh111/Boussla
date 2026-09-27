@@ -1195,7 +1195,13 @@ class BousslaAppService(_DemoAdministration):
             return None
 
     def _extract(self, text: DocumentText | None) -> ExtractionProposal | None:
-        if text is None or self.field_extractor is None:
+        if text is None:
+            return None
+        from boussla.documents.allocation import KnownLayoutAllocationExtractor
+        allocation = KnownLayoutAllocationExtractor().extract_fields(text)
+        if allocation is not None:
+            return allocation
+        if self.field_extractor is None:
             return None
         try:
             return self.field_extractor.extract_fields(text)
@@ -1225,7 +1231,8 @@ class BousslaAppService(_DemoAdministration):
 
     def confirm_transcription(self, actor: Actor, case_id: str, proposal_id: str, field_confirmations: dict[str, str],
                               expected_version: int, request_id: str) -> CompanyCaseView:
-        actor, _ = self._open(actor, case_id, "confirm_transcription")
+        actor, meta = self._open(actor, case_id, "confirm_transcription")
+        from boussla.documents.confirmation import confirm_fields
         ihash = self._input_hash(actor, "confirm_transcription", [proposal_id, field_confirmations, expected_version])
         with self.store.write(case_id) as tx:
             if tx.find_receipt("confirm_transcription", request_id, ihash) is None:
@@ -1237,11 +1244,25 @@ class BousslaAppService(_DemoAdministration):
                 if not set(field_confirmations) <= known:
                     raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE, "Champ non proposé",
                                        fields=sorted(set(field_confirmations) - known))
-                tx.put("extraction", proposal_id, proposal.model_copy(update={"status": "CONFIRMED"}))
+                document = self.store.fact(case_id, "document", proposal.document_id, Document)
+                if document is None or document.subject_company_id != meta["company_id"]:
+                    raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE, "Document hors périmètre")
+                # Native parsing is bounded and local; no model call in this transaction.
+                from boussla.documents.native_text import NativePdfExtractor
+                text = None
+                if document.local_path:
+                    with Path(document.local_path).open("rb") as source:
+                        content = source.read(self.settings.max_upload_bytes + 1)
+                    text = NativePdfExtractor(max_bytes=self.settings.max_upload_bytes,
+                                              max_pages=self.settings.max_pdf_pages).extract_text(document, content)
+                confirmed = confirm_fields(proposal, field_confirmations, text)
+                tx.put("extraction", proposal_id, confirmed)
                 tx.put("transcription_confirmation", proposal_id,
                        {"proposal_id": proposal_id, "fields": {str(k): str(v) for k, v in field_confirmations.items()},
                         "author_actor_id": actor.actor_id, "note": "Confirmation de transcription, pas d'authenticité"})
-                v = tx.commit_version("Transcription confirmée par l'entreprise")
+                facts_after = self._prospective_facts(case_id, expected_version, extraction=[confirmed])
+                snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+                v = tx.commit_version("Transcription confirmée par l'entreprise", score=snapshot)
                 tx.event("TRANSCRIPTION_CONFIRMED", actor.actor_id, "Transcription confirmée (confirmation ≠ authenticité)",
                          (proposal_id,))
                 tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="confirm_transcription", case_id=case_id,

@@ -142,7 +142,17 @@ export interface DocumentView {
     processing_limitations: string[];
   };
   routing: { candidate_class: string; mode: Mode } | null;
-  extraction: { mode: Mode; status: string } | null;
+  extraction: {
+    proposal_id?: string;
+    mode: Mode;
+    status: string;
+    candidates?: {
+      field_name: string;
+      raw_value: string | null;
+      normalized_value: string | null;
+      ambiguities: string[];
+    }[];
+  } | null;
   integrity: { signature_status: string; limitations: string[] } | null;
   mode: Mode;
 }

@@ -101,6 +101,20 @@ export const api = {
       { method: "POST", headers: { "Idempotency-Key": key }, body: form },
     );
   },
+  confirmTranscription: (
+    id: string,
+    proposal: string,
+    version: number,
+    fields: Record<string, string>,
+  ) =>
+    api.post<CompanyCaseView>(
+      "COMPANY",
+      `/cases/${encodeURIComponent(id)}/transcriptions/${encodeURIComponent(proposal)}/confirm`,
+      {
+        expected_version: version,
+        fields,
+      },
+    ),
   context: (id: string, version: number, context: object) =>
     api.post<CompanyCaseView>("COMPANY", `/cases/${id}/context`, {
       expected_version: version,

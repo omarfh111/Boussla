@@ -159,6 +159,13 @@ async def upload(request: Request):
     return result(value)
 
 
+async def confirm_transcription(request: Request):
+    a, k, data = actor(request), key(request), await body(request)
+    return result(service(request).confirm_transcription(
+        a, request.path_params["case_id"], request.path_params["proposal_id"],
+        object_field(data, "fields"), version(data), k))
+
+
 async def context(request: Request):
     a, k, data = actor(request), key(request), await body(request)
     return result(service(request).submit_context(a, request.path_params["case_id"],
@@ -254,6 +261,7 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}/history", history),
         Route("/api/cases/{case_id}/documents", upload, methods=["POST"]),
         Route("/api/cases/{case_id}/context", context, methods=["POST"]),
+        Route("/api/cases/{case_id}/transcriptions/{proposal_id}/confirm", confirm_transcription, methods=["POST"]),
         Route("/api/cases/{case_id}/clarifications/prepare", prepare, methods=["POST"]),
         Route("/api/cases/{case_id}/clarifications/{draft_id}/publish", publish, methods=["POST"]),
         Route("/api/cases/{case_id}/responses/{request_id}", respond, methods=["POST"]),

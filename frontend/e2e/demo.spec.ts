@@ -112,6 +112,21 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(page.getByText("Contributions au score")).toBeVisible();
   await expect(page.locator(".cause-value")).toHaveText("40 → 20");
   await expect(page.getByText("Réduction provisoire")).toBeVisible();
+  // Company confirms source-backed fields; the service records the provisional 10 stage.
+  await page.getByRole("button", { name: "Entreprise", exact: true }).click();
+  await page.getByRole("button", { name: "Pièces", exact: true }).click();
+  await page.getByRole("button", { name: "Confirmer les champs" }).click();
+  await expect(
+    page.getByText(
+      "Champs vérifiés. Analyse mise à jour ; validation de l’agent requise.",
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Agent", exact: true }).click();
+  await page.getByRole("button", { name: "Dossier", exact: true }).click();
+  await expect(page.locator(".priority-ring strong")).toHaveText("10");
+  await expect(
+    page.getByText("Validation agent requise", { exact: true }),
+  ).toBeVisible();
   const accept = page.getByRole("button", { name: "Accepter dans ce dossier" });
   await expect(accept).toBeEnabled();
   await capture(
@@ -123,12 +138,12 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(
     page.getByRole("dialog", { name: "Nouvelle révision" }),
   ).toBeVisible();
-  await expect(page.locator(".revision-grid")).toContainText("20");
+  await expect(page.locator(".revision-grid")).toContainText("10");
   await expect(page.locator(".priority-ring strong")).toHaveText("0");
   await page.locator(".revision-card").evaluate(async (el) => {
     await Promise.all(el.getAnimations().map((a) => a.finished));
   });
-  await capture(page, "10_revision_20_to_0.png");
+  await capture(page, "10_revision_10_to_0.png");
 
   const caseView = await (
     await page.request.get("/api/cases/CASE-BRICKS-001", {

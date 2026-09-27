@@ -262,3 +262,41 @@ def test_progress_snapshots_identify_engine_causes_and_human_resolution(service)
     assert snapshot.engine_version and snapshot.rules_version
     assert snapshot.cause_ids == tuple(c.cause_id for c in snapshot.cause_progress)
     assert service.evaluate(CASE, version=result.new_version).score == snapshot
+
+
+def test_public_transcription_api_reaches_coherence_and_persists_recalculation(service):
+    from starlette.testclient import TestClient
+    from boussla.documents.native_text import NativePdfExtractor
+    from boussla.web.app import create_app
+    service.text_extractor = NativePdfExtractor()
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    document = service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+        version(service), "real-upload", response_id=response.response.response_id)
+    assert service.get_case(officer, CASE).score.review_index == 20
+    extraction = document.extraction
+    assert extraction is not None and extraction.status == "PROPOSED"
+    fields = {c.field_name: c.normalized_value for c in extraction.candidates}
+    url = f"/api/cases/{CASE}/transcriptions/{extraction.proposal_id}/confirm"
+    with TestClient(create_app(service)) as client:
+        payload = {"expected_version": version(service), "fields": fields}
+        headers = {"X-Boussla-Demo-Role": "COMPANY", "Idempotency-Key": "real-confirm"}
+        result = client.post(url, headers=headers, json=payload)
+        assert result.status_code == 200, result.text
+        assert "score" not in result.json()
+        assert client.post(url, headers=headers, json=payload).status_code == 200
+        assert client.post(url, headers={**headers, "X-Boussla-Demo-Role": "OFFICER"},
+                           json=payload).status_code == 403
+    assert service.get_case(officer, CASE).score.review_index == 10
+    snapshot = service.store.revisions(CASE)[-1].score_snapshot
+    assert snapshot.review_index == 10 and snapshot.engine_version == "progressive-review-2"
+    # A correction outside the actual source cannot keep the old corroborating span.
+    service.confirm_transcription(company, CASE, extraction.proposal_id,
+        {**fields, "allocation.P2.quantity": "800"}, version(service), "real-correct")
+    assert service.get_case(officer, CASE).score.review_index == 20
+    assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
+    service.confirm_transcription(company, CASE, extraction.proposal_id, fields,
+                                   version(service), "real-restore")
+    assert service.get_case(officer, CASE).score.review_index == 10
+    accepted = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "real-accept")
+    assert accepted.score_after.review_index == 0

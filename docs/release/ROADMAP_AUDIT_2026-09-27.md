@@ -51,3 +51,12 @@ Work in requested order. Before each production increment: meaningful regression
 - `python -m pip install -r requirements.txt` installed the existing lock; pip reported incompatibilities with unrelated packages in the shared user Python installation. No dependency lock was changed. The complete project suite is running; its result is not yet known.
 
 The additional fields are backward-compatible defaults for old saved records. The enum remains `UNRESOLVED` (the requested DETECTED meaning) to preserve clients. Historical snapshots from previous engines are retained, not relabelled as the new method.
+
+## Source-backed confirmation delivery
+
+- Full baseline at `12011b8`: `python -m pytest tests -o addopts= -q --tb=short` → 533 passed, 1 failed in 841.15s. Failure: first Streamlit AppTest exceeded its existing 10-second startup timeout. Exact isolated rerun passed (1 passed); do not describe the original run as green.
+- Native allocation extraction reads labelled company, transaction, line and proposed project quantities from the actual PDF. It never uses filename/fixture identity or expected case fields. Unsupported layouts stay on the manual path; conflicting repeated fields remain ambiguous.
+- The company API now exposes `POST /api/cases/{case_id}/transcriptions/{proposal_id}/confirm`. The company document screen exposes its form. Corrections are applied, unsupported values lose supporting spans, and the new score is stored atomically with the confirmation revision.
+- Public API regression proves 20 → 10 → 20 → 10 → 0, source recovery, company/officer isolation and idempotent retry. The existing quantity workflow proves 40 → 30 → 20. Pure tests cover 10 → 20 → 30 → 40; these are not a claim that all rollback actions already have UI controls.
+- `npm test -- --reporter=dot`: 23 passed; TypeScript/build passed. `BOUSSLA_E2E_URL=http://127.0.0.1:8018 npm run test:e2e -- demo.spec.ts`: 1 passed, including visible 20 → 10 → 0 through company confirmation and officer acceptance.
+- Limitations: allocation native layout only; no universal PDF/OCR or authenticity guarantee. Settlement/counterparty evidence replacement and broad document analysis remain later roadmap work. Existing Streamlit timeout needs monitoring on a warm complete rerun.
