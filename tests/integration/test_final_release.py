@@ -78,6 +78,23 @@ def test_history_gap_raises_triage_not_review_index(svc):
     assert not any("fraud" in s.explanation_fr.lower() for s in view.history_signals)
 
 
+def test_historical_indicator_is_separate_explained_and_scoped(svc):
+    view = svc.get_case(officer(svc), "SYN-OP-005-CASE")
+    assert view.score.review_index == 0
+    assert view.history_signal_status == "AVAILABLE"
+    assert view.history_signal_index is not None and view.history_signal_index > 0
+    assert view.history_signal_factors
+    assert sum(f.contribution for f in view.history_signal_factors) >= view.history_signal_index
+    assert all(f.source_signal_ids for f in view.history_signal_factors)
+    item = next(i for i in all_items(svc) if i.case_id == view.case_id)
+    assert item.history_signal_index == view.history_signal_index
+    curated = svc.get_case(officer(svc), BRICKS)
+    assert curated.history_signal_index is None
+    assert curated.history_signal_status == "INSUFFICIENT_DATA"
+    company = svc.get_case(actor(svc, "DEMO-COMPANY-BAT"), BRICKS).model_dump()
+    assert "history_signal_index" not in company
+
+
 def test_buyer_seller_comparison_is_field_level_and_neutral(svc):
     view = svc.get_case(officer(svc), "SYN-OP-003-CASE")
     diff = [c for c in view.invoice_comparisons if c.status == "DIFFERENCES"]

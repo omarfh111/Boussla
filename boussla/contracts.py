@@ -917,6 +917,8 @@ class OfficerCaseView(Contract):
     history_signals: tuple["CompanyHistorySignal", ...] = ()
     history_signal_index: int | None = None
     history_signal_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
+    history_signal_factors: tuple["HistoricalFactor", ...] = ()
+    history_signal_method: str | None = None
     operational_confidence_index: int | None = None
     operational_confidence_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
     investigator_brief: "InvestigatorBriefView | None" = None
@@ -967,6 +969,7 @@ class QueueItem(Contract):
     synthetic_identifier: str | None = None
     last_activity_at: date | None = None
     history_signal_codes: tuple[str, ...] = ()
+    history_signal_index: int | None = None
     history_anomaly: bool | None = None
     """True when a lane B signal other than NO_SIGNIFICANT_CHANGE/INSUFFICIENT_HISTORY exists."""
 
@@ -1126,6 +1129,20 @@ class CompanyHistorySignal(Contract):
     method: str
     mode: Mode
     affects_review_index: Literal[False] = False
+
+
+class HistoricalFactor(Contract):
+    reason_code: HistorySignalCode
+    contribution: int = Field(ge=0, le=100)
+    source_signal_ids: tuple[str, ...]
+    explanation_fr: str
+
+
+class HistoricalIndicator(Contract):
+    index: int | None = Field(default=None, ge=0, le=100)
+    status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    factors: tuple[HistoricalFactor, ...] = ()
+    method: str = "HISTORY_CONTEXT_V1"
 
 
 class BriefObservationView(Contract):

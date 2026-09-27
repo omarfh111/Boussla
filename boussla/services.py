@@ -50,6 +50,7 @@ from boussla.observability import traced
 from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clarification_deadlines
 from boussla.review_evidence import derive_progress_evidence
 from boussla.review_progress import calculate_progress, transaction_progress_index
+from boussla.historical_indicator import calculate_historical_indicator
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -517,8 +518,13 @@ class BousslaAppService(_DemoAdministration):
             banner_fr=DEMO_BANNER_FR)
         context_view, _, context_mode = self._context_assessment(case_id, company, v, facts)
         triage, deadlines, signals, history_mode = self._triage(case_id, company, v, ev, facts)
+        historical = calculate_historical_indicator(signals)
         view = view.model_copy(update={"context_assessment": context_view, "triage": triage,
                                        "clarification_deadlines": deadlines, "history_signals": signals,
+                                       "history_signal_index": historical.index,
+                                       "history_signal_status": historical.status,
+                                       "history_signal_factors": historical.factors,
+                                       "history_signal_method": historical.method,
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())
@@ -923,6 +929,7 @@ class BousslaAppService(_DemoAdministration):
             facts = self._facts(meta["case_id"], meta["version"])
             ev = self._evaluate(meta["case_id"], meta["company_id"], meta["version"], facts)
             triage, _, signals, _ = self._triage(meta["case_id"], meta["company_id"], meta["version"], ev, facts)
+            historical = calculate_historical_indicator(signals)
             enterprise = self.enterprises.get(meta["company_id"])
             dates = [o.issued_on for o in facts["invoice_observation"]] + [p.occurred_at.date() for p in facts["payment"]]
             items.append(QueueItem(
@@ -937,6 +944,7 @@ class BousslaAppService(_DemoAdministration):
                 synthetic_identifier=enterprise.synthetic_mf if enterprise else None,
                 last_activity_at=max(dates) if dates else None,
                 history_signal_codes=tuple(dict.fromkeys(x.reason_code.value for x in signals)),
+                history_signal_index=historical.index,
                 history_anomaly=any(x.reason_code in ANOMALY_CODES for x in signals) if signals else None))
         # Queue order = operational urgency first, then documentary review priority (null
         # last), then most recent activity, then case ID. React never computes an order.
