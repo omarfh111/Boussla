@@ -490,7 +490,20 @@ export interface BehaviorProfile {
     explanation_fr: string;
   }[];
 }
+export interface RecommendedAction {
+  action_id: string;
+  kind: string;
+  title_fr: string;
+  priority: number;
+  reason: string;
+  source_causes: string[];
+  required_documents: string[];
+  status: "OPEN" | "WAITING" | "COMPLETED";
+  source_ids: string[];
+  rule_version: string;
+}
 export interface OfficerCaseView extends BaseCase {
+  recommended_actions?: RecommendedAction[];
   behavior_profile?: BehaviorProfile | null;
   indicators?: Record<string, CaseIndicator>;
   audience: "OFFICER";

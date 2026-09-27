@@ -575,6 +575,8 @@ class BousslaAppService(_DemoAdministration):
         from boussla.indicators import case_indicators
         view = view.model_copy(update={"indicators": case_indicators(view, self.clock())})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())
+        from boussla.actions import recommend_actions
+        view = view.model_copy(update={"recommended_actions": recommend_actions(view)})
         return self._with_investigator_brief(view, facts)
 
     def _covered_history_transaction_ids(self, company_id: str, facts: dict[str, list],

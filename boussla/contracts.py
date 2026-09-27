@@ -1038,7 +1038,22 @@ class BehaviorProfile(Contract):
     metrics: tuple[BehaviorMetric, ...]
 
 
+class RecommendedAction(Contract):
+    action_id: str
+    kind: Literal["REVIEW_EVIDENCE", "REVIEW_DOCUMENT", "REQUEST_EXPLANATION", "REQUEST_DOCUMENT",
+                  "WAIT_RESPONSE", "ESCALATE", "VALIDATE_CAUSE"]
+    title_fr: str
+    priority: int = Field(ge=1, le=5)
+    reason: str
+    source_causes: tuple[str, ...] = ()
+    required_documents: tuple[str, ...] = ()
+    status: Literal["OPEN", "WAITING", "COMPLETED"]
+    source_ids: tuple[str, ...] = ()
+    rule_version: str = "recommended-actions-1"
+
+
 class OfficerCaseView(Contract):
+    recommended_actions: tuple[RecommendedAction, ...] = ()
     behavior_profile: BehaviorProfile | None = None
     indicators: dict[str, CaseIndicator] = Field(default_factory=dict)
     audience: Literal[Audience.OFFICER] = Audience.OFFICER

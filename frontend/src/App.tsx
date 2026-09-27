@@ -1936,6 +1936,35 @@ function Officer({
           <p>Données insuffisantes pour la vue sur 12 mois.</p>
         )}
       </Panel>
+      <Panel
+        title="Actions recommandées"
+        eyebrow="PROCHAINE ÉTAPE · DÉCISION AGENT"
+      >
+        {c.recommended_actions?.length ? (
+          c.recommended_actions.map((action) => (
+            <article key={action.action_id} className="document">
+              <strong>
+                Priorité {action.priority} · {action.title_fr}
+              </strong>
+              <span>
+                {action.status === "WAITING" ? "En attente" : "À traiter"}
+              </span>
+              <p>{action.reason}</p>
+              <small>
+                Causes :{" "}
+                {action.source_causes.join(", ") || "Aucune cause liée"}
+              </small>
+              {action.required_documents.length > 0 && (
+                <small>
+                  Pièces requises : {action.required_documents.join(", ")}
+                </small>
+              )}
+            </article>
+          ))
+        ) : (
+          <p>Aucune action recommandée avec les données actuelles.</p>
+        )}
+      </Panel>
       <InvestigatorPanel
         brief={c.investigator_brief}
         passages={c.candidate_passages}

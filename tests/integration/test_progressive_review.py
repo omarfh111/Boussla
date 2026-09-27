@@ -366,3 +366,23 @@ def test_identical_pending_request_is_reused_without_duplicate_event(service):
     assert repeated.request.request_id == first.request.request_id and version(service) == before
     assert service.publish_clarification(officer,CASE,draft.draft_id,before,"repeat") == repeated
     assert len([e for e in service.store.events(CASE) if e.kind == "REQUEST_PUBLISHED"]) == 1
+
+
+def test_recommended_actions_follow_progress_without_mutating_the_case(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    start = service.get_case(officer,CASE)
+    assert any(a.kind == "REQUEST_EXPLANATION" and a.source_causes == (f"{CASE}:TX-001:QUANTITY",)
+               for a in start.recommended_actions)
+    initial_version = version(service)
+    company,response = request_and_answer(service)
+    assert any(a.kind == "REVIEW_EVIDENCE" for a in service.get_case(officer,CASE).recommended_actions)
+    assert version(service) > initial_version
+    service.upload_document(company,CASE,PDF,"allocation.pdf","application/pdf",version(service),"action-doc",
+                            response_id=response.response.response_id)
+    actions = service.get_case(officer,CASE).recommended_actions
+    assert actions and actions[0].priority == 1 and actions[0].status == "OPEN"
+    assert all(a.rule_version == "recommended-actions-1" for a in actions)
+    assert "recommended_actions" not in service.get_case(company,CASE).model_dump()
+    before_read = version(service)
+    assert service.get_case(officer,CASE).recommended_actions == actions
+    assert version(service) == before_read
