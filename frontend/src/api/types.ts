@@ -130,6 +130,23 @@ export interface AdminResult {
   notice_fr: string;
 }
 export interface DocumentView {
+  processing_status?: string;
+  analysis?: {
+    calculated_at: string;
+    rule_version: string;
+    classification: string;
+    authenticity_statement: string;
+    linked_cause_ids: string[];
+    proposed_action: string;
+    stages: { code: string; status: string; explanation_fr: string }[];
+    checks: {
+      code: string;
+      status: string;
+      explanation_fr: string;
+      source_ids: string[];
+    }[];
+    limitations: string[];
+  } | null;
   document: {
     document_id: string;
     original_filename: string;

@@ -1149,6 +1149,33 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                     <dd>{d.extraction?.status || "N/D"}</dd>
                   </div>
                 </dl>
+                {d.processing_status === "ANALYZED_AWAITING_REVIEW" && (
+                  <p>Analyse automatique terminée. En attente de validation.</p>
+                )}
+                {d.analysis && (
+                  <details>
+                    <summary>Analyse documentaire</summary>
+                    <p>
+                      {d.analysis.classification} ·{" "}
+                      {d.analysis.authenticity_statement}
+                    </p>
+                    <small>
+                      {d.analysis.rule_version} · {d.analysis.calculated_at}
+                    </small>
+                    {d.analysis.checks.map((check) => (
+                      <p key={check.code}>
+                        <strong>{check.status}</strong> · {check.explanation_fr}
+                        <br />
+                        <small>{check.source_ids.join(", ")}</small>
+                      </p>
+                    ))}
+                    <p>
+                      Causes proposées :{" "}
+                      {d.analysis.linked_cause_ids.join(", ") ||
+                        "Aucun lien établi"}
+                    </p>
+                  </details>
+                )}
                 {d.integrity?.limitations?.length ? (
                   <small>Limites : {d.integrity.limitations.join(", ")}</small>
                 ) : null}

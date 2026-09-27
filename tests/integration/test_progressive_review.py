@@ -333,3 +333,24 @@ def test_behavior_profile_is_officer_only_and_uncovered_history_stays_unknown(se
     assert view.behavior_profile.as_of.tzinfo
     assert all(m.status != "AVAILABLE" for m in view.behavior_profile.metrics)
     assert "behavior_profile" not in service.get_case(company, CASE).model_dump()
+
+
+def test_upload_analysis_is_persisted_idempotently_and_internal_causes_are_officer_only(service):
+    from boussla.documents.native_text import NativePdfExtractor
+    service.text_extractor = NativePdfExtractor()
+    company, response = request_and_answer(service)
+    before = version(service)
+    first = service.upload_document(company,CASE,PDF,"allocation.pdf","application/pdf",before,"analysis-upload",
+                                    response_id=response.response.response_id)
+    retry = service.upload_document(company,CASE,PDF,"allocation.pdf","application/pdf",before,"analysis-upload",
+                                    response_id=response.response.response_id)
+    assert first == retry and first.analysis is None
+    officer = service.registry.actors["DEMO-OFFICER"]
+    view = service.get_case(officer,CASE)
+    doc = next(d for d in view.documents if d.document.document_id == first.document.document_id)
+    assert doc.analysis and doc.analysis.rule_version == "document-pipeline-1"
+    assert doc.analysis.case_version == before+1
+    assert doc.analysis.linked_cause_ids == (f"{CASE}:TX-001:QUANTITY",)
+    assert all(d.analysis is None for d in service.get_case(company,CASE).documents)
+    assert len([e for e in service.store.events(CASE) if e.kind == "DOCUMENT_ANALYZED"]) == 1
+    assert view.score.review_index == 20

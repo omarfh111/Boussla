@@ -215,14 +215,16 @@ def test_create_case_scoped(svc, actors):
 class _Text:
     def extract_text(self, document, content):
         from boussla.contracts import DocumentText, PageText
-        return DocumentText(document_id=document.document_id, pages=(PageText(page=1, text="Facture"),), status="OK")
+        return DocumentText(document_id=document.document_id, pages=(PageText(page=1, text="Facture X"),), status="OK")
 
 
 class _Fields:
     def extract_fields(self, text):
-        from boussla.contracts import CandidateField, ExtractionProposal
+        from boussla.contracts import CandidateField, EvidenceRef, ExtractionProposal
         return ExtractionProposal(proposal_id=f"EXT-{text.document_id}", document_id=text.document_id,
-                                  candidates=(CandidateField(field_name="invoice_number", raw_value="X"),),
+                                  candidates=(CandidateField(field_name="invoice_number", raw_value="X", normalized_value="X",
+                                      evidence_refs=(EvidenceRef(document_id=text.document_id,page=1,
+                                          exact_text="X",field_name="invoice_number"),)),),
                                   mode=Mode.MANUAL, prompt_version="t")
 
 
@@ -331,3 +333,17 @@ def test_question_rounds_count_answer_batches_not_answered_questions(svc, actors
     after = svc.answer_questions(co, CASE, first.analysis_id, {q.question_id: "réponse" for q in first.questions},
                                  ver(svc), "round-1")
     assert after.question_round == 1
+
+
+def test_extractor_cannot_introduce_a_value_absent_from_the_document(tmp_path):
+    class Invented(_Fields):
+        def extract_fields(self,text):
+            proposal = super().extract_fields(text)
+            candidate = proposal.candidates[0].model_copy(update={"raw_value":"INVENTED"})
+            return proposal.model_copy(update={"candidates":(candidate,)})
+    service = _svc_with(tmp_path,text_extractor=_Text(),field_extractor=Invented())
+    actor = service.registry.actors["DEMO-COMPANY-BAT"]
+    with pytest.raises(BousslaError) as exc:
+        service.upload_document(actor,CASE,PDF,"invoice.pdf","application/pdf",1,"invented")
+    assert exc.value.code is ErrorCode.INVALID_EVIDENCE_REFERENCE
+    assert service.store.case_meta(CASE)["version"] == 1

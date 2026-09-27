@@ -27,7 +27,7 @@ from boussla.config import Settings, get_settings, use_os_trust_store
 from boussla.contracts import (
     Actor, Allocation, AllocationChange, AllocationStatus, AllocationTarget, AnalysisStatus, AnalysisView,
     Audience, BousslaError, ClarificationDraft, ClarificationRequest, ClarificationResponse, ClarificationStatus,
-    CompanyCaseView, ContextClaim, Delivery, Document, DocumentView, ErrorCode, EvidenceProposal, Finding,
+    CompanyCaseView, ContextClaim, Delivery, Document, DocumentAnalysisReport, DocumentView, ErrorCode, EvidenceProposal, Finding,
     FindingFamily, FindingStatus, HistoryView, Hypothesis, IdentityMapping, IntegrityReport, InvoiceObservation,
     LocalDraftArtifact, Mode, OfficerCaseView, OfficerHistoryView, Payment, PaymentAllocation, PaymentStatus, Perspective, Project,
     ProposalStatus, PurposeCategory, QuantityReference, QueueItem, QueuePage, RequestStatus, RequestView,
@@ -354,6 +354,7 @@ class BousslaAppService(_DemoAdministration):
             "extraction": s.facts(case_id, "extraction", ExtractionProposal, v),
             "integrity": s.facts(case_id, "integrity", IntegrityReport, v),
             "routing": s.facts(case_id, "routing", RouterResult, v),
+            "document_analysis": s.facts(case_id, "document_analysis", DocumentAnalysisReport, v),
         }
 
     def _clarification_status(self, requests: list[RequestView]) -> ClarificationStatus:
@@ -475,7 +476,9 @@ class BousslaAppService(_DemoAdministration):
         extractions = {e.document_id: e for e in facts["extraction"]}
         integrity = {i.document_id: i for i in facts["integrity"]}
         routing = {r.document_id: r for r in facts["routing"]}
-        return tuple(DocumentView(document=d, extraction=extractions.get(d.document_id),
+        analyses = {r.document_id: r for r in facts.get("document_analysis", ())}
+        return tuple(DocumentView(document=d, analysis=analyses.get(d.document_id),
+                                  processing_status="ANALYZED_AWAITING_REVIEW" if d.document_id in analyses else "NOT_ANALYZED", extraction=extractions.get(d.document_id),
                                   integrity=integrity.get(d.document_id) or IntegrityReport(
                                       document_id=d.document_id, sha256=d.sha256,
                                       limitations=("INTEGRITY_ADAPTER_NOT_RUN",)),
@@ -502,7 +505,7 @@ class BousslaAppService(_DemoAdministration):
             open_q = tuple(q for r in published if r.request.status is RequestStatus.PUBLISHED_IN_DEMO for q in r.questions)
             return CompanyCaseView(
                 case_id=case_id, company_id=company, company_display_name=self._company_name(company), case_version=v,
-                documents=tuple(dv for dv in self._doc_views(facts, v)
+                documents=tuple(dv.model_copy(update={"analysis": None}) for dv in self._doc_views(facts, v)
                                 if dv.document.acquisition_channel.value != "SIMULATED_COUNTERPARTY_REFERENCE"),
                 transactions=self._summaries(facts),
                 projects=tuple(p for p in facts["project"] if p.company_id == company),
@@ -1161,11 +1164,18 @@ class BousslaAppService(_DemoAdministration):
             auto = self._auto_clarify(tx, actor, case_id, meta["company_id"], facts_after, context_codes)
             if auto is not None:
                 facts_after["request"].append(auto)
-            snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+            evaluation = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after)
+            snapshot = evaluation.score
+            from boussla.documents.pipeline import analyze_document
+            report = analyze_document(document, extraction, routing, integrity, facts_after,
+                                      evaluation.findings, self.clock(), expected_version + 1, text)
+            tx.put("document_analysis", doc_id, report)
             v = tx.commit_version(f"Pièce déposée : {safe_name}" + self._auto_reason(auto), score=snapshot)
             tx.event("UPLOAD", actor.actor_id, f"Pièce déposée ({doc_id}) — original conservé, empreinte SHA-256", (doc_id,))
             self._auto_event(tx, auto)
-            view = DocumentView(document=document, extraction=extraction, integrity=integrity, routing=routing,
+            tx.event("DOCUMENT_ANALYZED", AUTO_ACTOR_ID, "Analyse documentaire terminée ; validation requise", (doc_id,))
+            view = DocumentView(document=document, analysis=report if actor.role is Role.OFFICER else None,
+                                processing_status="ANALYZED_AWAITING_REVIEW", extraction=extraction, integrity=integrity, routing=routing,
                                 case_version=v, mode=Mode.LIVE)
             tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="upload_document", case_id=case_id,
                                           actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
@@ -1211,7 +1221,12 @@ class BousslaAppService(_DemoAdministration):
         if self.field_extractor is None:
             return None
         try:
-            return self.field_extractor.extract_fields(text)
+            result = self.field_extractor.extract_fields(text)
+            if not any(c.normalized_value is not None for c in result.candidates):
+                from boussla.documents.labelled import extract_labelled
+                result = extract_labelled(text) or result
+            from boussla.documents.spans import validate_extraction_proposal
+            return validate_extraction_proposal(text, result)
         except BousslaError:
             raise
         except Exception:  # noqa: BLE001 - provider failure is never a finding; manual entry remains
@@ -1273,7 +1288,14 @@ class BousslaAppService(_DemoAdministration):
                         "calculated_at": self.clock().isoformat(), "rule_version": "transcription-confirmation-2",
                         "note": "Confirmation de transcription, pas d'authenticité"})
                 facts_after = self._prospective_facts(case_id, expected_version, extraction=[confirmed])
-                snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+                evaluation = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after)
+                snapshot = evaluation.score
+                from boussla.documents.pipeline import analyze_document
+                report = analyze_document(document, confirmed,
+                    next((r for r in facts_after["routing"] if r.document_id == document.document_id), None),
+                    next((r for r in facts_after["integrity"] if r.document_id == document.document_id), None),
+                    facts_after, evaluation.findings, self.clock(), expected_version + 1, text)
+                tx.put("document_analysis", document.document_id, report)
                 v = tx.commit_version("Transcription confirmée par l'entreprise", score=snapshot)
                 tx.event("TRANSCRIPTION_CONFIRMED", actor.actor_id, "Transcription confirmée (confirmation ≠ authenticité)",
                          (proposal_id,))

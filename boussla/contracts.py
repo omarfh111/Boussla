@@ -237,6 +237,8 @@ class DocumentClass(str, Enum):
     ALLOCATION_RESPONSE = "ALLOCATION_RESPONSE"
     DELIVERY_RECORD = "DELIVERY_RECORD"
     CREDIT_NOTE = "CREDIT_NOTE"
+    CONTRACT = "CONTRACT"
+    DECLARATION = "DECLARATION"
     OTHER_OR_UNKNOWN = "OTHER_OR_UNKNOWN"
 
 
@@ -806,7 +808,31 @@ class CaseEvent(Contract):
 # Service views (what the UI receives)
 # ---------------------------------------------------------------------------
 
+class DocumentCheck(Contract):
+    code: str
+    status: Literal["PASS", "WARN", "FAIL", "UNKNOWN"]
+    explanation_fr: str
+    source_ids: tuple[str, ...] = ()
+
+
+class DocumentAnalysisReport(Contract):
+    document_id: str
+    case_version: int
+    calculated_at: AwareDatetime
+    rule_version: str
+    classification: str
+    checks: tuple[DocumentCheck, ...]
+    stages: tuple[DocumentCheck, ...]
+    linked_cause_ids: tuple[str, ...] = ()
+    transaction_ids: tuple[str, ...] = ()
+    proposed_action: Literal["REVIEW_DOCUMENT", "REQUEST_READABLE_DOCUMENT", "REQUEST_CLARIFICATION"]
+    authenticity_statement: str = "Authenticité à vérifier"
+    limitations: tuple[str, ...] = ()
+
+
 class DocumentView(Contract):
+    analysis: DocumentAnalysisReport | None = None
+    processing_status: str = "NOT_ANALYZED"
     document: Document
     extraction: ExtractionProposal | None = None
     integrity: IntegrityReport | None = None
