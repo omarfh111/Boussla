@@ -51,7 +51,7 @@ from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clari
 from boussla.review_evidence import derive_progress_evidence
 from boussla.review_progress import RULE_VERSION, calculate_progress, transaction_progress_index
 from boussla.historical_indicator import calculate_historical_indicator
-from boussla.operational_confidence import calculate_operational_confidence
+from boussla.operational_confidence import calculate_operational_confidence, confidence_window_start
 from boussla.monthly_context import build_monthly_context
 from boussla.confidence_history import confidence_delta
 
@@ -555,6 +555,10 @@ class BousslaAppService(_DemoAdministration):
                                        "operational_confidence_factors": confidence.factors,
                                        "operational_confidence_eligible_observations": confidence.eligible_observations,
                                        "operational_confidence_method": confidence.method,
+                                       "operational_confidence_sample_size": confidence.sample_size,
+                                       "operational_confidence_data_quality": confidence.data_quality,
+                                       "operational_confidence_sample_note_fr": confidence.sample_note_fr,
+                                       "operational_confidence_window_start": confidence.window_start,
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
         from boussla.indicators import case_indicators
@@ -570,9 +574,10 @@ class BousslaAppService(_DemoAdministration):
         if bundle is None:
             return ()
         periods = {row["period"] for row in bundle["coverage"]
-                   if row.get("source_id") and row["period"] < as_of.strftime("%Y-%m")}
+                   if row.get("source_id") and confidence_window_start(as_of).strftime("%Y-%m") <= row["period"] < as_of.strftime("%Y-%m")}
         buyer_tx = {o.transaction_id for o in facts["invoice_observation"]
-                    if o.perspective is Perspective.BUYER_RECEIVED and o.available_at <= as_of}
+                    if o.perspective is Perspective.BUYER_RECEIVED and o.available_at <= as_of
+                    and o.issued_on >= confidence_window_start(as_of).date()}
         return tuple(sorted(t.transaction_id for t in facts["transaction"]
                             if t.economic_period in periods and t.transaction_id in buyer_tx))
 

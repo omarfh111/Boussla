@@ -71,13 +71,13 @@ def case_indicators(view: OfficerCaseView, as_of: datetime) -> dict[str, CaseInd
         sample_size=len(view.requests) + len(view.proposals) + len(view.history_signals))
     confidence = CaseIndicator(value=str(view.operational_confidence_index)
                               if view.operational_confidence_index is not None else None,
-        status=view.operational_confidence_status,
+        status="LIMITED_DATA" if view.operational_confidence_index is not None and view.operational_confidence_data_quality == "LIMITED_DATA" else view.operational_confidence_status,
         factors=tuple(IndicatorFactor(code=f.code, value=str(f.numerator), contribution=f.weighted_contribution,
             source_ids=f.source_ids, explanation=f"{f.explanation_fr} ({f.numerator}/{f.denominator} ; poids {f.effective_weight} %)")
             for f in view.operational_confidence_factors),
-        explanation="Coopération et corroboration observées ; indicateur distinct, sans effet sur le score documentaire ni l’urgence.",
+        explanation="Coopération et corroboration observées ; sans effet sur la revue ni l’urgence. " + view.operational_confidence_sample_note_fr,
         calculated_at=view.operational_confidence_as_of or as_of,
         rule_version=view.operational_confidence_method,
-        sample_size=view.operational_confidence_eligible_observations)
+        sample_size=view.operational_confidence_sample_size)
     return {"document_review": review, "evidence_coverage": coverage,
             "historical_signal": history, "urgency": urgency, "operational_confidence": confidence}

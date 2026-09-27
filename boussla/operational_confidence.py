@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from calendar import monthrange
 from decimal import Decimal, ROUND_HALF_UP
 
 from boussla.contracts import (ClarificationResponse, CompanyHistorySignal, EvidenceProposal,
@@ -16,6 +17,11 @@ WEIGHTS = {"TIMELINESS": 30, "ANSWER_COHERENCE": 25,
 
 def _decimal_str(value: Decimal) -> str:
     return format(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP).normalize(), "f")
+
+
+def confidence_window_start(as_of: datetime) -> datetime:
+    return as_of.replace(year=as_of.year - 1,
+                         day=min(as_of.day, monthrange(as_of.year - 1, as_of.month)[1]))
 
 
 def calculate_operational_confidence(
@@ -32,12 +38,16 @@ def calculate_operational_confidence(
     """
     if as_of.tzinfo is None or as_of.utcoffset() is None:
         raise ValueError("as_of must be timezone aware")
+    window_start = confidence_window_start(as_of)
     published = tuple(v.request for v in requests if v.request.status is not RequestStatus.DRAFT
                       and (v.request.published_at is None or v.request.published_at <= as_of))
-    response_by_request = {r.request_id: r for r in responses if r.submitted_at <= as_of}
+    request_ids_in_scope = {r.request_id for r in published}
+    response_by_request = {r.request_id: r for r in responses
+                           if window_start <= r.submitted_at <= as_of and r.request_id in request_ids_in_scope}
     dimensions: list[tuple[str, int, int, tuple[str, ...], tuple[str, ...], str]] = []
 
     eligible_requests = tuple(r for r in published if r.target_response_at is not None
+                              and (r.target_response_at >= window_start or r.request_id in response_by_request)
                               and (r.target_response_at <= as_of or r.request_id in response_by_request))
     if eligible_requests:
         timely = sum(response_by_request.get(r.request_id) is not None
@@ -70,8 +80,11 @@ def calculate_operational_confidence(
         dimensions.append(("ANSWER_COHERENCE", consistent, len(verifiable), reasons, refs,
                            "Réponses corroborées parmi celles vérifiables par des champs documentaires sourcés."))
 
+    response_dates = {r.response_id: r.submitted_at for r in responses}
     judged = tuple(p for p in proposals if p.source_document_id is not None
-                   and p.status in (ProposalStatus.ACCEPTED, ProposalStatus.REJECTED))
+                   and p.status in (ProposalStatus.ACCEPTED, ProposalStatus.REJECTED)
+                   and (p.decided_at or response_dates.get(p.source_response_id)) is not None
+                   and window_start <= (p.decided_at or response_dates[p.source_response_id]) <= as_of)
     if judged:
         accepted = sum(p.status is ProposalStatus.ACCEPTED for p in judged)
         refs = tuple(sorted({x for p in judged for x in (p.proposal_id, p.source_document_id) if x}))
@@ -90,10 +103,21 @@ def calculate_operational_confidence(
                            ("REPEATED_INVOICE_CONFLICT",) if conflicted else ("NO_REPEATED_CONFLICT",), refs,
                            "Transactions couvertes sans conflit de facture répété parmi les transactions couvertes."))
 
-    count = sum(denominator for _, _, denominator, _, _, _ in dimensions)
+    response_requests = {r.response_id: r.request_id for r in response_by_request.values()}
+    distinct_requests = {r.request_id for r in eligible_requests} | {response_requests[r] for r in verifiable}
+    distinct_documents = {p.source_document_id for p in judged}
+    count = len(distinct_requests) + len(distinct_documents) + len(covered)
+    quality = "INSUFFICIENT_DATA" if count < 3 else "LIMITED_DATA" if count < 10 else "OBSERVED"
+    sample = dict(window_start=window_start, sample_size=count,
+                  request_count=len(distinct_requests), document_count=len(distinct_documents),
+                  history_transaction_count=len(covered), data_quality=quality,
+                  sample_note_fr=f"{len(distinct_requests)} demandes, {len(distinct_documents)} pièces examinées et "
+                                 f"{len(covered)} transactions historiques sur les 12 derniers mois. "
+                                 + (f"Données limitées — {count} éléments distincts seulement." if count < 10
+                                    else "Observations attribuées ; aucune certitude statistique revendiquée."))
     if count < 3:
         return OperationalConfidence(index=None, status="INSUFFICIENT_DATA", as_of=as_of,
-                                     eligible_observations=count)
+                                     eligible_observations=count, **sample)
 
     active_weight = sum(WEIGHTS[code] for code, *_ in dimensions)
     factors = []
@@ -109,4 +133,4 @@ def calculate_operational_confidence(
             source_ids=refs, explanation_fr=explanation))
     index = int(raw.quantize(Decimal(1), rounding=ROUND_HALF_UP))
     return OperationalConfidence(index=index, status="AVAILABLE", as_of=as_of,
-                                 factors=tuple(factors), eligible_observations=count)
+                                 factors=tuple(factors), eligible_observations=count, **sample)

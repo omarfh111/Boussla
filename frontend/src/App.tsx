@@ -1638,6 +1638,11 @@ function Officer({
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
         les contrôles déterministes.
       </p>
+      {c.operational_confidence_sample_note_fr && (
+        <p className="hero-caption">
+          {c.operational_confidence_sample_note_fr}
+        </p>
+      )}
       {c.indicators && (
         <details className="panel">
           <summary>Comprendre les cinq indicateurs</summary>

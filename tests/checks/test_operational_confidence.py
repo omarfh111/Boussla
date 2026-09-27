@@ -59,7 +59,7 @@ def test_four_dimensions_have_explicit_denominators_and_weighted_contributions()
         ("TX-1", "TX-2", "TX-3", "TX-4"), ("TX-4",), NOW + timedelta(days=2),
     )
     assert result.status == "AVAILABLE" and result.index == 60
-    assert result.as_of == NOW + timedelta(days=2) and result.eligible_observations == 11
+    assert result.as_of == NOW + timedelta(days=2) and result.eligible_observations == 9
     factors = {f.code: f for f in result.factors}
     assert {code: (f.numerator, f.denominator, f.nominal_weight)
             for code, f in factors.items()} == {
@@ -90,8 +90,8 @@ def test_rejected_then_accepted_proof_recalculates_without_moving_documentary_sc
 
 
 def test_new_contradictory_proof_reverses_answer_coherence():
-    requests = (request("1"), request("2"))
-    responses = (response("1"), response("2"))
+    requests = (request("1"), request("2"), request("3"))
+    responses = (response("1"), response("2"), response("3"))
     good = calculate(requests, responses, evidence_items=(evidence("1", consistent=True),))
     bad = calculate(requests, responses, evidence_items=(evidence("1", consistent=False),))
     assert good.index == 100 and bad.index == 55
@@ -104,3 +104,19 @@ def test_covered_history_uses_distinct_transactions_not_missing_months():
     conflict = calculate(covered=("TX-1", "TX-2", "TX-3"), conflicted=("TX-2",))
     assert stable.index == 100 and conflict.index == 67
     assert conflict.factors[0].denominator == 3 and conflict.factors[0].numerator == 2
+
+
+def test_one_response_cannot_count_twice_toward_minimum_sample():
+    result = calculate((request("1"), request("2")), (response("1"), response("2")),
+                       evidence_items=(evidence("1", consistent=True),))
+    assert result.index is None and result.sample_size == 2
+    assert result.data_quality == "INSUFFICIENT_DATA"
+
+
+def test_small_numeric_sample_is_explicitly_limited_and_windowed():
+    result = calculate((request("1", due_days=-1), request("2", due_days=-1), request("3", due_days=-1)))
+    assert result.index == 0 and result.data_quality == "LIMITED_DATA"
+    assert result.request_count == 3 and result.document_count == 0
+    assert "3 éléments distincts" in result.sample_note_fr
+    assert result.window_start.year == NOW.year - 1
+    assert calculate((request("ancient", due_days=-400),)).sample_size == 0

@@ -917,7 +917,14 @@ class OperationalConfidence(Contract):
     as_of: AwareDatetime
     factors: tuple[OperationalConfidenceFactor, ...] = ()
     eligible_observations: int = 0
-    method: str = "OPERATIONAL_CONFIDENCE_V2"
+    method: str = "OPERATIONAL_CONFIDENCE_V3"
+    window_start: AwareDatetime | None = None
+    sample_size: int = 0
+    request_count: int = 0
+    document_count: int = 0
+    history_transaction_count: int = 0
+    data_quality: Literal["INSUFFICIENT_DATA", "LIMITED_DATA", "OBSERVED"] = "INSUFFICIENT_DATA"
+    sample_note_fr: str = "Données insuffisantes"
 
 
 class ConfidenceFactorDelta(Contract):
@@ -1000,7 +1007,11 @@ class OfficerCaseView(Contract):
     operational_confidence_as_of: AwareDatetime | None = None
     operational_confidence_factors: tuple[OperationalConfidenceFactor, ...] = ()
     operational_confidence_eligible_observations: int = 0
-    operational_confidence_method: str = "OPERATIONAL_CONFIDENCE_V2"
+    operational_confidence_method: str = "OPERATIONAL_CONFIDENCE_V3"
+    operational_confidence_sample_size: int = 0
+    operational_confidence_data_quality: str = "INSUFFICIENT_DATA"
+    operational_confidence_sample_note_fr: str = "Données insuffisantes"
+    operational_confidence_window_start: AwareDatetime | None = None
     investigator_brief: "InvestigatorBriefView | None" = None
     enterprise_profile: "EnterpriseProfileView | None" = None
     monthly_activity: tuple["MonthlyActivityView", ...] = ()

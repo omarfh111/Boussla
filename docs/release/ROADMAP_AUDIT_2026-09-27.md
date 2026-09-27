@@ -64,3 +64,7 @@ The additional fields are backward-compatible defaults for old saved records. Th
 ## Five-indicator contract
 
 The officer API now exposes `indicators` with exactly document review, evidence coverage, historical signal, urgency and operational confidence. Each provides value/status/factors/explanation/calculated_at/rule_version/sample_size. Existing numeric fields remain compatible; no new blended score is introduced. Company responses do not contain this object. French urgency factors identify their source requests, proposals or history signals. Backend integration: 27 passed, plus 13 passed after source-label refinement. TypeScript passed.
+
+## Confidence consolidation
+
+`OPERATIONAL_CONFIDENCE_V3` keeps the approved 30/25/25/20 normalized dimensions, but counts distinct requests, reviewed documents and covered transactions for the minimum three-observation threshold. A response participating in two dimensions no longer fabricates a third sample. Observations are restricted to twelve months at the declared cutoff; missing decision timestamps use the associated response date only when available. Numeric results from fewer than ten distinct observations carry LIMITED_DATA and a French count/window explanation; the ten-observation display threshold is a demo convention, not statistical certification. Targeted confidence/history/progression/release tests: 37 passed; TypeScript passed. No impact on documentary score or urgency.

@@ -469,6 +469,10 @@ export interface OfficerCaseView extends BaseCase {
   operational_confidence_factors: OperationalConfidenceFactor[];
   operational_confidence_eligible_observations: number;
   operational_confidence_method: string;
+  operational_confidence_sample_size?: number;
+  operational_confidence_data_quality?: string;
+  operational_confidence_sample_note_fr?: string;
+  operational_confidence_window_start?: string | null;
   enterprise_profile: EnterpriseProfile | null;
   monthly_activity: MonthlyActivityEntry[];
   payment_timeline: PaymentTimelineEntry[];
