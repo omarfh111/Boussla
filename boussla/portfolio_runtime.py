@@ -19,7 +19,7 @@ from boussla.contracts import (
     CompanyHistorySignal, Enterprise, FinancialSnapshotView, HistorySignalCode, Mode,
 )
 from boussla.data import operational_portfolio as op
-from boussla.history_signals import analyze_history
+from boussla.history_signals import analyze_self_history
 from boussla.seed import fact_id
 from boussla.store import CaseStore, stable_hash
 
@@ -122,7 +122,7 @@ class PortfolioRuntime:
                 if bundle is None:
                     self._signals[company_id] = ()
                 else:
-                    raw = analyze_history(op.transaction_inputs(self.data, company_id), company_id=company_id,
+                    raw = analyze_self_history(op.transaction_inputs(self.data, company_id), company_id=company_id,
                                           as_of=self.as_of,
                                           coverage={r["period"]: r["source_id"] for r in bundle["coverage"]})
                     self._signals[company_id] = tuple(CompanyHistorySignal(
@@ -144,4 +144,3 @@ class PortfolioRuntime:
             documented_payable_millimes=s["documented_payable_millimes"],
             outstanding_documented_payable_millimes=s["outstanding_documented_payable_millimes"],
             scope=s["scope"], statement_fr=s["statement"], source_count=len(s["source_ids"]))
-
