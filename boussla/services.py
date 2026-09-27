@@ -74,9 +74,6 @@ HYPOTHESIS_NAMES_FR = {
 # Deterministic playbook hypotheses (checks engine) -> lane C catalogue evidence features.
 PLAYBOOK_TO_CATALOGUE = {"SECOND_AUTHORIZED_PACKAGE": "SECOND_PROJECT_ALLOCATION",
                          "AUTHORIZED_STOCK": "STOCK_REMAINING"}
-COMPARED_INVOICE_FIELDS = ("invoice_number", "invoice_version", "issued_on", "currency", "net_millimes",
-                           "tax_millimes", "gross_millimes")
-COMPARED_LINE_FIELDS = ("item_description", "quantity", "unit", "unit_price_millimes", "line_net_millimes")
 """Author of automatic clarification events. Not an Actor: it cannot call the service."""
 
 # Input contracts for dictionary payloads: any other property is a typed INVALID_INPUT
@@ -425,7 +422,7 @@ class BousslaAppService(_DemoAdministration):
             company_id=company_id, case_version=version, cutoff=effective_as_of,
             calculated_at=effective_as_of, engine_version=RULE_VERSION,
             cause_ids=tuple(c.cause_id for c in cause_progress),
-            method_id="PROGRESSIVE_REVIEW_V2", rules_version=f"{getattr(self.checks, 'calculation_version', 'B')}+{RULE_VERSION}",
+            method_id="PROGRESSIVE_REVIEW_V2", rules_version="+".join(sorted({f.calculation_version for f in findings} | {RULE_VERSION})),
             review_index=index, raw_review_index=raw_index, cause_progress=cause_progress,
             decisive_transaction_id=decisive_transaction_id,
             evidence_coverage=str(coverage.quantize(Decimal("0.01"))) if coverage is not None else None,
@@ -805,31 +802,23 @@ class BousslaAppService(_DemoAdministration):
         }
 
     def _invoice_comparisons(self, facts: dict[str, list]) -> tuple[InvoiceComparisonView, ...]:
-        """Pair buyer/seller observations by authoritative transaction ID and compare
-        field by field. Agreement is corroboration, never validity or authenticity."""
-        out = []
-        for tx in facts["transaction"]:
-            obs = [o for o in facts["invoice_observation"] if o.transaction_id == tx.transaction_id]
-            buyer = next((o for o in obs if o.perspective is Perspective.BUYER_RECEIVED), None)
-            seller = next((o for o in obs if o.perspective is Perspective.SELLER_ISSUED), None)
-            if buyer is None or seller is None:
-                out.append(InvoiceComparisonView(
-                    transaction_id=tx.transaction_id, buyer_observation_id=buyer.observation_id if buyer else None,
-                    seller_observation_id=seller.observation_id if seller else None, status="SINGLE_OBSERVATION",
-                    label_fr="Observation unique — pas de comparaison indépendante"))
-                continue
-            diffs = [f for f in COMPARED_INVOICE_FIELDS if getattr(buyer, f) != getattr(seller, f)]
-            bl, sl = (buyer.lines[0] if buyer.lines else None), (seller.lines[0] if seller.lines else None)
-            if bl is not None and sl is not None:
-                diffs += [f"line.{f}" for f in COMPARED_LINE_FIELDS if getattr(bl, f) != getattr(sl, f)]
-            elif (bl is None) != (sl is None):
-                diffs.append("lines")
-            out.append(InvoiceComparisonView(
-                transaction_id=tx.transaction_id, buyer_observation_id=buyer.observation_id,
-                seller_observation_id=seller.observation_id, status="DIFFERENCES" if diffs else "CONCORDANT",
-                label_fr="Différences observées entre les deux observations" if diffs else "Observations concordantes",
-                difference_fields=tuple(diffs)))
-        return tuple(out)
+        from boussla.reconciliation import compare_transaction
+        cutoff = self.clock()
+        result = []
+        known_payments = {p.payment_id for p in facts["payment"] if p.available_at <= cutoff}
+        for transaction in facts["transaction"]:
+            comparison = compare_transaction(transaction, facts["invoice_observation"], facts["document"], cutoff)
+            result.append(comparison.model_copy(update={
+                "payment_ids": tuple(sorted({a.payment_id for a in facts["payment_allocation"]
+                    if a.transaction_id == transaction.transaction_id and a.payment_id in known_payments
+                    and a.accepted_at <= cutoff})),
+                "delivery_ids": tuple(sorted(d.delivery_id for d in facts["delivery"]
+                    if d.transaction_id == transaction.transaction_id and d.received_at <= cutoff.date())),
+                "project_ids": tuple(sorted({a.target_project_id for a in facts["allocation"]
+                    if a.transaction_id == transaction.transaction_id and a.target_project_id
+                    and a.status is AllocationStatus.ACCEPTED and a.effective_on <= cutoff.date()}
+                    | ({transaction.project_id} if transaction.project_id else set())))}))
+        return tuple(result)
 
     # ------------------------------------------------------- deterministic scenarios
     def _reallocation_scenarios(self, case_id: str, company_id: str, version: int, facts: dict[str, list],

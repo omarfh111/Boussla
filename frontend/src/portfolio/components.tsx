@@ -751,6 +751,18 @@ function ComparisonPair({
               <dd>{value.origin_group_id}</dd>
             </div>
           </dl>
+          {value.lines.length > 1 && (
+            <details>
+              <summary>Toutes les lignes ({value.lines.length})</summary>
+              {value.lines.map((line) => (
+                <p key={line.line_id}>
+                  {line.item_description} · {line.quantity} {line.unit} · Prix
+                  unitaire {money(line.unit_price_millimes, value.currency)} ·
+                  HT {money(line.line_net_millimes, value.currency)}
+                </p>
+              ))}
+            </details>
+          )}
           <small className="portfolio-source">
             Pièce : {value.document_id}
           </small>
@@ -765,6 +777,15 @@ function ComparisonPair({
       <p className={`comparison-status ${comparison.status.toLowerCase()}`}>
         <strong>{comparison.label_fr}</strong> · {comparison.transaction_id}
       </p>
+      {comparison.reconciliation_status === "RAPPROCHEMENT_AMBIGU" && (
+        <p>Candidates : {comparison.candidate_observation_ids?.join(", ")}</p>
+      )}
+      {comparison.difference_fields.length > 0 && (
+        <p>Champs différents : {comparison.difference_fields.join(", ")}</p>
+      )}
+      {comparison.rule_version && (
+        <small>Règle : {comparison.rule_version}</small>
+      )}
       <div className="comparison-pair">
         {side(buyer, "Observation acheteur")}
         {side(seller, "Observation vendeur")}

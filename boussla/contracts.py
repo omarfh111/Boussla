@@ -1376,7 +1376,14 @@ class InvoiceComparisonView(Contract):
     transaction_id: str
     buyer_observation_id: str | None = None
     seller_observation_id: str | None = None
-    status: Literal["CONCORDANT", "DIFFERENCES", "SINGLE_OBSERVATION"]
+    status: Literal["CONCORDANT", "DIFFERENCES", "SINGLE_OBSERVATION", "AMBIGUOUS"]
+    reconciliation_status: Literal["EN_ATTENTE_DE_CONTREPARTIE", "RAPPROCHE", "ECART_DETECTE", "RAPPROCHEMENT_AMBIGU", "NON_RAPPROCHE"] = "NON_RAPPROCHE"
+    candidate_observation_ids: tuple[str, ...] = ()
+    payment_ids: tuple[str, ...] = ()
+    delivery_ids: tuple[str, ...] = ()
+    project_ids: tuple[str, ...] = ()
+    rule_version: str = "invoice-reconciliation-1"
+    calculated_at: AwareDatetime | None = None
     label_fr: str
     difference_fields: tuple[str, ...] = ()
     counterparty_reason_code: str | None = None

@@ -351,7 +351,11 @@ export interface InvoiceComparison {
   transaction_id: string;
   buyer_observation_id: string | null;
   seller_observation_id: string | null;
-  status: "CONCORDANT" | "DIFFERENCES" | "SINGLE_OBSERVATION";
+  status: "CONCORDANT" | "DIFFERENCES" | "SINGLE_OBSERVATION" | "AMBIGUOUS";
+  reconciliation_status?: string;
+  candidate_observation_ids?: string[];
+  rule_version?: string;
+  calculated_at?: string | null;
   label_fr: string;
   difference_fields: string[];
   counterparty_reason_code: string | null;
