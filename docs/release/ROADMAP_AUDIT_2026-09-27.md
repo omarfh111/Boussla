@@ -68,3 +68,6 @@ The officer API now exposes `indicators` with exactly document review, evidence 
 ## Confidence consolidation
 
 `OPERATIONAL_CONFIDENCE_V3` keeps the approved 30/25/25/20 normalized dimensions, but counts distinct requests, reviewed documents and covered transactions for the minimum three-observation threshold. A response participating in two dimensions no longer fabricates a third sample. Observations are restricted to twelve months at the declared cutoff; missing decision timestamps use the associated response date only when available. Numeric results from fewer than ten distinct observations carry LIMITED_DATA and a French count/window explanation; the ten-observation display threshold is a demo convention, not statistical certification. Targeted confidence/history/progression/release tests: 37 passed; TypeScript passed. No impact on documentary score or urgency.
+
+Complete rerun at a95cd0c: 539 passed, 1 failed in 770.16s; the same first Streamlit startup exceeded ten seconds. Initial-render allowance is now 30 seconds; subsequent interactions keep the ten-second budget and all assertions remain unchanged. Confidence final follow-up: 22 passed.
+Startup adjustment verified: all six tests in tests/ui/test_app.py passed in 38.14s. A complete rerun after this adjustment remains outstanding.
