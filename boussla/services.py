@@ -568,7 +568,10 @@ class BousslaAppService(_DemoAdministration):
             profile_cutoff = min(profile_cutoff, self.portfolio.as_of)
             bundle = self.portfolio.bundle(company)
             coverage = {row["period"]: row["source_id"] for row in bundle["coverage"]} if bundle else {}
-        view = view.model_copy(update={"behavior_profile": build_behavior_profile(facts, coverage, profile_cutoff, self.store.events(case_id))})
+        profile_findings = (ev.findings if ev.score.cutoff == profile_cutoff else
+                            self._evaluate(case_id, company, v, facts, as_of=profile_cutoff).findings)
+        view = view.model_copy(update={"behavior_profile": build_behavior_profile(
+            facts, coverage, profile_cutoff, self.store.events(case_id), profile_findings)})
         from boussla.indicators import case_indicators
         view = view.model_copy(update={"indicators": case_indicators(view, self.clock())})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())
@@ -1271,15 +1274,23 @@ class BousslaAppService(_DemoAdministration):
                     text = NativePdfExtractor(max_bytes=self.settings.max_upload_bytes,
                                               max_pages=self.settings.max_pdf_pages).extract_text(document, content)
                 confirmed = confirm_fields(proposal, field_confirmations, text)
+                prior_values = {c.field_name: c.normalized_value for c in proposal.candidates}
+                changes = {c.field_name: {"before": prior_values.get(c.field_name), "after": c.normalized_value}
+                           for c in confirmed.candidates if c.normalized_value != prior_values.get(c.field_name)}
                 tx.put("extraction", proposal_id, confirmed)
                 tx.put("transcription_confirmation", proposal_id,
                        {"proposal_id": proposal_id, "fields": {str(k): str(v) for k, v in field_confirmations.items()},
-                        "author_actor_id": actor.actor_id, "note": "Confirmation de transcription, pas d'authenticité"})
+                        "author_actor_id": actor.actor_id, "changes": changes,
+                        "calculated_at": self.clock().isoformat(), "rule_version": "transcription-confirmation-2",
+                        "note": "Confirmation de transcription, pas d'authenticité"})
                 facts_after = self._prospective_facts(case_id, expected_version, extraction=[confirmed])
                 snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
                 v = tx.commit_version("Transcription confirmée par l'entreprise", score=snapshot)
                 tx.event("TRANSCRIPTION_CONFIRMED", actor.actor_id, "Transcription confirmée (confirmation ≠ authenticité)",
                          (proposal_id,))
+                if changes:
+                    tx.event("TRANSCRIPTION_CORRECTED", actor.actor_id,
+                             "Champs corrigés : " + ", ".join(sorted(changes)), (proposal_id,))
                 tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="confirm_transcription", case_id=case_id,
                                               actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
                                               result_hash=ihash), ReceiptNote(note="CONFIRMED", fact_ids=(proposal_id,)))

@@ -295,6 +295,9 @@ def test_public_transcription_api_reaches_coherence_and_persists_recalculation(s
         {**fields, "allocation.P2.quantity": "800"}, version(service), "real-correct")
     assert service.get_case(officer, CASE).score.review_index == 20
     assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
+    correction_events = [e for e in service.store.events(CASE) if e.kind == "TRANSCRIPTION_CORRECTED"]
+    assert len(correction_events) == 1 and correction_events[0].actor_id == company.actor_id
+    assert "allocation.P2.quantity" in correction_events[0].summary
     service.confirm_transcription(company, CASE, extraction.proposal_id, fields,
                                    version(service), "real-restore")
     assert service.get_case(officer, CASE).score.review_index == 10

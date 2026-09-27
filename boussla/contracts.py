@@ -432,6 +432,7 @@ class Transaction(Contract):
 
 
 class Payment(Contract):
+    payment_method: Literal["CASH", "TRANSFER", "CARD", "CHEQUE", "OTHER", "UNKNOWN"] = "UNKNOWN"
     payment_id: str
     source_record_id: str
     payer_company_id: str | None = None

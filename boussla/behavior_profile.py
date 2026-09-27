@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from boussla.contracts import BehaviorMetric, BehaviorProfile, Perspective
 
-RULE_VERSION = "self-baseline-1"
+RULE_VERSION = "self-baseline-2"
 
 
 def month(index):
@@ -17,7 +17,7 @@ def mean(values):
     return sum(values, Decimal(0)) / len(values) if values else None
 
 
-def build_behavior_profile(facts, coverage, as_of: datetime, events=()) -> BehaviorProfile:
+def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings=None) -> BehaviorProfile:
     if as_of.tzinfo is None:
         raise ValueError("timezone-aware cutoff required")
     current_index = as_of.year * 12 + as_of.month - 2
@@ -102,14 +102,17 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=()) -> Behav
                 decisions[period].append(proposal)
     add("DOCUMENT_REJECTION_RATE", "Taux de rejet des pièces examinées", {p: (Decimal(sum(x.status.value == "REJECTED" for x in v)) * 100 / len(v)
         if v else None) for p, v in decisions.items()}, "%", sources=tuple(x.proposal_id for v in decisions.values() for x in v))
-    event_counts = {p: Decimal(0) for p in rows}
-    event_sources = []
+    # Old confirmation events do not distinguish corrections: leave those months unknown.
+    corrected = {p: [] for p in rows}
     for event in events:
-        if event.kind == "TRANSCRIPTION_CONFIRMED" and event.at <= as_of and event.at.strftime("%Y-%m") in event_counts:
-            event_counts[event.at.strftime("%Y-%m")] += 1
-            event_sources.append(event.event_id)
-    add("CORRECTION_ACTIVITY", "Confirmations ou corrections de transcription", {p: n if event_sources else None for p, n in event_counts.items()}, "actions", sources=event_sources,
-        note="Actions de vérification enregistrées ; une confirmation ne prouve pas qu’une erreur existait.")
+        period = event.at.strftime("%Y-%m")
+        if event.at <= as_of and period in rows:
+            if event.kind == "TRANSCRIPTION_CORRECTED":
+                corrected[period].append(event)
+    add("CORRECTION_ACTIVITY", "Corrections de transcription attestées", {
+        p: Decimal(len(v)) if v else None for p, v in corrected.items()}, "actions",
+        sources=tuple(e.event_id for v in corrected.values() for e in v),
+        note="Corrections enregistrées explicitement, sans compter les simples confirmations. Les anciennes confirmations non qualifiées restent inconnues.")
     known_suppliers = {o.issuer_company_id for p in baseline for o in rows[p] if o.issuer_company_id}
     new_suppliers = {o.issuer_company_id for o in rows[current] if o.issuer_company_id} - known_suppliers
     metrics.append(BehaviorMetric(code="NEW_SUPPLIERS", label_fr="Nouveaux fournisseurs", unit="fournisseurs",
@@ -117,8 +120,16 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=()) -> Behav
         status="AVAILABLE" if current in covered and len(baseline) >= 3 else "INSUFFICIENT_DATA",
         baseline_periods=baseline, sample_size=len(baseline), source_ids=tuple(sorted(set(invoice_refs) | {coverage[p] for p in (*baseline, current) if coverage.get(p)})),
         explanation_fr="Fournisseurs absents des mois couverts de référence ; changement descriptif, pas une accusation."))
-    metrics.append(BehaviorMetric(code="CASH_FREQUENCY", label_fr="Fréquence des paiements en espèces", unit="%",
-        status="UNSUPPORTED", explanation_fr="Le mode de paiement n’est pas renseigné dans les observations disponibles."))
+    cash_groups = {p: [] for p in rows}
+    for payment in payments.values():
+        period = payment.occurred_at.strftime("%Y-%m")
+        if period in cash_groups:
+            cash_groups[period].append(payment)
+    add("CASH_FREQUENCY", "Fréquence des règlements en espèces", {
+        p: Decimal(sum(x.payment_method == "CASH" for x in v)) * 100 / len(v)
+        if v and all(x.payment_method != "UNKNOWN" for x in v) else None
+        for p, v in cash_groups.items()}, "%", sources=tuple(payments),
+        note="Part des règlements observés dont le mode est espèces ; inconnue dès qu’un mode manque dans le mois.")
     seasonal_periods = tuple(p for p in seasonal if p in covered)
     seasonal_base = mean([Decimal(len(rows[p])) for p in seasonal_periods]) if len(seasonal_periods) == 2 else None
     seasonal_current = Decimal(len(rows[current])) if current in covered else None
@@ -130,7 +141,15 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=()) -> Behav
         baseline_periods=seasonal_periods, sample_size=len(seasonal_periods),
         source_ids=tuple(sorted(set(invoice_refs) | {coverage[p] for p in (*seasonal_periods, current) if coverage.get(p)})),
         explanation_fr="Comparaison descriptive de deux mois homologues couverts ; ce n’est pas un modèle prédictif de saisonnalité."))
-    metrics.append(BehaviorMetric(code="ANOMALY_COUNT", label_fr="Nombre d’anomalies historiques", unit="anomalies",
-        status="INSUFFICIENT_DATA", explanation_fr="Le catalogue actuel ne conserve pas encore toutes les constatations historiques datées ; absence de constatation ne signifie pas zéro anomalie."))
+    anomaly_groups = {p: [] for p in rows}
+    for finding in findings or ():
+        transaction = transactions.get(finding.transaction_id)
+        if transaction is not None and transaction.economic_period in anomaly_groups:
+            anomaly_groups[transaction.economic_period].append(finding)
+    add("ANOMALY_COUNT", "Causes non résolues par période de transaction", {
+        p: Decimal(sum(f.status.value == "UNRESOLVED" for f in v)) if v else None
+        for p, v in anomaly_groups.items()}, "causes",
+        sources=tuple(f.finding_id for v in anomaly_groups.values() for f in v),
+        note="État des causes évaluées au calcul courant, regroupées par période de transaction ; ce n’est pas une reconstruction de leur état passé.")
     return BehaviorProfile(as_of=as_of, observed_period=current, baseline_periods=baseline,
                            rule_version=RULE_VERSION, metrics=tuple(metrics))
