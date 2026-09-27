@@ -85,13 +85,14 @@ def test_mutation_flow_stale_idempotent_and_history(client):
                     json={"expected_version": v, "response": response})
     assert r.status_code == 200, r.text
     proposal = r.json()["proposal_ids"][0]
-    assert view(client, "OFFICER")["score"]["review_index"] == 40
+    assert view(client, "OFFICER")["score"]["review_index"] == 20
     v = view(client, "OFFICER")["case_version"]
     url = f"/api/cases/{CASE}/proposals/{proposal}/accept"
     assert client.post(url, headers=headers(key="wrong-role"), json={"expected_version": v}).status_code == 403
     accepted = client.post(url, headers=headers("OFFICER", "accept-1"), json={"expected_version": v})
     assert accepted.status_code == 200, accepted.text
-    assert accepted.json()["score_before"]["review_index"] == 40
+    assert accepted.json()["score_before"]["review_index"] == 20
+    assert accepted.json()["score_before"]["raw_review_index"] == 40
     assert accepted.json()["score_after"]["review_index"] == 0
     assert client.post(url, headers=headers("OFFICER", "accept-1"), json={"expected_version": v}).json()["replayed"]
     assert len(client.get(f"/api/cases/{CASE}/history", headers=headers("OFFICER")).json()["revisions"]) > 1

@@ -637,6 +637,9 @@ class ScoreSnapshot(Contract):
     method_id: str
     rules_version: str
     review_index: int | None
+    raw_review_index: int | None = None
+    cause_progress: tuple[CauseProgress, ...] = ()
+    decisive_transaction_id: str | None = None
     evidence_coverage: DecimalStr | None
     coverage_complete: bool
     contributions: dict[str, DecimalStr] = Field(default_factory=dict)

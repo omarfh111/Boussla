@@ -1,9 +1,12 @@
 """Progress evidence must be linked to the cause it provisionally reduces."""
 
+from datetime import datetime, timezone
+
 import pytest
 
 from boussla.config import FIXTURE_ROOT, Settings
-from boussla.contracts import BousslaError, ErrorCode, FindingFamily, ProgressStage
+from boussla.contracts import (BousslaError, CandidateField, ErrorCode, EvidenceRef, ExtractionProposal,
+                               FindingFamily, Mode, ProgressStage)
 from boussla.review_evidence import derive_progress_evidence
 from boussla.review_progress import calculate_progress, transaction_progress_index
 from boussla.security import ActorRegistry
@@ -116,3 +119,76 @@ def test_linked_upload_is_idempotent_and_cannot_be_attached_by_officer(service):
     replay = service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
                                      before, "company-upload", response_id=response.response.response_id)
     assert replay == first and version(service) == before + 1
+
+
+def test_officer_score_and_revision_follow_progressive_stages(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    assert service.get_case(officer, CASE).score.review_index == 40
+    company, response = request_and_answer(service)
+    answered = service.get_case(officer, CASE).score
+    assert answered.review_index == 30
+    assert answered.raw_review_index == 40
+    assert answered.cause_progress[0].provisional
+    assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 30
+    assert service.list_queue(officer, datetime.now(timezone.utc), 10).items[0].review_index == 30
+    service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                            version(service), "upload", response_id=response.response.response_id)
+    uploaded = service.get_case(officer, CASE).score
+    assert uploaded.review_index == 20
+    assert uploaded.cause_progress[0].stage is ProgressStage.EVIDENCE_RECEIVED
+    assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
+    assert service.list_queue(officer, datetime.now(timezone.utc), 10).items[0].review_index == 20
+    assert service.get_case(company, CASE).model_dump().get("score") is None
+    result = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "accept")
+    assert result.score_before.review_index == 20
+    assert result.score_after.review_index == 0
+    assert result.score_after.cause_progress[0].stage is ProgressStage.RESOLVED
+    assert service.store.revisions(CASE)[-1].score_snapshot.cause_progress[0].stage is ProgressStage.RESOLVED
+    assert service.evaluate(CASE, version=result.previous_version).score.review_index == 20
+
+
+def test_rejection_restores_raw_cause_weight(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                            version(service), "upload", response_id=response.response.response_id)
+    rejected = service.reject_evidence(officer, CASE, response.proposal_ids[0],
+                                       version(service), "pièce contradictoire", "reject")
+    assert rejected.score_before.review_index == 20
+    assert rejected.score_after.review_index == 40
+    assert rejected.score_after.cause_progress[0].stage is ProgressStage.UNRESOLVED
+
+
+def test_source_backed_coherence_and_contradiction_are_reversible(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    doc = service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                                  version(service), "upload", response_id=response.response.response_id)
+    doc_id = doc.document.document_id
+
+    def record(p2):
+        fields = {"allocation.transaction_id": "TX-001", "allocation.line_id": "LINE-BUY-001",
+                  "allocation.P1.quantity": "1000", "allocation.P2.quantity": p2}
+        candidates = tuple(CandidateField(field_name=name, raw_value=value, normalized_value=value,
+                                          evidence_refs=(EvidenceRef(document_id=doc_id, page=1,
+                                                                     exact_text=value),))
+                           for name, value in fields.items())
+        with service.store.write(CASE) as tx:
+            tx.put("extraction", "EXTRACT-ALLOC", ExtractionProposal(
+                proposal_id="EXTRACT-ALLOC", document_id=doc_id, candidates=candidates,
+                mode=Mode.MANUAL, prompt_version="test-source-backed", status="CONFIRMED"))
+            tx.commit_version("Champs de pièce contrôlés")
+
+    record("1000")
+    coherent = service.get_case(officer, CASE).score
+    assert coherent.review_index == 10
+    assert coherent.cause_progress[0].stage is ProgressStage.EVIDENCE_COHERENT
+    record("900")
+    contradictory = service.get_case(officer, CASE).score
+    assert contradictory.review_index == 40
+    assert contradictory.cause_progress[0].reason_code == "DOCUMENT_ALLOCATION_CONTRADICTION"
+    record("1000")
+    assert service.get_case(officer, CASE).score.review_index == 10
+    accepted = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "accept")
+    assert accepted.score_before.review_index == 10
+    assert accepted.score_after.review_index == 0

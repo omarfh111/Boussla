@@ -48,6 +48,8 @@ from boussla.seed import load_enterprises, seed_demo_case
 from boussla.store import CaseStore, ReceiptNote, stable_hash, utcnow
 from boussla.observability import traced
 from boussla.triage import ANOMALY_CODES, PENDING_STATUSES, assess_triage, clarification_deadlines
+from boussla.review_evidence import derive_progress_evidence
+from boussla.review_progress import calculate_progress, transaction_progress_index
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -368,7 +370,8 @@ class BousslaAppService(_DemoAdministration):
             return ClarificationStatus.ANSWERED
         return ClarificationStatus.CLOSED
 
-    def _evaluate(self, case_id: str, company_id: str, version: int, facts: dict[str, list]) -> Evaluation:
+    def _evaluate(self, case_id: str, company_id: str, version: int, facts: dict[str, list],
+                  previous_snapshot: ScoreSnapshot | None = None) -> Evaluation:
         findings: list[Finding] = []
         hypotheses: list[Hypothesis] = []
         scenarios: list[Scenario] = []
@@ -392,7 +395,17 @@ class BousslaAppService(_DemoAdministration):
             tx_scores.append(self.checks.score_transaction(tx_findings, set(ALL_FAMILIES)))
             scenarios += self.checks.run_scenarios(inputs, {})
             hypotheses += self._hypothesis_engine.test_hypotheses(inputs, tx_findings, pending_second_package=pending)
-        index = self.checks.aggregate_company(tx_scores)
+        raw_index = self.checks.aggregate_company(tx_scores)
+        if previous_snapshot is None:
+            previous_snapshot = next((revision.score_snapshot for revision in reversed(self.store.revisions(case_id))
+                                      if revision.version <= version and revision.score_snapshot is not None), None)
+        cause_progress = calculate_progress(tuple(findings),
+                                            derive_progress_evidence(tuple(findings), facts, previous_snapshot))
+        adjusted = [(transaction_progress_index(cause_progress, s.transaction_id)
+                     if any(c.transaction_id == s.transaction_id for c in cause_progress) else s.review_index,
+                     s.transaction_id) for s in tx_scores]
+        scored = [(index, tx_id) for index, tx_id in adjusted if index is not None]
+        index, decisive_transaction_id = max(scored, key=lambda pair: (pair[0], pair[1])) if scored else (None, None)
         evaluable = [s for s in tx_scores if s.evidence_coverage is not None]
         coverage = min((Decimal(s.evidence_coverage) for s in evaluable), default=None)
         unresolved_tx = {f.transaction_id for f in findings if f.status is FindingStatus.UNRESOLVED}
@@ -403,7 +416,9 @@ class BousslaAppService(_DemoAdministration):
         score = ScoreSnapshot(
             company_id=company_id, case_version=version, cutoff=utcnow(),
             method_id=tx_scores[0].method if tx_scores else "NONE", rules_version=getattr(self.checks, "calculation_version", "B"),
-            review_index=index, evidence_coverage=str(coverage.quantize(Decimal("0.01"))) if coverage is not None else None,
+            review_index=index, raw_review_index=raw_index, cause_progress=cause_progress,
+            decisive_transaction_id=decisive_transaction_id,
+            evidence_coverage=str(coverage.quantize(Decimal("0.01"))) if coverage is not None else None,
             coverage_complete=bool(tx_scores) and all(s.coverage_complete for s in tx_scores),
             contributions=contributions,
             tested_families=tuple(sorted({f for s in tx_scores for f in s.evaluable_families}, key=lambda f: f.value)),
@@ -528,7 +543,9 @@ class BousslaAppService(_DemoAdministration):
         now = self.clock()
         signals, history_mode = self._history_signals(company_id, now)
         deadlines = clarification_deadlines(facts["request"], now)
-        triage = assess_triage(case_id=case_id, case_version=version, review_index=ev.score.review_index,
+        # Provisional score reductions do not de-prioritize an officer's pending decision.
+        # The triage base is the visible raw documentary contribution, not history or AI.
+        triage = assess_triage(case_id=case_id, case_version=version, review_index=ev.score.raw_review_index,
                                findings=ev.findings, deadlines=deadlines, proposals=facts["proposal"],
                                history_signals=signals, now=now)
         return triage, deadlines, signals, history_mode
@@ -1023,20 +1040,28 @@ class BousslaAppService(_DemoAdministration):
             linked_response = self._upload_response_scope(case_id, actor, response_id) if response_id else None
             tx.put("document", doc_id, document)
             if linked_response is not None:
-                tx.put("response", response_id, linked_response.model_copy(update={
-                    "document_ids": (*linked_response.document_ids, doc_id)}))
+                updated_response = linked_response.model_copy(update={
+                    "document_ids": (*linked_response.document_ids, doc_id)})
+                tx.put("response", response_id, updated_response)
+                facts_after["response"] = [updated_response if r.response_id == response_id else r
+                                           for r in facts_after["response"]]
                 for proposal in self.store.facts(case_id, "proposal", EvidenceProposal):
                     if proposal.source_response_id == response_id and proposal.source_document_id is None \
                             and proposal.status is ProposalStatus.AWAITING_HUMAN_REVIEW:
-                        tx.put("proposal", proposal.proposal_id,
-                               proposal.model_copy(update={"source_document_id": doc_id}))
+                        updated_proposal = proposal.model_copy(update={"source_document_id": doc_id})
+                        tx.put("proposal", proposal.proposal_id, updated_proposal)
+                        facts_after["proposal"] = [updated_proposal if p.proposal_id == proposal.proposal_id else p
+                                                   for p in facts_after["proposal"]]
             if extraction is not None:
                 tx.put("extraction", extraction.proposal_id, extraction)
             tx.put("integrity", doc_id, integrity)
             if routing is not None:
                 tx.put("routing", doc_id, routing)
             auto = self._auto_clarify(tx, actor, case_id, meta["company_id"], facts_after, context_codes)
-            v = tx.commit_version(f"Pièce déposée : {safe_name}" + self._auto_reason(auto))
+            if auto is not None:
+                facts_after["request"].append(auto)
+            snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+            v = tx.commit_version(f"Pièce déposée : {safe_name}" + self._auto_reason(auto), score=snapshot)
             tx.event("UPLOAD", actor.actor_id, f"Pièce déposée ({doc_id}) — original conservé, empreinte SHA-256", (doc_id,))
             self._auto_event(tx, auto)
             view = DocumentView(document=document, extraction=extraction, integrity=integrity, routing=routing,
@@ -1481,8 +1506,25 @@ class BousslaAppService(_DemoAdministration):
                 tx.put("proposal", proposal.proposal_id, proposal)
                 proposal_ids = (proposal.proposal_id,)
             auto = self._auto_clarify(tx, actor, case_id, meta["company_id"], facts_after, context_codes)
+            if facts_after is None:
+                facts_after = self._prospective_facts(case_id, expected_version)
+            if facts_after is not None:
+                if all(r.response_id != response.response_id for r in facts_after["response"]):
+                    facts_after["response"].append(response)
+                if superseding is not None and all(c.claim_id != superseding.claim_id for c in facts_after["context_claim"]):
+                    facts_after["context_claim"].append(superseding)
+                facts_after["request"] = [rv.model_copy(update={"request": rv.request.model_copy(update={
+                    "status": RequestStatus.RESPONDED})}) if r.request.request_id == request_id else r
+                    for r in facts_after["request"]]
+                if alloc is not None:
+                    facts_after["proposal"].append(proposal)
+                if auto is not None:
+                    facts_after["request"].append(auto)
+                snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+            else:
+                snapshot = None
             v = tx.commit_version("Réponse de l'entreprise reçue (proposition, pas une acceptation)"
-                                  + self._auto_reason(auto))
+                                  + self._auto_reason(auto), score=snapshot)
             tx.event("RESPONSE", actor.actor_id, "Réponse reçue ; en attente de revue par l'agent",
                      (response.response_id, *proposal_ids))
             self._auto_event(tx, auto)
@@ -1589,7 +1631,7 @@ class BousslaAppService(_DemoAdministration):
                            "proposal": [p if p.proposal_id != proposal_id else p.model_copy(update={
                                "status": ProposalStatus.ACCEPTED if accept else ProposalStatus.REJECTED})
                                         for p in facts["proposal"]]}
-            after = self._evaluate(case_id, meta["company_id"], previous + 1, after_facts)
+            after = self._evaluate(case_id, meta["company_id"], previous + 1, after_facts, before.score)
             v = tx.commit_version(("Pièce acceptée dans ce dossier : " if accept else "Pièce rejetée : ")
                                   + (reason or proposal_id), (proposal_id,) if accept else (), score=after.score)
             tx.event("EVIDENCE_ACCEPTED" if accept else "EVIDENCE_REJECTED", actor.actor_id,

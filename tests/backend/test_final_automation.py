@@ -105,14 +105,14 @@ def test_ljg001_documentless_declaration_is_never_accepted(svc):
     request_id = officer_request(svc)
     proposal = respond(svc, request_id, with_document=False).proposal_ids[0]
     before, v, revisions = authority(svc), ver(svc), len(svc.store.revisions(CASE))
-    assert before[0] == 40
+    assert before[0] == 30  # provisional answer, not an accepted allocation
     assert code(lambda: svc.accept_evidence(off(svc), CASE, proposal, v, "accept")) is ErrorCode.INSUFFICIENT_INFORMATION
     assert authority(svc) == before and ver(svc) == v and len(svc.store.revisions(CASE)) == revisions
     assert all(not r.accepted_evidence_ids for r in svc.store.revisions(CASE))
     # The declaration can still be rejected (no canonical change) ...
     rejected = svc.reject_evidence(off(svc), CASE, proposal, v, "pièce manquante", "reject")
     assert rejected.outcome == "REJECTED" and rejected.score_after.review_index == 40
-    # ... and a document-backed response is still accepted: 40 -> 0.
+    # ... and a document-backed response is still accepted after human review.
     request_id = officer_request(svc, "publish-2")
     backed = respond(svc, request_id, key="response-2").proposal_ids[0]
     assert svc.accept_evidence(off(svc), CASE, backed, ver(svc), "accept-2").score_after.review_index == 0
@@ -241,10 +241,10 @@ def test_full_40_to_0_without_officer_preparing_a_request(svc):
     assert "Q-PROJECT-ALLOCATION" in req.request.question_ids
     response = respond(svc, req.request.request_id)
     officer = svc.get_case(off(svc), CASE)
-    assert officer.score.review_index == 40 and len(officer.requests) == 1
+    assert officer.score.review_index == 20 and len(officer.requests) == 1
     assert officer.requests[0].request.status is RequestStatus.RESPONDED
     result = svc.accept_evidence(off(svc), CASE, response.proposal_ids[0], ver(svc), "accept")  # human decision
-    assert (result.score_before.review_index, result.score_after.review_index) == (40, 0)
+    assert (result.score_before.review_index, result.score_after.review_index) == (20, 0)
     assert len(svc.get_case(off(svc), CASE).requests) == 1  # nothing re-asked after acceptance
 
 
@@ -302,11 +302,13 @@ def test_unanswered_request_changes_triage_only(svc, clock):
     assert not {"triage", "score", "clarification_deadlines", "history_signals", "investigator_brief"} & company.keys()
 
 
-def test_proposal_awaiting_decision_raises_triage_not_index(svc):
+def test_proposal_awaiting_decision_keeps_triage_separate_from_provisional_index(svc):
     respond(svc, officer_request(svc))
     view = svc.get_case(off(svc), CASE)
     assert "EVIDENCE_AWAITING_OFFICER_DECISION" in view.triage.reason_codes
-    assert view.score.review_index == 40 and view.triage.triage_priority == 50
+    assert view.score.review_index == 20 and view.triage.triage_priority == 50
+    assert view.score.raw_review_index == 40
+    assert view.triage.components["REVIEW_INDEX_BASE"] == 40
 
 
 def signal(code, company="DEMO-BAT", sid="S"):

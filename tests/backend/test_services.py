@@ -96,7 +96,8 @@ def test_full_loop_recalculates_exactly_once(svc, actors):
     r = svc.accept_evidence(off, CASE, resp.proposal_ids[0], before_v, "acc-1")
     assert r.outcome == "ACCEPTED" and r.new_version == before_v + 1
     assert {a.target_project_id: a.quantity for a in r.allocations_after} == {"P1": "1000", "P2": "1000"}
-    assert r.score_before.review_index == 40 and r.score_after.review_index == 0
+    assert r.score_before.review_index == 20 and r.score_after.review_index == 0
+    assert r.score_before.raw_review_index == 40
     assert qty(r.findings_after).status is FindingStatus.EXPLAINED
     o = svc.get_case(off, CASE)
     assert o.score.review_index == 0 and o.proposals[0].status is ProposalStatus.ACCEPTED
