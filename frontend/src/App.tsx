@@ -1806,6 +1806,45 @@ function Officer({
           )}
         </Panel>
       </div>
+      {c.behavior_profile && (
+        <Panel
+          title="Habitude et période observée"
+          eyebrow="BASELINE PROPRE À L’ENTREPRISE"
+        >
+          <p>
+            Période : {c.behavior_profile.observed_period} · Données arrêtées au{" "}
+            {c.behavior_profile.as_of} · Règle {c.behavior_profile.rule_version}
+          </p>
+          <div className="monthly-context">
+            {c.behavior_profile.metrics.map((metric) => (
+              <article key={`${metric.code}-${metric.currency ?? "all"}`}>
+                <strong>{metric.label_fr}</strong>
+                <span>
+                  Observé : {metric.current_value ?? "inconnu"} {metric.unit}{" "}
+                  {metric.currency}
+                </span>
+                <span>
+                  Habitude : {metric.baseline_value ?? "données insuffisantes"}{" "}
+                  {metric.unit}
+                </span>
+                {metric.change_percent !== null && (
+                  <span>Écart : {metric.change_percent} %</span>
+                )}
+                <small>
+                  {metric.sample_size} mois de référence exploitables
+                </small>
+                <details>
+                  <summary>Méthode et sources</summary>
+                  <p>{metric.explanation_fr}</p>
+                  <small>
+                    {metric.source_ids.join(", ") || "Sources insuffisantes"}
+                  </small>
+                </details>
+              </article>
+            ))}
+          </div>
+        </Panel>
+      )}
       <Panel
         title="Comportement sur 12 mois"
         eyebrow="FENÊTRE CALENDAIRE · COUVERTURE EXPLICITE"

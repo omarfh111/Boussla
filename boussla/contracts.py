@@ -968,7 +968,31 @@ class CaseIndicator(Contract):
     sample_size: int = Field(ge=0)
 
 
+class BehaviorMetric(Contract):
+    code: str
+    label_fr: str
+    current_value: DecimalStr | None = None
+    baseline_value: DecimalStr | None = None
+    change_percent: DecimalStr | None = None
+    status: Literal["AVAILABLE", "INSUFFICIENT_DATA", "UNSUPPORTED"]
+    unit: str
+    currency: str | None = None
+    baseline_periods: tuple[str, ...] = ()
+    sample_size: int = Field(default=0, ge=0)
+    source_ids: tuple[str, ...] = ()
+    explanation_fr: str
+
+
+class BehaviorProfile(Contract):
+    as_of: AwareDatetime
+    observed_period: str
+    baseline_periods: tuple[str, ...]
+    rule_version: str
+    metrics: tuple[BehaviorMetric, ...]
+
+
 class OfficerCaseView(Contract):
+    behavior_profile: BehaviorProfile | None = None
     indicators: dict[str, CaseIndicator] = Field(default_factory=dict)
     audience: Literal[Audience.OFFICER] = Audience.OFFICER
     case_id: str

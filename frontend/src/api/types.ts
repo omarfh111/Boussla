@@ -440,7 +440,27 @@ export interface CaseIndicator {
   rule_version: string;
   sample_size: number;
 }
+export interface BehaviorProfile {
+  as_of: string;
+  observed_period: string;
+  baseline_periods: string[];
+  rule_version: string;
+  metrics: {
+    code: string;
+    label_fr: string;
+    current_value: string | null;
+    baseline_value: string | null;
+    change_percent: string | null;
+    status: string;
+    unit: string;
+    currency: string | null;
+    sample_size: number;
+    source_ids: string[];
+    explanation_fr: string;
+  }[];
+}
 export interface OfficerCaseView extends BaseCase {
+  behavior_profile?: BehaviorProfile | null;
   indicators?: Record<string, CaseIndicator>;
   audience: "OFFICER";
   score: ScoreSnapshot | null;

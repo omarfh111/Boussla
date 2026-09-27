@@ -561,6 +561,14 @@ class BousslaAppService(_DemoAdministration):
                                        "operational_confidence_window_start": confidence.window_start,
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
+        from boussla.behavior_profile import build_behavior_profile
+        profile_cutoff = self.clock()
+        coverage = {}
+        if self.portfolio is not None and self.portfolio.is_member(company):
+            profile_cutoff = min(profile_cutoff, self.portfolio.as_of)
+            bundle = self.portfolio.bundle(company)
+            coverage = {row["period"]: row["source_id"] for row in bundle["coverage"]} if bundle else {}
+        view = view.model_copy(update={"behavior_profile": build_behavior_profile(facts, coverage, profile_cutoff, self.store.events(case_id))})
         from boussla.indicators import case_indicators
         view = view.model_copy(update={"indicators": case_indicators(view, self.clock())})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())

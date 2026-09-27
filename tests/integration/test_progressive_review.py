@@ -320,3 +320,13 @@ def test_five_indicators_expose_separate_metadata_without_company_leakage(servic
     advanced = service.get_case(officer, CASE)
     assert advanced.indicators["document_review"].status == "PROVISIONAL"
     assert advanced.indicators["document_review"].value == "30"
+
+
+def test_behavior_profile_is_officer_only_and_uncovered_history_stays_unknown(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company = service.registry.actors["DEMO-COMPANY-BAT"]
+    view = service.get_case(officer, CASE)
+    assert view.behavior_profile is not None
+    assert view.behavior_profile.as_of.tzinfo
+    assert all(m.status != "AVAILABLE" for m in view.behavior_profile.metrics)
+    assert "behavior_profile" not in service.get_case(company, CASE).model_dump()
