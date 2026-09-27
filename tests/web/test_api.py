@@ -95,3 +95,27 @@ def test_mutation_flow_stale_idempotent_and_history(client):
     assert accepted.json()["score_after"]["review_index"] == 0
     assert client.post(url, headers=headers("OFFICER", "accept-1"), json={"expected_version": v}).json()["replayed"]
     assert len(client.get(f"/api/cases/{CASE}/history", headers=headers("OFFICER")).json()["revisions"]) > 1
+
+
+def test_upload_can_attach_to_existing_response(client):
+    v = view(client, "OFFICER")["case_version"]
+    draft = client.post(f"/api/cases/{CASE}/clarifications/prepare", headers=headers("OFFICER"),
+                        json={"expected_version": v}).json()
+    request = client.post(f"/api/cases/{CASE}/clarifications/{draft['draft_id']}/publish",
+                          headers=headers("OFFICER", "publish-later"),
+                          json={"expected_version": v}).json()["request"]
+    v = view(client, "COMPANY")["case_version"]
+    response = client.post(f"/api/cases/{CASE}/responses/{request['request_id']}",
+                           headers=headers(key="respond-later"), json={"expected_version": v, "response": {
+                               "answers": {"Q-PROJECT-ALLOCATION": "1000 P1, 1000 P2"},
+                               "allocation": {"transaction_id": "TX-001", "line_id": "LINE-BUY-001",
+                                              "splits": {"P1": "1000", "P2": "1000"}},
+                           }})
+    assert response.status_code == 200, response.text
+    response_id = response.json()["response"]["response_id"]
+    v = view(client, "COMPANY")["case_version"]
+    upload = client.post(f"/api/cases/{CASE}/documents", headers=headers(key="upload-later"),
+                         data={"expected_version": v, "response_id": response_id},
+                         files={"file": ("allocation.pdf", PDF, "application/pdf")})
+    assert upload.status_code == 200, upload.text
+    assert upload.json()["case_version"] == v + 1

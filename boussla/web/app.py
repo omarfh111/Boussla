@@ -140,18 +140,22 @@ async def upload(request: Request):
     # Bound the request body before the PDF parser runs.
     if int(request.headers.get("content-length", "0") or "0") > 11 * 1024 * 1024:
         raise BousslaError(ErrorCode.LIMIT_EXCEEDED, "Fichier trop volumineux (10 Mo max.)")
-    form = await request.form(max_files=1, max_fields=2)
+    form = await request.form(max_files=1, max_fields=3)
     file = form.get("file")
     if file is None or not hasattr(file, "read"):
         raise HTTPException(400, "Fichier PDF requis")
     expected = form.get("expected_version")
     if not isinstance(expected, str) or not expected.isdigit():
         raise HTTPException(400, "expected_version requis")
+    response_id = form.get("response_id")
+    if response_id is not None and (not isinstance(response_id, str) or not response_id.strip()):
+        raise HTTPException(400, "response_id invalide")
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024:
         raise BousslaError(ErrorCode.LIMIT_EXCEEDED, "Fichier trop volumineux (10 Mo max.)")
     value = service(request).upload_document(a, request.path_params["case_id"], content,
-                                             file.filename or "", file.content_type or "", int(expected), k)
+                                             file.filename or "", file.content_type or "", int(expected), k,
+                                             response_id=response_id)
     return result(value)
 
 

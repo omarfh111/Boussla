@@ -973,11 +973,13 @@ class BousslaAppService(_DemoAdministration):
         return self.get_case(trusted, case_id)
 
     def upload_document(self, actor: Actor, case_id: str, upload_bytes: bytes, filename: str, media_type: str,
-                        expected_version: int, request_id: str) -> DocumentView:
+                        expected_version: int, request_id: str, response_id: str | None = None) -> DocumentView:
         actor, meta = self._open(actor, case_id, "upload_document")
         safe_name = Path(filename).name[:120]
         digest = hashlib.sha256(upload_bytes).hexdigest()
-        ihash = self._input_hash(actor, "upload_document", [safe_name, media_type, digest, expected_version])
+        ihash = self._input_hash(actor, "upload_document", [safe_name, media_type, digest, expected_version, response_id])
+        if response_id is not None:
+            self._upload_response_scope(case_id, actor, response_id)
         # Validate before any processing of arbitrary content.
         if len(upload_bytes) > self.settings.max_upload_bytes:
             raise BousslaError(ErrorCode.LIMIT_EXCEEDED, "Fichier trop volumineux (10 Mo max.)")
@@ -1018,7 +1020,16 @@ class BousslaAppService(_DemoAdministration):
             tx.require_version(expected_version)
             if any(d.document_id == doc_id for d in self.store.facts(case_id, "document", Document)):
                 raise BousslaError(ErrorCode.INVALID_STATE, "Pièce identique déjà déposée dans ce dossier")
+            linked_response = self._upload_response_scope(case_id, actor, response_id) if response_id else None
             tx.put("document", doc_id, document)
+            if linked_response is not None:
+                tx.put("response", response_id, linked_response.model_copy(update={
+                    "document_ids": (*linked_response.document_ids, doc_id)}))
+                for proposal in self.store.facts(case_id, "proposal", EvidenceProposal):
+                    if proposal.source_response_id == response_id and proposal.source_document_id is None \
+                            and proposal.status is ProposalStatus.AWAITING_HUMAN_REVIEW:
+                        tx.put("proposal", proposal.proposal_id,
+                               proposal.model_copy(update={"source_document_id": doc_id}))
             if extraction is not None:
                 tx.put("extraction", extraction.proposal_id, extraction)
             tx.put("integrity", doc_id, integrity)
@@ -1034,6 +1045,17 @@ class BousslaAppService(_DemoAdministration):
                                           actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
                                           result_hash=stable_hash(view.model_dump(mode="json"))), view)
         return view
+
+    def _upload_response_scope(self, case_id: str, actor: Actor,
+                               response_id: str) -> ClarificationResponse:
+        response = self.store.fact(case_id, "response", response_id, ClarificationResponse)
+        request = (self.store.fact(case_id, "request", response.request_id, RequestView)
+                   if response is not None else None)
+        if (response is None or response.author_actor_id != actor.actor_id or actor.role is not Role.COMPANY
+                or request is None or request.request.status is not RequestStatus.RESPONDED):
+            raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE,
+                               "Réponse inconnue ou hors périmètre pour cette pièce")
+        return response
 
     def _inspect(self, document: Document, content: bytes) -> IntegrityReport:
         fallback = IntegrityReport(document_id=document.document_id, sha256=document.sha256,
