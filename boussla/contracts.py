@@ -815,7 +815,25 @@ class DocumentCheck(Contract):
     source_ids: tuple[str, ...] = ()
 
 
+class DocumentConfidenceFactor(Contract):
+    code: str
+    value: int | None = Field(default=None, ge=0, le=100)
+    status: Literal["MEASURED", "UNKNOWN"]
+    explanation_fr: str
+    source_ids: tuple[str, ...] = ()
+
+
+class DocumentConfidence(Contract):
+    value: int | None = Field(default=None, ge=0, le=100)
+    level: Literal["HIGH", "MEDIUM", "LOW", "INSUFFICIENT_DATA"]
+    factors: tuple[DocumentConfidenceFactor, ...]
+    measured_dimensions: int = Field(ge=0, le=4)
+    rule_version: str
+    explanation_fr: str
+
+
 class DocumentAnalysisReport(Contract):
+    confidence: DocumentConfidence | None = None
     document_id: str
     case_version: int
     calculated_at: AwareDatetime

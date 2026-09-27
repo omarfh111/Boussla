@@ -136,6 +136,14 @@ export interface DocumentView {
     rule_version: string;
     classification: string;
     authenticity_statement: string;
+    confidence?: {
+      value: number | null;
+      level: string;
+      measured_dimensions: number;
+      rule_version: string;
+      explanation_fr: string;
+      factors: { code: string; value: number | null; explanation_fr: string }[];
+    } | null;
     linked_cause_ids: string[];
     proposed_action: string;
     stages: { code: string; status: string; explanation_fr: string }[];

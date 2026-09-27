@@ -123,7 +123,9 @@ def analyze_document(document, extraction, routing, integrity, facts, findings, 
             ("CAUSE_LINKING","PASS" if linked else "UNKNOWN","Liens proposés uniquement, sans résolution automatique."),
             ("UPDATE_PROPOSAL","PASS","Examen humain proposé."),
             ("RECALCULATION","PASS","Calcul du dossier enregistré dans la même révision.")))
-    return DocumentAnalysisReport(document_id=document.document_id,case_version=version,calculated_at=as_of,
+    from boussla.documents.confidence import calculate_document_confidence
+    confidence = calculate_document_confidence(extraction, checks, class_name)
+    return DocumentAnalysisReport(confidence=confidence, document_id=document.document_id,case_version=version,calculated_at=as_of,
         rule_version=RULE_VERSION,classification=class_name,checks=tuple(checks),stages=stages,
         linked_cause_ids=linked,transaction_ids=tuple(sorted(tx_ids)),
         proposed_action="REQUEST_READABLE_DOCUMENT" if not usable else "REQUEST_CLARIFICATION" if failed else "REVIEW_DOCUMENT",

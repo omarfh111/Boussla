@@ -1155,6 +1155,33 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                 {d.analysis && (
                   <details>
                     <summary>Analyse documentaire</summary>
+                    {d.analysis.confidence && (
+                      <div>
+                        <strong>
+                          Confiance documentaire :{" "}
+                          {{
+                            HIGH: "élevée",
+                            MEDIUM: "moyenne",
+                            LOW: "faible",
+                            INSUFFICIENT_DATA: "données insuffisantes",
+                          }[d.analysis.confidence.level] ?? "inconnue"}
+                        </strong>
+                        <p>
+                          {d.analysis.confidence.value === null
+                            ? "Indice non calculable"
+                            : `${d.analysis.confidence.value}/100`}{" "}
+                          · {d.analysis.confidence.measured_dimensions}/4
+                          dimensions mesurées
+                        </p>
+                        {d.analysis.confidence.factors.map((factor) => (
+                          <p key={factor.code}>
+                            {factor.code} : {factor.value ?? "inconnu"} ·{" "}
+                            {factor.explanation_fr}
+                          </p>
+                        ))}
+                        <small>{d.analysis.confidence.explanation_fr}</small>
+                      </div>
+                    )}
                     <p>
                       {d.analysis.classification} ·{" "}
                       {d.analysis.authenticity_statement}
