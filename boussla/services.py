@@ -29,7 +29,7 @@ from boussla.contracts import (
     Audience, BousslaError, ClarificationDraft, ClarificationRequest, ClarificationResponse, ClarificationStatus,
     CompanyCaseView, ContextClaim, Delivery, Document, DocumentView, ErrorCode, EvidenceProposal, Finding,
     FindingFamily, FindingStatus, HistoryView, Hypothesis, IdentityMapping, IntegrityReport, InvoiceObservation,
-    LocalDraftArtifact, Mode, OfficerCaseView, Payment, PaymentAllocation, PaymentStatus, Perspective, Project,
+    LocalDraftArtifact, Mode, OfficerCaseView, OfficerHistoryView, Payment, PaymentAllocation, PaymentStatus, Perspective, Project,
     ProposalStatus, PurposeCategory, QuantityReference, QueueItem, QueuePage, RequestStatus, RequestView,
     ResponseView, RevisionResult, Role, Scenario, ScoreSnapshot, Transaction, TransactionInputs,
     TransactionSummary, ActionReceipt, ExtractionProposal, DocumentClass, DocumentText, RouterResult,
@@ -52,6 +52,8 @@ from boussla.review_evidence import derive_progress_evidence
 from boussla.review_progress import calculate_progress, transaction_progress_index
 from boussla.historical_indicator import calculate_historical_indicator
 from boussla.operational_confidence import calculate_operational_confidence
+from boussla.monthly_context import build_monthly_context
+from boussla.confidence_history import confidence_delta
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -373,7 +375,9 @@ class BousslaAppService(_DemoAdministration):
         return ClarificationStatus.CLOSED
 
     def _evaluate(self, case_id: str, company_id: str, version: int, facts: dict[str, list],
-                  previous_snapshot: ScoreSnapshot | None = None) -> Evaluation:
+                  previous_snapshot: ScoreSnapshot | None = None,
+                  as_of: datetime | None = None) -> Evaluation:
+        effective_as_of = as_of or utcnow()
         findings: list[Finding] = []
         hypotheses: list[Hypothesis] = []
         scenarios: list[Scenario] = []
@@ -381,7 +385,7 @@ class BousslaAppService(_DemoAdministration):
         pending = any(p.status is ProposalStatus.AWAITING_HUMAN_REVIEW for p in facts["proposal"])
         for tx in facts["transaction"]:
             inputs = TransactionInputs(
-                case_id=case_id, company_id=company_id, case_version=version, as_of=utcnow(), transaction=tx,
+                case_id=case_id, company_id=company_id, case_version=version, as_of=effective_as_of, transaction=tx,
                 invoice_observations=tuple(o for o in facts["invoice_observation"] if o.transaction_id == tx.transaction_id),
                 payments=tuple(facts["payment"]), payment_allocations=tuple(facts["payment_allocation"]),
                 settlement_adjustments=tuple(a for a in facts.get("settlement_adjustment", ())
@@ -416,7 +420,7 @@ class BousslaAppService(_DemoAdministration):
             for fam, val in s.contributions.items():
                 contributions[fam] = str(max(Decimal(val), Decimal(contributions.get(fam, "0"))))
         score = ScoreSnapshot(
-            company_id=company_id, case_version=version, cutoff=utcnow(),
+            company_id=company_id, case_version=version, cutoff=effective_as_of,
             method_id=tx_scores[0].method if tx_scores else "NONE", rules_version=getattr(self.checks, "calculation_version", "B"),
             review_index=index, raw_review_index=raw_index, cause_progress=cause_progress,
             decisive_transaction_id=decisive_transaction_id,
@@ -520,8 +524,15 @@ class BousslaAppService(_DemoAdministration):
         context_view, _, context_mode = self._context_assessment(case_id, company, v, facts)
         triage, deadlines, signals, history_mode = self._triage(case_id, company, v, ev, facts)
         historical = calculate_historical_indicator(signals)
+        confidence_cutoff = self.clock()
+        covered_ids = self._covered_history_transaction_ids(company, facts, confidence_cutoff)
+        conflicted_ids = tuple(sorted({tx_id for signal in signals
+                                      if signal.reason_code.value == "REPEATED_INVOICE_CONFLICT"
+                                      for tx_id in signal.affected_transaction_ids}))
         confidence = calculate_operational_confidence(view.requests, view.responses, view.proposals,
-                                                      signals, self.clock(), ev.score.cause_progress)
+                                                      signals, confidence_cutoff,
+                                                      derive_progress_evidence(ev.findings, facts, None),
+                                                      covered_ids, conflicted_ids)
         view = view.model_copy(update={"context_assessment": context_view, "triage": triage,
                                        "clarification_deadlines": deadlines, "history_signals": signals,
                                        "history_signal_index": historical.index,
@@ -529,16 +540,29 @@ class BousslaAppService(_DemoAdministration):
                                        "history_signal_factors": historical.factors,
                                        "history_signal_method": historical.method,
                                        "operational_confidence_index": confidence.index,
-                                       "operational_confidence_uncapped_index": confidence.uncapped_index,
                                        "operational_confidence_status": confidence.status,
-                                       "operational_confidence_baseline": confidence.baseline,
+                                       "operational_confidence_as_of": confidence.as_of,
                                        "operational_confidence_factors": confidence.factors,
-                                       "operational_confidence_observation_count": confidence.observation_count,
+                                       "operational_confidence_eligible_observations": confidence.eligible_observations,
                                        "operational_confidence_method": confidence.method,
                                        "mode_by_node": {**view.mode_by_node, "context": context_mode,
                                                         "history": history_mode}})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())
         return self._with_investigator_brief(view, facts)
+
+    def _covered_history_transaction_ids(self, company_id: str, facts: dict[str, list],
+                                         as_of: datetime) -> tuple[str, ...]:
+        if self.portfolio is None or not self.portfolio.is_member(company_id):
+            return ()
+        bundle = self.portfolio.bundle(company_id)
+        if bundle is None:
+            return ()
+        periods = {row["period"] for row in bundle["coverage"]
+                   if row.get("source_id") and row["period"] < as_of.strftime("%Y-%m")}
+        buyer_tx = {o.transaction_id for o in facts["invoice_observation"]
+                    if o.perspective is Perspective.BUYER_RECEIVED and o.available_at <= as_of}
+        return tuple(sorted(t.transaction_id for t in facts["transaction"]
+                            if t.economic_period in periods and t.transaction_id in buyer_tx))
 
     # ------------------------------------------------------- triage (queue urgency)
     def _history_signals(self, company_id: str, now: datetime):
@@ -731,6 +755,11 @@ class BousslaAppService(_DemoAdministration):
                 months.setdefault(pay.occurred_at.strftime("%Y-%m"), {"tx": 0, "inv": 0, "out": 0})["out"] += \
                     pay.amount_millimes
         periods = sorted(months)
+        coverage = ({row["period"]: row["source_id"] for row in bundle["coverage"]}
+                    if bundle is not None else {})
+        monthly_context = build_monthly_context(
+            {period: (value["tx"], value["inv"], value["out"]) for period, value in months.items()},
+            coverage, bundle["history_end"] if bundle is not None else self.clock().strftime("%Y-%m"))
         profile = None if e is None else EnterpriseProfileView(
             company_id=company_id, display_name=e.display_name, synthetic_identifier=e.synthetic_mf, sector=e.sector,
             created_on=e.created_on, portfolio_member=bundle is not None,
@@ -738,10 +767,7 @@ class BousslaAppService(_DemoAdministration):
             activity_end=bundle["history_end"] if bundle else (periods[-1] if periods else None))
         return {
             "enterprise_profile": profile,
-            "monthly_activity": tuple(MonthlyActivityView(month=m, transaction_count=v["tx"],
-                                                          invoice_observation_count=v["inv"],
-                                                          settled_outflow_millimes=v["out"])
-                                      for m, v in sorted(months.items())),
+            "monthly_activity": monthly_context,
             "payment_timeline": tuple(PaymentTimelineEntry(
                 payment_id=pay.payment_id, transaction_id=tx_of_payment.get(pay.payment_id), occurred_at=pay.occurred_at,
                 amount_millimes=pay.amount_millimes, currency=pay.currency, status=pay.status,
@@ -973,14 +999,54 @@ class BousslaAppService(_DemoAdministration):
                          cutoff=cutoff if isinstance(cutoff, datetime) else utcnow(), mode=Mode.LIVE)
 
     def get_history(self, actor: Actor, case_id: str) -> HistoryView:
-        actor, _ = self._open(actor, case_id, "get_history")
+        actor, meta = self._open(actor, case_id, "get_history")
         company = actor.role is Role.COMPANY
         internal = {"ANALYSIS_OFFICER", "EVIDENCE_REJECTED", "EXPORT"}
         events = tuple(e for e in self.store.events(case_id) if not (company and e.kind in internal))
         revisions = tuple(r.model_copy(update={"score_snapshot": None}) if company else r
                           for r in self.store.revisions(case_id))
-        return HistoryView(case_id=case_id, audience=Audience.COMPANY if company else Audience.OFFICER,
-                           revisions=revisions, events=events, mode=Mode.LIVE)
+        if company:
+            return HistoryView(case_id=case_id, audience=Audience.COMPANY,
+                               revisions=revisions, events=events, mode=Mode.LIVE)
+        now = self.clock()
+        signals, _ = self._history_signals(meta["company_id"], now)
+        changes = []
+        previous = None
+        previous_version = None
+        for revision in revisions:
+            current = self._confidence_at_version(case_id, meta["company_id"], revision.version,
+                                                  revision.created_at, signals)
+            if previous is not None:
+                change = confidence_delta(previous, current, from_version=previous_version,
+                                          to_version=revision.version)
+                if change is not None:
+                    changes.append(change)
+            previous, previous_version = current, revision.version
+        if previous is not None and revisions and now >= revisions[-1].created_at:
+            current = self._confidence_at_version(case_id, meta["company_id"], revisions[-1].version,
+                                                  now, signals)
+            change = confidence_delta(previous, current, from_version=revisions[-1].version,
+                                      to_version=revisions[-1].version)
+            if change is not None:
+                changes.append(change)
+        return OfficerHistoryView(case_id=case_id, revisions=revisions, events=events,
+                                  operational_confidence_changes=tuple(changes), mode=Mode.LIVE)
+
+    def _confidence_at_version(self, case_id: str, company_id: str, version: int,
+                               as_of: datetime, signals: tuple[CompanyHistorySignal, ...]):
+        facts = self._facts(case_id, version)
+        evidence = ()
+        if facts["response"]:
+            ev = self._evaluate(case_id, company_id, version, facts, as_of=as_of)
+            evidence = derive_progress_evidence(ev.findings, facts, None)
+        scoped_signals = tuple(s for s in signals if s.period.split("/")[-1] < as_of.strftime("%Y-%m"))
+        conflicted = tuple(sorted({tx_id for signal in scoped_signals
+                                  if signal.reason_code.value == "REPEATED_INVOICE_CONFLICT"
+                                  for tx_id in signal.affected_transaction_ids}))
+        return calculate_operational_confidence(
+            tuple(facts["request"]), tuple(facts["response"]), tuple(facts["proposal"]),
+            scoped_signals, as_of, evidence,
+            self._covered_history_transaction_ids(company_id, facts, as_of), conflicted)
 
     # ================================================================= writes
     def create_case(self, actor: Actor, company_id: str, project_payload: dict, request_id: str):

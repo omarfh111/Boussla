@@ -3,7 +3,8 @@
 from datetime import timedelta
 
 from boussla.data.operational_portfolio import AS_OF, FIXTURE, seed_portfolio, transaction_inputs
-from boussla.history_signals import analyze_self_history
+from boussla.history_signals import HistorySignal, analyze_self_history
+from boussla.portfolio_runtime import PortfolioRuntime
 
 
 PORTFOLIO = seed_portfolio(FIXTURE)
@@ -19,6 +20,25 @@ def run(facts, coverage=COVERAGE):
 
 def first_four():
     return list(transaction_inputs(PORTFOLIO, COMPANY)[:4])
+
+
+def test_multiple_same_month_transaction_signals_have_unique_stable_ids(tmp_path, monkeypatch):
+    signals_from_analysis = tuple(HistorySignal(
+        reason_code="UNUSUAL_DEPOSIT_DELAY", company_id="SYN-OP-006", period="2025-12",
+        observed_value="20", baseline_value="2", metric="days_until_buyer_document_available",
+        baseline_periods=("2025-09", "2025-10", "2025-11"),
+        evidence_source_ids=(f"TX-{i}", f"DOC-{i}"), explanation="Retard inhabituel")
+        for i in range(4))
+    monkeypatch.setattr("boussla.portfolio_runtime.analyze_self_history",
+                        lambda *args, **kwargs: signals_from_analysis)
+    runtime = PortfolioRuntime(tmp_path / "portfolio.json")
+    signals = runtime.signals("SYN-OP-006")
+    delays = [s for s in signals if s.reason_code.value == "UNUSUAL_DEPOSIT_DELAY"]
+    assert len(delays) >= 2
+    assert len({s.signal_id for s in delays}) == len(delays)
+    assert [(s.signal_id, s.evidence_source_ids) for s in delays] == [
+        (s.signal_id, s.evidence_source_ids) for s in runtime.signals("SYN-OP-006")
+        if s.reason_code.value == "UNUSUAL_DEPOSIT_DELAY"]
 
 
 def test_late_deposit_uses_own_baseline_not_only_absolute_threshold():
@@ -85,3 +105,6 @@ def test_repeated_invoice_conflict_remains_a_neutral_separate_signal():
                                    coverage={r["period"]: r["source_id"] for r in row["coverage"]})
     repeated = next(s for s in signals if s.reason_code == "REPEATED_INVOICE_CONFLICT")
     assert repeated.evidence_source_ids and not repeated.affects_review_index
+    assert len(repeated.affected_transaction_ids) >= 2
+    assert set(repeated.affected_transaction_ids) <= {i.transaction.transaction_id
+                                                      for i in transaction_inputs(PORTFOLIO, company)}

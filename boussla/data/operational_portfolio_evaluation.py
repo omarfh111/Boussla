@@ -27,7 +27,9 @@ def evaluate_operational_portfolio(portfolio: dict) -> dict:
             "no_project":not any(e["projects"] for e in row["events"]),
             "current_checks_review_index":engine.aggregate_company(scores),
             "unknown_families":sorted({f.value for s in scores for f in s.unknown_families}),
-            "history_signals":[asdict(s) for s in signals]})
+            # Keep the frozen V1 report schema; runtime attribution is an additive V2 field.
+            "history_signals":[{k: v for k, v in asdict(s).items()
+                                if k != "affected_transaction_ids"} for s in signals]})
     return {"data_kind":"SYNTHETIC", "as_of":portfolio["as_of"], "enterprise_count":len(companies),
         "transaction_count":sum(c["transaction_count"] for c in companies),
         "buyer_seller_pairs":sum(c["buyer_seller_pairs"] for c in companies),

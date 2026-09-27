@@ -887,22 +887,47 @@ class GroundedNoteView(Contract):
 
 
 class OperationalConfidenceFactor(Contract):
-    code: Literal["TIMELY_RESPONSE", "LATE_RESPONSE", "UNANSWERED_REQUEST", "ACCEPTED_PROOF",
-                  "REJECTED_PROOF", "REPEATED_ANOMALY", "DOCUMENT_COHERENT",
-                  "DOCUMENT_CONTRADICTORY", "HISTORY_STABILITY"]
-    contribution: int = Field(ge=-100, le=100)
+    code: Literal["TIMELINESS", "ANSWER_COHERENCE", "EVIDENCE_CORROBORATION", "HISTORICAL_STABILITY"]
+    numerator: int = Field(ge=0)
+    denominator: int = Field(gt=0)
+    nominal_weight: int = Field(ge=0, le=100)
+    effective_weight: DecimalStr
+    weighted_contribution: DecimalStr
+    reason_codes: tuple[str, ...]
     source_ids: tuple[str, ...]
     explanation_fr: str
 
 
 class OperationalConfidence(Contract):
     index: int | None = Field(default=None, ge=0, le=100)
-    uncapped_index: int | None = None
     status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
-    baseline: int = 70
+    as_of: AwareDatetime
     factors: tuple[OperationalConfidenceFactor, ...] = ()
-    observation_count: int = 0
-    method: str = "OPERATIONAL_CONFIDENCE_V1"
+    eligible_observations: int = 0
+    method: str = "OPERATIONAL_CONFIDENCE_V2"
+
+
+class ConfidenceFactorDelta(Contract):
+    code: str
+    before_contribution: DecimalStr | None = None
+    after_contribution: DecimalStr | None = None
+    before_numerator: int | None = None
+    before_denominator: int | None = None
+    after_numerator: int | None = None
+    after_denominator: int | None = None
+    source_ids: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...] = ()
+
+
+class ConfidenceHistoryEntry(Contract):
+    from_version: int
+    to_version: int
+    as_of: AwareDatetime
+    before_index: int | None = None
+    after_index: int | None = None
+    before_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    after_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    factor_deltas: tuple[ConfidenceFactorDelta, ...] = ()
 
 
 class OfficerCaseView(Contract):
@@ -939,12 +964,11 @@ class OfficerCaseView(Contract):
     history_signal_factors: tuple["HistoricalFactor", ...] = ()
     history_signal_method: str | None = None
     operational_confidence_index: int | None = None
-    operational_confidence_uncapped_index: int | None = None
     operational_confidence_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
-    operational_confidence_baseline: int = 70
+    operational_confidence_as_of: AwareDatetime | None = None
     operational_confidence_factors: tuple[OperationalConfidenceFactor, ...] = ()
-    operational_confidence_observation_count: int = 0
-    operational_confidence_method: str = "OPERATIONAL_CONFIDENCE_V1"
+    operational_confidence_eligible_observations: int = 0
+    operational_confidence_method: str = "OPERATIONAL_CONFIDENCE_V2"
     investigator_brief: "InvestigatorBriefView | None" = None
     enterprise_profile: "EnterpriseProfileView | None" = None
     monthly_activity: tuple["MonthlyActivityView", ...] = ()
@@ -1058,6 +1082,11 @@ class HistoryView(Contract):
     mode: Mode
 
 
+class OfficerHistoryView(HistoryView):
+    audience: Literal[Audience.OFFICER] = Audience.OFFICER
+    operational_confidence_changes: tuple[ConfidenceHistoryEntry, ...] = ()
+
+
 class LocalDraftArtifact(Contract):
     artifact_id: str
     case_id: str
@@ -1153,6 +1182,7 @@ class CompanyHistorySignal(Contract):
     method: str
     mode: Mode
     affects_review_index: Literal[False] = False
+    affected_transaction_ids: tuple[str, ...] = ()
 
 
 class HistoricalFactor(Contract):
@@ -1230,13 +1260,15 @@ class EnterpriseProfileView(Contract):
 
 
 class MonthlyActivityView(Contract):
-    """Deterministic monthly counts from the case facts (no imputation of missing months)."""
+    """Calendar window with explicit covered zero versus unknown ledger coverage."""
 
     month: str
     transaction_count: int
     invoice_observation_count: int
     settled_outflow_millimes: int
     source_label: str = "Faits synthétiques du dossier"
+    coverage_status: Literal["COVERED", "UNKNOWN"] = "UNKNOWN"
+    coverage_source_id: str | None = None
 
 
 class PaymentTimelineEntry(Contract):

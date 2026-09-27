@@ -323,6 +323,8 @@ const officer = {
       invoice_observation_count: 2,
       settled_outflow_millimes: 1190000,
       source_label: "Faits synthétiques du dossier",
+      coverage_status: "COVERED",
+      coverage_source_id: "COV-2025-01",
     },
     {
       month: "2025-11",
@@ -330,6 +332,8 @@ const officer = {
       invoice_observation_count: 4,
       settled_outflow_millimes: 2380000,
       source_label: "Faits synthétiques du dossier",
+      coverage_status: "COVERED",
+      coverage_source_id: "COV-2025-11",
     },
   ],
   payment_timeline: [
@@ -364,12 +368,11 @@ const officer = {
   history_signal_factors: [],
   history_signal_method: null,
   operational_confidence_index: null,
-  operational_confidence_uncapped_index: null,
   operational_confidence_status: "INSUFFICIENT_DATA",
-  operational_confidence_baseline: 70,
+  operational_confidence_as_of: "2026-09-27T00:00:00Z",
   operational_confidence_factors: [],
-  operational_confidence_observation_count: 0,
-  operational_confidence_method: "OPERATIONAL_CONFIDENCE_V1",
+  operational_confidence_eligible_observations: 0,
+  operational_confidence_method: "OPERATIONAL_CONFIDENCE_V2",
 } satisfies OfficerCaseView;
 
 it("renders Company 360 from server data with synthetic, neutral provenance", () => {

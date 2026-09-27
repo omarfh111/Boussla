@@ -126,11 +126,13 @@ class PortfolioRuntime:
                                           as_of=self.as_of,
                                           coverage={r["period"]: r["source_id"] for r in bundle["coverage"]})
                     self._signals[company_id] = tuple(CompanyHistorySignal(
-                        signal_id=f"SIG-{stable_hash([s.reason_code, s.period, s.metric])[:10].upper()}",
+                        signal_id=f"SIG-{stable_hash([company_id, s.reason_code, s.period, s.metric,
+                                                        s.evidence_source_ids])[:10].upper()}",
                         company_id=company_id, reason_code=HistorySignalCode(s.reason_code), period=s.period,
                         metric=s.metric, observed_value=s.observed_value, baseline_value=s.baseline_value,
                         baseline_periods=s.baseline_periods, evidence_source_ids=s.evidence_source_ids,
-                        explanation_fr=s.explanation, method=s.method, mode=Mode.LIVE) for s in raw)
+                        explanation_fr=s.explanation, method=s.method, mode=Mode.LIVE,
+                        affected_transaction_ids=s.affected_transaction_ids) for s in raw)
             return list(self._signals[company_id])
 
     def financial_snapshot(self, company_id: str) -> FinancialSnapshotView | None:

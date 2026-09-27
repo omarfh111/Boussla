@@ -22,12 +22,13 @@ WEIGHTS: dict[HistorySignalCode, int] = {
 
 
 def calculate_historical_indicator(signals: tuple[CompanyHistorySignal, ...]) -> HistoricalIndicator:
-    if not signals or not any(s.reason_code in WEIGHTS or s.reason_code is HistorySignalCode.NO_SIGNIFICANT_CHANGE
+    if not signals or not any(len(s.baseline_periods) >= 3 and
+                              (s.reason_code in WEIGHTS or s.reason_code is HistorySignalCode.NO_SIGNIFICANT_CHANGE)
                               for s in signals):
         return HistoricalIndicator(status="INSUFFICIENT_DATA")
     by_code: dict[HistorySignalCode, list[CompanyHistorySignal]] = {}
     for signal in signals:
-        if signal.reason_code in WEIGHTS:
+        if signal.reason_code in WEIGHTS and len(signal.baseline_periods) >= 3:
             by_code.setdefault(signal.reason_code, []).append(signal)
     factors = tuple(HistoricalFactor(
         reason_code=code, contribution=WEIGHTS[code],

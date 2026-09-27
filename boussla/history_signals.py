@@ -31,6 +31,7 @@ class HistorySignal:
     explanation: str
     method: str = SIGNAL_VERSION
     affects_review_index: bool = False
+    affected_transaction_ids: tuple[str, ...] = ()
 
 
 def _month_number(period: str) -> int:
@@ -58,10 +59,11 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
     compared = False
     seen = set()
     engine = ChecksEngineV4()
-    def emit(code, period, observed, baseline, metric, base_periods, ids, explanation):
+    def emit(code, period, observed, baseline, metric, base_periods, ids, explanation,
+             affected_transaction_ids=()):
         signals.append(HistorySignal(code, company_id, period, str(observed),
             None if baseline is None else str(baseline), metric, tuple(base_periods),
-            tuple(sorted(set(ids))), explanation))
+            tuple(sorted(set(ids))), explanation, affected_transaction_ids=tuple(sorted(set(affected_transaction_ids)))))
     for original in inputs:
         i = original.model_copy(update={"as_of": as_of})
         t = i.transaction
@@ -90,7 +92,7 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
         findings = engine.evaluate_transaction(i)
         conflicts = [f for f in findings if f.family is FindingFamily.COUNTERPARTY and f.status is FindingStatus.UNRESOLVED]
         refs += [ref.document_id for f in conflicts for ref in f.evidence_refs if ref.document_id]
-        rows[t.economic_period].append({"seller": t.seller_company_id, "gross": invoice.gross_millimes,
+        rows[t.economic_period].append({"transaction": t.transaction_id, "seller": t.seller_company_id, "gross": invoice.gross_millimes,
             "settled": settled, "conflict": bool(conflicts), "refs": refs, "currency": invoice.currency})
         sources[t.economic_period] += refs
         delay = (invoice.available_at.date()-invoice.issued_on).days
@@ -151,7 +153,8 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
             if len(conflicted) >= 2:
                 emit("REPEATED_INVOICE_CONFLICT", f"{latest_periods[0]}/{latest_periods[-1]}", len(conflicted),
                      sum(r["conflict"] for r in old), "distinct_transactions_with_invoice_conflicts", previous_periods,
-                     ids(previous_periods+latest_periods), "Des observations indépendantes divergent sur plusieurs transactions distinctes ; revue humaine des pièces nécessaire.")
+                     ids(previous_periods+latest_periods), "Des observations indépendantes divergent sur plusieurs transactions distinctes ; revue humaine des pièces nécessaire.",
+                     affected_transaction_ids=tuple(r["transaction"] for r in conflicted))
     if not signals:
         insufficient = not compared or not any(rows.values())
         emit("INSUFFICIENT_HISTORY" if insufficient else "NO_SIGNIFICANT_CHANGE",

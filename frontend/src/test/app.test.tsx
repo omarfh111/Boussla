@@ -88,12 +88,11 @@ const officer: OfficerCaseView = {
   history_signal_factors: [],
   history_signal_method: null,
   operational_confidence_index: null,
-  operational_confidence_uncapped_index: null,
   operational_confidence_status: "INSUFFICIENT_DATA",
-  operational_confidence_baseline: 70,
+  operational_confidence_as_of: "2026-09-27T00:00:00Z",
   operational_confidence_factors: [],
-  operational_confidence_observation_count: 0,
-  operational_confidence_method: "OPERATIONAL_CONFIDENCE_V1",
+  operational_confidence_eligible_observations: 0,
+  operational_confidence_method: "OPERATIONAL_CONFIDENCE_V2",
   enterprise_profile: null,
   monthly_activity: [],
   payment_timeline: [],
@@ -104,6 +103,7 @@ const officer: OfficerCaseView = {
 function mockApi(
   officerView: OfficerCaseView = officer,
   companyView: CompanyCaseView = company,
+  historyView?: Record<string, unknown>,
 ) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -143,38 +143,40 @@ function mockApi(
                 ].map((k) => [k, role === "OPERATOR"]),
               ),
             }
-          : path.includes("/officer/queue")
-            ? {
-                items: [
-                  {
-                    case_id: shared.case_id,
-                    company_display_name: shared.company_display_name,
-                    case_version: 1,
-                    review_index: 40,
-                    evidence_coverage: "75.00",
-                    active_finding_count: 1,
-                    clarification_status: "NOT_REQUESTED",
-                    scope_note: "Documentaire",
-                    company_id: "DEMO-BAT",
-                    coverage_complete: false,
-                    triage_priority: 50,
-                    triage_reason_codes: [
-                      "REVIEW_FINDING_PRESENT",
-                      "CLARIFICATION_PENDING",
-                    ],
-                    sector: "Construction",
-                    synthetic_identifier: "DEMO-MF",
-                    last_activity_at: "2026-09-07",
-                    history_signal_codes: [],
-                    history_anomaly: null,
-                  },
-                ],
-                next_cursor: null,
-                mode: "LIVE",
-              }
-            : role === "COMPANY"
-              ? companyView
-              : officerView;
+          : path.includes("/history") && historyView
+            ? historyView
+            : path.includes("/officer/queue")
+              ? {
+                  items: [
+                    {
+                      case_id: shared.case_id,
+                      company_display_name: shared.company_display_name,
+                      case_version: 1,
+                      review_index: 40,
+                      evidence_coverage: "75.00",
+                      active_finding_count: 1,
+                      clarification_status: "NOT_REQUESTED",
+                      scope_note: "Documentaire",
+                      company_id: "DEMO-BAT",
+                      coverage_complete: false,
+                      triage_priority: 50,
+                      triage_reason_codes: [
+                        "REVIEW_FINDING_PRESENT",
+                        "CLARIFICATION_PENDING",
+                      ],
+                      sector: "Construction",
+                      synthetic_identifier: "DEMO-MF",
+                      last_activity_at: "2026-09-07",
+                      history_signal_codes: [],
+                      history_anomaly: null,
+                    },
+                  ],
+                  next_cursor: null,
+                  mode: "LIVE",
+                }
+              : role === "COMPANY"
+                ? companyView
+                : officerView;
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -285,16 +287,40 @@ it("shows attributed history and confidence factors only to the officer", async 
         explanation_fr: "Conflit répété de factures",
       },
     ],
-    operational_confidence_index: 55,
-    operational_confidence_uncapped_index: 55,
+    operational_confidence_index: 0,
     operational_confidence_status: "AVAILABLE",
-    operational_confidence_observation_count: 2,
+    operational_confidence_eligible_observations: 3,
     operational_confidence_factors: [
       {
-        code: "REJECTED_PROOF",
-        contribution: -15,
+        code: "EVIDENCE_CORROBORATION",
+        numerator: 0,
+        denominator: 3,
+        nominal_weight: 25,
+        effective_weight: "100",
+        weighted_contribution: "0",
+        reason_codes: ["REJECTED_PROOF"],
         source_ids: ["PROP-1"],
         explanation_fr: "Pièce rejetée par l’agent",
+      },
+    ],
+    monthly_activity: [
+      {
+        month: "2025-02",
+        transaction_count: 0,
+        invoice_observation_count: 0,
+        settled_outflow_millimes: 0,
+        source_label: "Source COV-FEB",
+        coverage_status: "COVERED",
+        coverage_source_id: "COV-FEB",
+      },
+      {
+        month: "2025-03",
+        transaction_count: 0,
+        invoice_observation_count: 0,
+        settled_outflow_millimes: 0,
+        source_label: "Couverture non attestée",
+        coverage_status: "UNKNOWN",
+        coverage_source_id: null,
       },
     ],
   });
@@ -311,6 +337,9 @@ it("shows attributed history and confidence factors only to the officer", async 
   expect(screen.getByText("Pièce rejetée par l’agent")).toBeInTheDocument();
   expect(screen.getByText("SIG-1")).toBeInTheDocument();
   expect(screen.getByText("PROP-1")).toBeInTheDocument();
+  expect(screen.getByText("0/3 pièces corroborées")).toBeInTheDocument();
+  expect(screen.getByText("Période couverte")).toBeInTheDocument();
+  expect(screen.getByText("Couverture inconnue")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   await screen.findByText("Votre dossier, en un regard");
   expect(
@@ -319,6 +348,53 @@ it("shows attributed history and confidence factors only to the officer", async 
   expect(
     screen.queryByText("Pièce rejetée par l’agent"),
   ).not.toBeInTheDocument();
+});
+
+it("shows factor-level confidence deltas in officer history", async () => {
+  mockApi(officer, company, {
+    revisions: [
+      {
+        version: 2,
+        parent_version: 1,
+        reason: "Demande publiée",
+        created_at: "2026-09-27T00:00:00Z",
+      },
+    ],
+    events: [],
+    operational_confidence_changes: [
+      {
+        from_version: 2,
+        to_version: 2,
+        as_of: "2026-09-29T00:00:00Z",
+        before_index: null,
+        after_index: 0,
+        factor_deltas: [
+          {
+            code: "TIMELINESS",
+            before_contribution: null,
+            after_contribution: "0",
+            before_numerator: null,
+            before_denominator: null,
+            after_numerator: 0,
+            after_denominator: 3,
+            source_ids: ["REQ-1", "REQ-2", "REQ-3"],
+            reason_codes: ["UNANSWERED_REQUEST"],
+          },
+        ],
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Historique" }));
+  expect(
+    await screen.findByText("Confiance : données insuffisantes → 0"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("REQ-1, REQ-2, REQ-3")).toBeInTheDocument();
 });
 
 it("shows an empty reference state and only officer-side synthesis", async () => {

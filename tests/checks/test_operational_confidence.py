@@ -1,11 +1,11 @@
-"""Operational trust reflects attributed interactions, never documentary risk."""
+"""The approved trust contract is a normalized, source-backed indicator."""
 
 from datetime import datetime, timedelta, timezone
 
 from boussla.contracts import (ClarificationRequest, ClarificationResponse, EvidenceProposal,
-                               ProposalStatus, RequestStatus, RequestView, HistorySignalCode,
-                               CompanyHistorySignal, Mode, CauseProgress, FindingFamily, ProgressStage)
+                               FindingFamily, Mode, ProposalStatus, RequestStatus, RequestView)
 from boussla.operational_confidence import calculate_operational_confidence
+from boussla.review_progress import ProgressEvidence
 
 
 NOW = datetime(2026, 9, 27, tzinfo=timezone.utc)
@@ -23,75 +23,84 @@ def response(suffix: str, *, days: int = 0) -> ClarificationResponse:
                                  author_actor_id="ACTOR-COMP-1", submitted_at=NOW + timedelta(days=days))
 
 
-def proposal(status: ProposalStatus) -> EvidenceProposal:
-    return EvidenceProposal(proposal_id="PROP-1", case_id="CASE-1", expected_version=1,
-                            source_response_id="RESP-1", transaction_id="TX-1", line_id="L-1",
-                            unit="unit", budget_quantity="1", changes=(), status=status)
+def proposal(suffix: str, status: ProposalStatus) -> EvidenceProposal:
+    return EvidenceProposal(proposal_id=f"PROP-{suffix}", case_id="CASE-1", expected_version=1,
+                            source_response_id=f"RESP-{suffix}", source_document_id=f"DOC-{suffix}",
+                            transaction_id=f"TX-{suffix}", line_id="L-1", unit="unit",
+                            budget_quantity="1", changes=(), status=status)
 
 
-def signal(code=HistorySignalCode.REPEATED_INVOICE_CONFLICT) -> CompanyHistorySignal:
-    return CompanyHistorySignal(signal_id="SIG-1", company_id="COMP-1",
-                                reason_code=code,
-                                period="2026-08", metric="count", observed_value="3",
-                                explanation_fr="Conflits répétés", method="SYNTHETIC_SELF_HISTORY_V2", mode=Mode.LIVE)
+def evidence(suffix: str, *, consistent: bool) -> ProgressEvidence:
+    return ProgressEvidence(transaction_id=f"TX-{suffix}", family=FindingFamily.QUANTITY,
+                            response_id=f"RESP-{suffix}", document_id=f"DOC-{suffix}",
+                            proposal_id=f"PROP-{suffix}", technically_consistent=consistent,
+                            contradiction_reason=None if consistent else "DOCUMENT_ALLOCATION_CONTRADICTION")
 
 
-def test_insufficient_observations_do_not_create_numeric_trust():
-    assert calculate_operational_confidence((), (), (), (), NOW).index is None
-    assert calculate_operational_confidence((request("1"),), (), (), (), NOW).status == "INSUFFICIENT_DATA"
+def calculate(requests=(), responses=(), proposals=(), evidence_items=(), covered=(), conflicted=(), cutoff=NOW):
+    return calculate_operational_confidence(requests, responses, proposals, (), cutoff,
+                                            evidence_items, covered, conflicted)
 
 
-def test_response_and_accepted_proof_improve_trust_and_rejection_reverses_it():
-    requests = (request("1"),)
-    responses = (response("1"),)
-    pending = calculate_operational_confidence(requests, responses, (proposal(ProposalStatus.AWAITING_HUMAN_REVIEW),), (), NOW)
-    accepted = calculate_operational_confidence(requests, responses, (proposal(ProposalStatus.ACCEPTED),), (), NOW)
-    rejected = calculate_operational_confidence(requests, responses, (proposal(ProposalStatus.REJECTED),), (), NOW)
-    assert pending.status == accepted.status == rejected.status == "AVAILABLE"
-    assert accepted.index > pending.index > rejected.index
-    assert sum(f.contribution for f in accepted.factors) + accepted.baseline == accepted.index
-    assert any("PROP-1" in f.source_ids for f in rejected.factors)
+def test_pending_before_target_and_two_eligible_events_are_unknown():
+    pending = calculate((request("1"), request("2")))
+    assert pending.index is None and pending.status == "INSUFFICIENT_DATA"
+    assert pending.eligible_observations == 0
+    two = calculate((request("1"), request("2")), (response("1"), response("2")))
+    assert two.index is None and two.eligible_observations == 2
 
 
-def test_late_response_unanswered_request_and_repeated_anomaly_are_attributed():
-    timely = calculate_operational_confidence((request("1"), request("2", due_days=-1)),
-                                               (response("1"),), (), (), NOW)
-    late = calculate_operational_confidence((request("1"), request("2", due_days=-1)),
-                                             (response("1", days=2),), (), (signal(),), NOW + timedelta(days=2))
-    assert late.index < timely.index
-    assert {f.code for f in late.factors} >= {"LATE_RESPONSE", "UNANSWERED_REQUEST", "REPEATED_ANOMALY"}
-    assert all(f.source_ids for f in late.factors)
+def test_four_dimensions_have_explicit_denominators_and_weighted_contributions():
+    result = calculate(
+        (request("1"), request("2"), request("3")),
+        (response("1"), response("2"), response("3", days=2)),
+        (proposal("1", ProposalStatus.ACCEPTED), proposal("2", ProposalStatus.REJECTED)),
+        (evidence("1", consistent=True), evidence("2", consistent=False)),
+        ("TX-1", "TX-2", "TX-3", "TX-4"), ("TX-4",), NOW + timedelta(days=2),
+    )
+    assert result.status == "AVAILABLE" and result.index == 60
+    assert result.as_of == NOW + timedelta(days=2) and result.eligible_observations == 11
+    factors = {f.code: f for f in result.factors}
+    assert {code: (f.numerator, f.denominator, f.nominal_weight)
+            for code, f in factors.items()} == {
+        "TIMELINESS": (2, 3, 30), "ANSWER_COHERENCE": (1, 2, 25),
+        "EVIDENCE_CORROBORATION": (1, 2, 25), "HISTORICAL_STABILITY": (3, 4, 20)}
+    assert all(f.source_ids and f.reason_codes for f in factors.values())
+    assert {f.weighted_contribution for f in factors.values()} == {"20", "12.5", "15"}
 
 
-def test_coherent_then_contradictory_proof_reverses_trust_independent_of_review():
-    interactions = ((request("1"),), (response("1"),), (proposal(ProposalStatus.AWAITING_HUMAN_REVIEW),))
-    coherent = CauseProgress(transaction_id="TX-1", family=FindingFamily.QUANTITY,
-                             raw_contribution="40", current_contribution="10",
-                             stage=ProgressStage.EVIDENCE_COHERENT, provisional=True,
-                             source_ids=("DOC-1",))
-    contradicted = coherent.model_copy(update={"stage": ProgressStage.UNRESOLVED,
-                                                 "reason_code": "DOCUMENT_ALLOCATION_CONTRADICTION",
-                                                 "source_ids": ("DOC-2",)})
-    good = calculate_operational_confidence(*interactions, (), NOW, (coherent,))
-    bad = calculate_operational_confidence(*interactions, (), NOW, (contradicted,))
-    assert good.index > bad.index
-    assert {f.code for f in good.factors} >= {"DOCUMENT_COHERENT"}
-    assert {f.code for f in bad.factors} >= {"DOCUMENT_CONTRADICTORY"}
-    assert "DOC-2" in next(f.source_ids for f in bad.factors if f.code == "DOCUMENT_CONTRADICTORY")
+def test_missing_dimensions_are_omitted_and_weights_renormalized():
+    result = calculate((request("1"), request("2"), request("3")),
+                       (response("1"), response("2"), response("3", days=2)), cutoff=NOW + timedelta(days=2))
+    assert result.index == 67
+    assert len(result.factors) == 1
+    assert result.factors[0].code == "TIMELINESS"
+    assert result.factors[0].effective_weight == "100"
 
 
-def test_covered_stable_history_is_positive_but_missing_history_is_not():
-    interactions = ((request("1"),), (response("1"),), (proposal(ProposalStatus.ACCEPTED),))
-    without = calculate_operational_confidence(*interactions, (), NOW)
-    stable = calculate_operational_confidence(*interactions,
-                                              (signal(HistorySignalCode.NO_SIGNIFICANT_CHANGE),), NOW)
-    assert stable.index > without.index
-    assert "HISTORY_STABILITY" in {f.code for f in stable.factors}
+def test_rejected_then_accepted_proof_recalculates_without_moving_documentary_score():
+    requests = (request("1"), request("2"))
+    responses = (response("1"), response("2"))
+    rejected = calculate(requests, responses, (proposal("1", ProposalStatus.REJECTED),))
+    accepted = calculate(requests, responses, (proposal("1", ProposalStatus.ACCEPTED),))
+    assert rejected.index == 55 and accepted.index == 100
+    assert rejected.eligible_observations == accepted.eligible_observations == 3
+    assert "PROP-1" in next(f.source_ids for f in rejected.factors
+                            if f.code == "EVIDENCE_CORROBORATION")
 
 
-def test_answer_after_missed_target_improves_confidence_but_remains_late():
-    requests = (request("1", due_days=-1), request("2", due_days=-1))
-    before = calculate_operational_confidence(requests, (), (), (), NOW)
-    after = calculate_operational_confidence(requests, (response("1"),), (), (), NOW)
-    assert after.index > before.index
-    assert {f.code for f in after.factors} >= {"LATE_RESPONSE", "UNANSWERED_REQUEST"}
+def test_new_contradictory_proof_reverses_answer_coherence():
+    requests = (request("1"), request("2"))
+    responses = (response("1"), response("2"))
+    good = calculate(requests, responses, evidence_items=(evidence("1", consistent=True),))
+    bad = calculate(requests, responses, evidence_items=(evidence("1", consistent=False),))
+    assert good.index == 100 and bad.index == 55
+    assert "DOCUMENT_ALLOCATION_CONTRADICTION" in next(f.reason_codes for f in bad.factors
+                                                         if f.code == "ANSWER_COHERENCE")
+
+
+def test_covered_history_uses_distinct_transactions_not_missing_months():
+    stable = calculate(covered=("TX-1", "TX-2", "TX-3"))
+    conflict = calculate(covered=("TX-1", "TX-2", "TX-3"), conflicted=("TX-2",))
+    assert stable.index == 100 and conflict.index == 67
+    assert conflict.factors[0].denominator == 3 and conflict.factors[0].numerator == 2

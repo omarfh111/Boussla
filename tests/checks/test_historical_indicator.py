@@ -36,3 +36,12 @@ def test_contributions_are_explicit_deduplicated_and_bounded():
     assert delay.contribution == 10
     assert delay.source_signal_ids == ("SIG-delay-1", "SIG-delay-2")
     assert all(not s.affects_review_index for s in inputs)
+
+
+def test_isolated_late_activity_without_own_company_baseline_has_no_index():
+    isolated = signal(HistorySignalCode.LATE_DOCUMENT_ACTIVITY)
+    isolated = isolated.model_copy(update={"baseline_periods": ()})
+    result = calculate_historical_indicator((isolated,))
+    assert result.status == "INSUFFICIENT_DATA"
+    assert result.index is None
+    assert result.factors == ()

@@ -1,18 +1,18 @@
 """Progress evidence must be linked to the cause it provisionally reduces."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
 from boussla.config import FIXTURE_ROOT, Settings
 from boussla.contracts import (BousslaError, CandidateField, ErrorCode, EvidenceRef, ExtractionProposal,
-                               FindingFamily, Mode, ProgressStage)
+                               FindingFamily, Mode, ProgressStage, ClarificationRequest, RequestStatus, RequestView)
 from boussla.review_evidence import derive_progress_evidence
 from boussla.review_progress import calculate_progress, transaction_progress_index
 from boussla.security import ActorRegistry
 from boussla.seed import seed_demo_case
 from boussla.services import BousslaAppService
-from boussla.store import CaseStore
+from boussla.store import CaseStore, utcnow
 
 
 CASE = "CASE-BRICKS-001"
@@ -139,10 +139,9 @@ def test_officer_score_and_revision_follow_progressive_stages(service):
     assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
     assert service.list_queue(officer, datetime.now(timezone.utc), 10).items[0].review_index == 20
     officer_view = service.get_case(officer, CASE)
-    assert officer_view.operational_confidence_index == 80
-    assert officer_view.operational_confidence_status == "AVAILABLE"
-    assert officer_view.operational_confidence_observation_count == 2
-    assert {f.code for f in officer_view.operational_confidence_factors} == {"TIMELY_RESPONSE"}
+    assert officer_view.operational_confidence_index is None
+    assert officer_view.operational_confidence_status == "INSUFFICIENT_DATA"
+    assert officer_view.operational_confidence_eligible_observations == 1
     assert officer_view.history_signal_index is None
     assert officer_view.history_signal_status == "INSUFFICIENT_DATA"
     company_view = service.get_case(company, CASE).model_dump()
@@ -154,10 +153,39 @@ def test_officer_score_and_revision_follow_progressive_stages(service):
     assert result.score_after.review_index == 0
     assert result.score_after.cause_progress[0].stage is ProgressStage.RESOLVED
     accepted_view = service.get_case(officer, CASE)
-    assert accepted_view.operational_confidence_index > officer_view.operational_confidence_index
-    assert "ACCEPTED_PROOF" in {f.code for f in accepted_view.operational_confidence_factors}
+    assert accepted_view.operational_confidence_index is None
+    assert accepted_view.operational_confidence_eligible_observations == 2
     assert service.store.revisions(CASE)[-1].score_snapshot.cause_progress[0].stage is ProgressStage.RESOLVED
     assert service.evaluate(CASE, version=result.previous_version).score.review_index == 20
+
+
+def test_officer_history_reconstructs_deadline_only_confidence_delta(service):
+    now = utcnow()
+    due = now + timedelta(hours=1)
+    with service.store.write(CASE) as tx:
+        tx.require_version(version(service))
+        for number in range(3):
+            request = ClarificationRequest(request_id=f"REQ-DEADLINE-{number}", case_id=CASE,
+                                           company_id="DEMO-BAT", case_version=version(service) + 1,
+                                           status=RequestStatus.PUBLISHED_IN_DEMO,
+                                           published_at=now, target_response_at=due)
+            tx.put("request", request.request_id,
+                   RequestView(request=request, questions=(), text_fr="Justifier", mode=Mode.LIVE))
+        tx.commit_version("Trois demandes de démonstration")
+    officer = service.registry.actors["DEMO-OFFICER"]
+    service.clock = lambda: now
+    before_history = service.get_history(officer, CASE)
+    assert before_history.operational_confidence_changes == ()
+    service.clock = lambda: due + timedelta(hours=1)
+    history = service.get_history(officer, CASE)
+    change = history.operational_confidence_changes[-1]
+    assert change.from_version == change.to_version == version(service)
+    assert change.before_index is None and change.after_index == 0
+    assert change.factor_deltas[0].after_denominator == 3
+    assert set(change.factor_deltas[0].source_ids) == {f"REQ-DEADLINE-{n}" for n in range(3)}
+    assert service.get_history(officer, CASE).operational_confidence_changes == history.operational_confidence_changes
+    company = service.registry.actors["DEMO-COMPANY-BAT"]
+    assert "operational_confidence_changes" not in service.get_history(company, CASE).model_dump()
 
 
 def test_rejection_restores_raw_cause_weight(service):

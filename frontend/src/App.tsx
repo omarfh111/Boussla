@@ -136,6 +136,12 @@ const progressLabel: Record<string, string> = {
   EVIDENCE_COHERENT: "Pièce cohérente, validation en attente",
   RESOLVED: "Résolue après décision agent",
 };
+const confidenceUnit: Record<string, string> = {
+  TIMELINESS: "réponses dans les délais",
+  ANSWER_COHERENCE: "réponses cohérentes",
+  EVIDENCE_CORROBORATION: "pièces corroborées",
+  HISTORICAL_STABILITY: "transactions sans conflit répété",
+};
 const indicator = (value: number | null, state: string) =>
   state === "INSUFFICIENT_DATA" || value === null
     ? "Données insuffisantes"
@@ -1687,13 +1693,12 @@ function Officer({
           {c.operational_confidence_status === "AVAILABLE" ? (
             <>
               <p>
-                Indice : {format(c.operational_confidence_index)}/100 · base{" "}
-                {c.operational_confidence_baseline} ·{" "}
-                {c.operational_confidence_observation_count} observations
+                Indice : {format(c.operational_confidence_index)}/100 ·{" "}
+                {c.operational_confidence_eligible_observations} observations
+                admissibles
               </p>
               <p>
-                Avant plafonnement :{" "}
-                {format(c.operational_confidence_uncapped_index)} ·{" "}
+                Calcul au {c.operational_confidence_as_of} ·{" "}
                 {c.operational_confidence_method}
               </p>
               <div className="indicator-factor-list">
@@ -1703,21 +1708,36 @@ function Officer({
                     key={`${factor.code}:${index}`}
                   >
                     <strong>
-                      {factor.code} · {factor.contribution > 0 ? "+" : ""}
-                      {factor.contribution}
+                      {factor.code} · {factor.weighted_contribution} points
                     </strong>
+                    <span>
+                      {factor.numerator}/{factor.denominator}{" "}
+                      {confidenceUnit[factor.code] || "observations favorables"}
+                    </span>
+                    <span>
+                      Poids : {factor.effective_weight} % (nominal{" "}
+                      {factor.nominal_weight} %)
+                    </span>
                     <span>{factor.explanation_fr}</span>
+                    <small>{factor.reason_codes.join(", ")}</small>
                     <small>{factor.source_ids.join(", ")}</small>
                   </article>
                 ))}
               </div>
             </>
           ) : (
-            <p>Données insuffisantes sur les interactions de l’entreprise.</p>
+            <p>
+              Données insuffisantes :{" "}
+              {c.operational_confidence_eligible_observations}/3 observations
+              admissibles.
+            </p>
           )}
         </Panel>
       </div>
-      <Panel title="Comportement sur 12 mois" eyebrow="HISTORIQUE COUVERT">
+      <Panel
+        title="Comportement sur 12 mois"
+        eyebrow="FENÊTRE CALENDAIRE · COUVERTURE EXPLICITE"
+      >
         {c.monthly_activity.length ? (
           <div className="monthly-context">
             {c.monthly_activity.slice(-12).map((month) => (
@@ -1728,6 +1748,11 @@ function Officer({
                   {month.invoice_observation_count} observations de factures
                 </span>
                 <small>{month.source_label}</small>
+                <small>
+                  {month.coverage_status === "COVERED"
+                    ? "Période couverte"
+                    : "Couverture inconnue"}
+                </small>
               </article>
             ))}
           </div>
@@ -2211,7 +2236,49 @@ function HistoryPanel({ c }: { c: OfficerCaseView }) {
       ) : q.isError ? (
         <p role="alert">Historique indisponible.</p>
       ) : (
-        <Timeline value={q.data!} />
+        <>
+          <Timeline value={q.data!} />
+          {q.data?.operational_confidence_changes?.length ? (
+            <Panel
+              eyebrow="CONFIANCE OPÉRATIONNELLE · AGENT"
+              title="Évolution expliquée"
+            >
+              <div className="indicator-factor-list">
+                {q.data.operational_confidence_changes.map((change, index) => (
+                  <article
+                    className="indicator-factor"
+                    key={`${change.to_version}:${change.as_of}:${index}`}
+                  >
+                    <strong>
+                      Confiance :{" "}
+                      {change.before_index === null
+                        ? "données insuffisantes"
+                        : format(change.before_index)}{" "}
+                      →{" "}
+                      {change.after_index === null
+                        ? "données insuffisantes"
+                        : format(change.after_index)}
+                    </strong>
+                    <small>
+                      Version {change.from_version} → {change.to_version} ·{" "}
+                      {change.as_of}
+                    </small>
+                    {change.factor_deltas.map((factor) => (
+                      <div key={factor.code}>
+                        <span>
+                          {factor.code} :{" "}
+                          {factor.before_contribution ?? "inconnu"} →{" "}
+                          {factor.after_contribution ?? "inconnu"} points
+                        </span>
+                        <small>{factor.source_ids.join(", ")}</small>
+                      </div>
+                    ))}
+                  </article>
+                ))}
+              </div>
+            </Panel>
+          ) : null}
+        </>
       )}
     </>
   );

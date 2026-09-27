@@ -1,82 +1,112 @@
-"""Explainable operational trust, scoped to observed interactions, not fraud risk."""
+"""Four normalized, source-backed operational confidence dimensions."""
 
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 
-from boussla.contracts import (CauseProgress, ClarificationResponse, CompanyHistorySignal, EvidenceProposal,
+from boussla.contracts import (ClarificationResponse, CompanyHistorySignal, EvidenceProposal,
                                HistorySignalCode, OperationalConfidence, OperationalConfidenceFactor,
-                               ProgressStage, ProposalStatus, RequestStatus, RequestView)
+                               ProposalStatus, RequestStatus, RequestView)
+from boussla.review_progress import ProgressEvidence
+
+WEIGHTS = {"TIMELINESS": 30, "ANSWER_COHERENCE": 25,
+           "EVIDENCE_CORROBORATION": 25, "HISTORICAL_STABILITY": 20}
+
+
+def _decimal_str(value: Decimal) -> str:
+    return format(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP).normalize(), "f")
 
 
 def calculate_operational_confidence(
     requests: tuple[RequestView, ...], responses: tuple[ClarificationResponse, ...],
     proposals: tuple[EvidenceProposal, ...], history_signals: tuple[CompanyHistorySignal, ...],
-    as_of: datetime, cause_progress: tuple[CauseProgress, ...] = (),
+    as_of: datetime, progress_evidence: tuple[ProgressEvidence, ...] = (),
+    covered_transaction_ids: tuple[str, ...] = (), conflicted_transaction_ids: tuple[str, ...] = (),
 ) -> OperationalConfidence:
-    """Read-time indicator. Two attributable observations are needed for a number.
+    """Calculate at an explicit cutoff; unknown dimensions never earn points.
 
-    A published request counts as one observation, and a reviewed or pending
-    proposal as another. Recalculation from current facts makes every factor
-    reversible when a response arrives or a proposal changes state.
+    The numerator/denominator for each eligible dimension is persisted in the
+    officer response. Contributions are percentage points after renormalizing
+    only the dimensions whose denominator is nonzero.
     """
-    published = tuple(r.request for r in requests if r.request.status is not RequestStatus.DRAFT
-                      and (r.request.published_at is None or r.request.published_at <= as_of))
+    if as_of.tzinfo is None or as_of.utcoffset() is None:
+        raise ValueError("as_of must be timezone aware")
+    published = tuple(v.request for v in requests if v.request.status is not RequestStatus.DRAFT
+                      and (v.request.published_at is None or v.request.published_at <= as_of))
     response_by_request = {r.request_id: r for r in responses if r.submitted_at <= as_of}
-    relevant_proposals = tuple(p for p in proposals if p.status is not ProposalStatus.SUPERSEDED)
-    count = len(published) + len(relevant_proposals)
-    if count < 2:
-        return OperationalConfidence(status="INSUFFICIENT_DATA", observation_count=count)
+    dimensions: list[tuple[str, int, int, tuple[str, ...], tuple[str, ...], str]] = []
 
-    factors: list[OperationalConfidenceFactor] = []
-    for request in published:
-        response = response_by_request.get(request.request_id)
-        if response is not None:
-            timely = request.target_response_at is None or response.submitted_at <= request.target_response_at
-            factors.append(OperationalConfidenceFactor(
-                code="TIMELY_RESPONSE" if timely else "LATE_RESPONSE",
-                contribution=10 if timely else -5,
-                source_ids=(request.request_id, response.response_id),
-                explanation_fr="Réponse reçue dans le délai indicatif." if timely
-                else "Réponse reçue après le délai indicatif."))
-        elif request.status in (RequestStatus.PUBLISHED_IN_DEMO, RequestStatus.EXTENDED) \
-                and request.target_response_at is not None and request.target_response_at < as_of:
-            factors.append(OperationalConfidenceFactor(
-                code="UNANSWERED_REQUEST", contribution=-10, source_ids=(request.request_id,),
-                explanation_fr="Demande restée sans réponse après le délai indicatif."))
-    for proposal in relevant_proposals:
-        if proposal.status in (ProposalStatus.ACCEPTED, ProposalStatus.REJECTED):
-            accepted = proposal.status is ProposalStatus.ACCEPTED
-            factors.append(OperationalConfidenceFactor(
-                code="ACCEPTED_PROOF" if accepted else "REJECTED_PROOF",
-                contribution=10 if accepted else -15, source_ids=(proposal.proposal_id,),
-                explanation_fr="Pièce ou proposition acceptée par l’agent." if accepted
-                else "Pièce ou proposition rejetée par l’agent."))
-    repeated = tuple(s.signal_id for s in history_signals
-                     if s.reason_code is HistorySignalCode.REPEATED_INVOICE_CONFLICT)
-    if repeated:
-        factors.append(OperationalConfidenceFactor(
-            code="REPEATED_ANOMALY", contribution=-10, source_ids=tuple(sorted(set(repeated))),
-            explanation_fr="Incohérences répétées dans l’historique couvert."))
-    stable = tuple(s.signal_id for s in history_signals
-                   if s.reason_code is HistorySignalCode.NO_SIGNIFICANT_CHANGE)
-    has_historical_deviation = any(s.reason_code not in (HistorySignalCode.NO_SIGNIFICANT_CHANGE,
-                                                          HistorySignalCode.INSUFFICIENT_HISTORY)
-                                   for s in history_signals)
-    if stable and not has_historical_deviation:
-        factors.append(OperationalConfidenceFactor(
-            code="HISTORY_STABILITY", contribution=5, source_ids=tuple(sorted(set(stable))),
-            explanation_fr="Aucune variation significative dans l’historique couvert."))
-    for cause in cause_progress:
-        if cause.reason_code == "DOCUMENT_ALLOCATION_CONTRADICTION":
-            factors.append(OperationalConfidenceFactor(
-                code="DOCUMENT_CONTRADICTORY", contribution=-15, source_ids=cause.source_ids,
-                explanation_fr="Nouvelle pièce contradictoire avec l’affectation proposée."))
-        elif cause.stage is ProgressStage.EVIDENCE_COHERENT:
-            factors.append(OperationalConfidenceFactor(
-                code="DOCUMENT_COHERENT", contribution=5, source_ids=cause.source_ids,
-                explanation_fr="Pièce vérifiée et cohérente avec l’affectation proposée (validation encore requise)."))
+    eligible_requests = tuple(r for r in published if r.target_response_at is not None
+                              and (r.target_response_at <= as_of or r.request_id in response_by_request))
+    if eligible_requests:
+        timely = sum(response_by_request.get(r.request_id) is not None
+                     and response_by_request[r.request_id].submitted_at <= r.target_response_at
+                     for r in eligible_requests)
+        request_ids = tuple(dict.fromkeys(x for r in eligible_requests
+                                          for x in (r.request_id,
+                                                    response_by_request[r.request_id].response_id
+                                                    if r.request_id in response_by_request else None) if x))
+        reasons = tuple(sorted({"TIMELY_RESPONSE" if r.request_id in response_by_request
+                                and response_by_request[r.request_id].submitted_at <= r.target_response_at
+                                else "LATE_RESPONSE" if r.request_id in response_by_request
+                                else "UNANSWERED_REQUEST" for r in eligible_requests}))
+        dimensions.append(("TIMELINESS", timely, len(eligible_requests), reasons, request_ids,
+                           "Réponses dans la cible de démonstration parmi les demandes arrivées à échéance ou répondues."))
 
-    raw = 70 + sum(f.contribution for f in factors)
-    return OperationalConfidence(index=max(0, min(100, raw)), uncapped_index=raw, status="AVAILABLE",
-                                 factors=tuple(factors), observation_count=count)
+    answer_ids = {r.response_id for r in response_by_request.values()}
+    verifiable: dict[str, list[ProgressEvidence]] = {}
+    for evidence in progress_evidence:
+        if evidence.response_id in answer_ids and evidence.document_id is not None \
+                and (evidence.technically_consistent or evidence.contradiction_reason):
+            verifiable.setdefault(evidence.response_id, []).append(evidence)
+    if verifiable:
+        consistent = sum(all(e.technically_consistent and not e.contradiction_reason for e in items)
+                         for items in verifiable.values())
+        refs = tuple(sorted({x for items in verifiable.values() for e in items
+                             for x in (e.response_id, e.document_id, e.proposal_id) if x}))
+        reasons = tuple(sorted({e.contradiction_reason or "DOCUMENT_COHERENT" for items in verifiable.values()
+                                for e in items}))
+        dimensions.append(("ANSWER_COHERENCE", consistent, len(verifiable), reasons, refs,
+                           "Réponses corroborées parmi celles vérifiables par des champs documentaires sourcés."))
+
+    judged = tuple(p for p in proposals if p.source_document_id is not None
+                   and p.status in (ProposalStatus.ACCEPTED, ProposalStatus.REJECTED))
+    if judged:
+        accepted = sum(p.status is ProposalStatus.ACCEPTED for p in judged)
+        refs = tuple(sorted({x for p in judged for x in (p.proposal_id, p.source_document_id) if x}))
+        reasons = tuple(sorted({"ACCEPTED_PROOF" if p.status is ProposalStatus.ACCEPTED else "REJECTED_PROOF"
+                                for p in judged}))
+        dimensions.append(("EVIDENCE_CORROBORATION", accepted, len(judged), reasons, refs,
+                           "Pièces acceptées parmi les propositions documentaires examinées par l’agent."))
+
+    covered = set(covered_transaction_ids)
+    if covered:
+        conflicted = covered & set(conflicted_transaction_ids)
+        historical_refs = {s.signal_id for s in history_signals
+                           if s.reason_code is HistorySignalCode.REPEATED_INVOICE_CONFLICT}
+        refs = tuple(sorted(covered | historical_refs))
+        dimensions.append(("HISTORICAL_STABILITY", len(covered) - len(conflicted), len(covered),
+                           ("REPEATED_INVOICE_CONFLICT",) if conflicted else ("NO_REPEATED_CONFLICT",), refs,
+                           "Transactions couvertes sans conflit de facture répété parmi les transactions couvertes."))
+
+    count = sum(denominator for _, _, denominator, _, _, _ in dimensions)
+    if count < 3:
+        return OperationalConfidence(index=None, status="INSUFFICIENT_DATA", as_of=as_of,
+                                     eligible_observations=count)
+
+    active_weight = sum(WEIGHTS[code] for code, *_ in dimensions)
+    factors = []
+    raw = Decimal(0)
+    for code, numerator, denominator, reasons, refs, explanation in dimensions:
+        effective = Decimal(100) * WEIGHTS[code] / active_weight
+        contribution = effective * numerator / denominator
+        raw += contribution
+        factors.append(OperationalConfidenceFactor(
+            code=code, numerator=numerator, denominator=denominator,
+            nominal_weight=WEIGHTS[code], effective_weight=_decimal_str(effective),
+            weighted_contribution=_decimal_str(contribution), reason_codes=reasons,
+            source_ids=refs, explanation_fr=explanation))
+    index = int(raw.quantize(Decimal(1), rounding=ROUND_HALF_UP))
+    return OperationalConfidence(index=index, status="AVAILABLE", as_of=as_of,
+                                 factors=tuple(factors), eligible_observations=count)
