@@ -30,6 +30,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ApiError, api } from "./api/client";
+import { NetworkGraph3D } from "./network/NetworkGraph3D";
 import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
 import { BousslaMark } from "./brand/BousslaMark";
 import {
@@ -628,9 +629,11 @@ function AppInner() {
 }
 
 function NetworkOverview({ c }: { c: OfficerCaseView }) {
+  const [scope, setScope] = useState<"case" | "all">("case");
   const graph = useQuery({
-    queryKey: ["network", "OFFICER"],
-    queryFn: () => api.network(),
+    queryKey: ["network", "OFFICER", scope, c.case_id],
+    queryFn: () =>
+      scope === "case" ? api.networkCase(c.case_id) : api.network(),
   });
   const nodes = new Map(
     graph.data?.nodes.map((node) => [node.node_id, node]) ?? [],
@@ -644,6 +647,16 @@ function NetworkOverview({ c }: { c: OfficerCaseView }) {
         title="Réseau"
         detail="Relations issues des dossiers assignés à l’agent, avec leurs sources."
       />
+      <label className="network-scope">
+        Périmètre du réseau
+        <select
+          value={scope}
+          onChange={(event) => setScope(event.target.value as "case" | "all")}
+        >
+          <option value="case">Dossier courant · {c.case_id}</option>
+          <option value="all">Tous les dossiers assignés</option>
+        </select>
+      </label>
       {graph.isLoading ? (
         <Skeleton />
       ) : graph.isError ? (
@@ -677,6 +690,7 @@ function NetworkOverview({ c }: { c: OfficerCaseView }) {
               <strong>{graph.data?.edges.length ?? 0}</strong>
             </div>
           </div>
+          {graph.data && <NetworkGraph3D graph={graph.data} dossier={c} />}
           <Panel
             title="Relations entre entreprises"
             eyebrow="ACHETEUR · VENDEUR"

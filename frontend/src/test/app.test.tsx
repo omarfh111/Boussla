@@ -143,7 +143,7 @@ function mockApi(
                 ].map((k) => [k, role === "OPERATOR"]),
               ),
             }
-          : path.endsWith("/network")
+          : path.includes("/network")
             ? {
                 scope: "ALL",
                 scope_id: null,
