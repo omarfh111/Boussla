@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Iterable
 
 from pydantic import Field
 from boussla.contracts import Contract, InvoiceObservation
 
-RULE_VERSION = "case-network-1"
+RULE_VERSION = "case-network-2"
 
 
 class NetworkNode(Contract):
@@ -28,11 +29,22 @@ class NetworkEdge(Contract):
     provenance_status: str
 
 
+class NetworkSignal(Contract):
+    signal_id: str
+    kind: str
+    company_ids: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    sample_size: int
+    explanation_fr: str
+    status: str = "OBSERVED_REVIEW_SIGNAL"
+
+
 class NetworkView(Contract):
     scope: str
     scope_id: str | None = None
     nodes: tuple[NetworkNode, ...]
     edges: tuple[NetworkEdge, ...]
+    signals: tuple[NetworkSignal, ...] = ()
     calculated_at: datetime
     rule_version: str = RULE_VERSION
     note_fr: str = "Relations observées dans les dossiers autorisés ; aucun signal de fraude."
@@ -40,6 +52,7 @@ class NetworkView(Contract):
 
 def build_network(cases: Iterable[tuple[str, dict[str, list]]], *, names: dict[str, str],
                   scope: str = "ALL", scope_id: str | None = None) -> NetworkView:
+    cases = tuple(cases)
     nodes: dict[str, NetworkNode] = {}
     edges: dict[str, NetworkEdge] = {}
 
@@ -134,6 +147,57 @@ def build_network(cases: Iterable[tuple[str, dict[str, list]]], *, names: dict[s
                                  quantity=delivery.quantity, unit=delivery.unit)
             edge(delivery_node, f"transaction:{delivery.transaction_id}", "RELATED_TO", case_id,
                  (delivery.delivery_id, *delivery.source_refs), "RECORDED_DELIVERY")
+    signals = _network_signals(cases)
     return NetworkView(scope=scope, scope_id=scope_id, nodes=tuple(sorted(nodes.values(), key=lambda item: item.node_id)),
                        edges=tuple(sorted(edges.values(), key=lambda item: item.edge_id)),
-                       calculated_at=datetime.now(timezone.utc))
+                       signals=signals, calculated_at=datetime.now(timezone.utc))
+
+
+def _network_signals(cases: tuple[tuple[str, dict[str, list]], ...]) -> tuple[NetworkSignal, ...]:
+    """Conservative patterns over canonical transactions, never invoice copies or inferred payments."""
+    by_buyer: dict[str, list[tuple[str, str]]] = {}
+    by_amount: dict[tuple[str, str, str, int], set[str]] = {}
+    links: dict[tuple[str, str], set[str]] = {}
+    for _, facts in cases:
+        observations = {item.observation_id: item for item in facts["invoice_observation"]}
+        for tx in facts["transaction"]:
+            if not tx.seller_company_id or tx.seller_company_id == tx.buyer_company_id:
+                continue
+            buyer, seller = tx.buyer_company_id, tx.seller_company_id
+            by_buyer.setdefault(buyer, []).append((seller, tx.transaction_id))
+            links.setdefault((seller, buyer), set()).add(tx.transaction_id)
+            amounts = {(obs.currency, obs.gross_millimes) for obs_id in tx.invoice_observation_ids
+                       if (obs := observations.get(obs_id)) is not None}
+            if len(amounts) == 1:
+                currency, amount = next(iter(amounts))
+                by_amount.setdefault((buyer, seller, currency, amount), set()).add(tx.transaction_id)
+    signals: list[NetworkSignal] = []
+    for buyer, rows in sorted(by_buyer.items()):
+        if len(rows) < 4:
+            continue
+        vendors = sorted({seller for seller, _ in rows})
+        for seller in vendors:
+            source_ids = tuple(sorted({tx_id for vendor, tx_id in rows if vendor == seller}))
+            if len(source_ids) * 4 < len(rows) * 3:
+                continue
+            signals.append(NetworkSignal(signal_id=f"concentration:{buyer}:{seller}",
+                kind="SUPPLIER_CONCENTRATION", company_ids=(buyer, seller), source_ids=source_ids,
+                sample_size=len(rows), explanation_fr=(
+                    f"{len(source_ids)} transactions sur {len(rows)} relient cet acheteur à ce fournisseur "
+                    "dans les dossiers visibles. Concentration à examiner, sans conclusion de fraude.")))
+    for (buyer, seller, currency, amount), source_set in sorted(by_amount.items()):
+        if len(source_set) < 3:
+            continue
+        signals.append(NetworkSignal(signal_id=f"repeated-amount:{buyer}:{seller}:{currency}:{amount}",
+            kind="REPEATED_AMOUNT", company_ids=(buyer, seller), source_ids=tuple(sorted(source_set)),
+            sample_size=len(source_set), explanation_fr=(
+                f"{len(source_set)} transactions distinctes entre ces entreprises présentent le même montant "
+                f"observé ({Decimal(amount) / 1000} {currency}). Répétition descriptive à vérifier.")))
+    for seller, buyer in sorted(links):
+        if seller >= buyer or (buyer, seller) not in links:
+            continue
+        source_ids = tuple(sorted(links[(seller, buyer)] | links[(buyer, seller)]))
+        signals.append(NetworkSignal(signal_id=f"reciprocal:{seller}:{buyer}", kind="RECIPROCAL_LINK",
+            company_ids=(seller, buyer), source_ids=source_ids, sample_size=len(source_ids),
+            explanation_fr="Échanges observés dans les deux sens entre ces entreprises ; relation à contextualiser."))
+    return tuple(signals)

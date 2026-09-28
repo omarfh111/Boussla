@@ -695,6 +695,30 @@ function NetworkOverview({ c }: { c: OfficerCaseView }) {
           </div>
           {graph.data && <NetworkGraph3D graph={graph.data} dossier={c} />}
           <Panel
+            title="Signaux réseau à examiner"
+            eyebrow="DESCRIPTIF · SOURCÉ"
+          >
+            {graph.data?.signals.length ? (
+              graph.data.signals.map((signal) => (
+                <article className="document" key={signal.signal_id}>
+                  <strong>{signal.kind.replaceAll("_", " ")}</strong>
+                  <p>{signal.explanation_fr}</p>
+                  <small>
+                    {signal.sample_size} transaction(s) dans l’échantillon ·
+                    Sources : {signal.source_ids.join(", ")}
+                  </small>
+                </article>
+              ))
+            ) : (
+              <p>Aucun motif réseau établi sur les transactions visibles.</p>
+            )}
+            <p className="footnote">
+              Les dossiers visibles ne constituent pas une couverture exhaustive
+              du réseau. Aucun signal ne modifie l’indice de revue ni ne conclut
+              à une fraude.
+            </p>
+          </Panel>
+          <Panel
             title="Relations entre entreprises"
             eyebrow="ACHETEUR · VENDEUR"
           >

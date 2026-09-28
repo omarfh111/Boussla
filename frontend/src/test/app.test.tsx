@@ -170,8 +170,9 @@ function mockApi(
                   scope_id: null,
                   nodes: [],
                   edges: [],
+                  signals: [],
                   calculated_at: "2026-09-27T00:00:00Z",
-                  rule_version: "case-network-1",
+                  rule_version: "case-network-2",
                   note_fr: "Relations observées.",
                 }
               : path.includes("/audit")

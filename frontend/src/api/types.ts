@@ -662,6 +662,15 @@ export interface NetworkView {
   calculated_at: string;
   rule_version: string;
   note_fr: string;
+  signals: {
+    signal_id: string;
+    kind: string;
+    company_ids: string[];
+    source_ids: string[];
+    sample_size: number;
+    explanation_fr: string;
+    status: "OBSERVED_REVIEW_SIGNAL";
+  }[];
   nodes: {
     node_id: string;
     kind: string;
