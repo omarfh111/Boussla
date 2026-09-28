@@ -610,6 +610,23 @@ export interface RevisionResult {
   score_after: ScoreSnapshot | null;
   replayed: boolean;
 }
+export interface InvestigationAnswer {
+  case_id: string;
+  case_version: number;
+  question: string;
+  answer_fr: string;
+  citations: {
+    source_id: string;
+    kind: string;
+    label_fr: string;
+    source_url: string | null;
+  }[];
+  calculated_at: string;
+  rule_version: string;
+  mode: "TEMPLATE";
+  authoritative: false;
+  limitations: string[];
+}
 export interface NetworkView {
   scope: "ALL" | "COMPANY" | "CASE";
   scope_id: string | null;

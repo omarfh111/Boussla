@@ -152,3 +152,13 @@ def test_network_http_routes_enforce_officer_scope(client):
     company = client.get("/api/network/company/DEMO-BAT", headers=headers("OFFICER"))
     assert company.status_code == 200 and company.json()["scope"] == "COMPANY"
     assert client.get("/api/network/case/CASE-NOT-ASSIGNED", headers=headers("OFFICER")).status_code == 403
+
+def test_investigation_http_answer_is_grounded_and_role_scoped(client):
+    url = f"/api/cases/{CASE}/investigate"
+    assert client.post(url, headers=headers(), json={"question": "Pourquoi prioritaire ?"}).status_code == 403
+    response = client.post(url, headers=headers("OFFICER"), json={"question": "Pourquoi prioritaire ?"})
+    assert response.status_code == 200, response.text
+    answer = response.json()
+    assert answer["mode"] == "TEMPLATE" and answer["citations"]
+    assert answer["authoritative"] is False and "local_path" not in response.text
+    assert client.post(url, headers=headers("OFFICER"), json={"question": "x"}).json()["error"]["code"] == "INVALID_INPUT"

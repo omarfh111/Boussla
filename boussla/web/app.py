@@ -134,6 +134,13 @@ async def history(request: Request):
     return result(service(request).get_history(actor(request), request.path_params["case_id"]))
 
 
+async def investigate(request: Request):
+    payload = await body(request)
+    if set(payload) != {"question"} or not isinstance(payload.get("question"), str):
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Question attendue")
+    return result(service(request).ask_investigation(actor(request), request.path_params["case_id"], payload["question"]))
+
+
 async def network(request: Request):
     return result(service(request).get_network(actor(request)))
 
@@ -276,6 +283,7 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}", case), Route("/api/officer/queue", queue),
         Route("/api/cases/{case_id}/history", history),
         Route("/api/cases/{case_id}/notifications", notifications),
+        Route("/api/cases/{case_id}/investigate", investigate, methods=["POST"]),
         Route("/api/network", network),
         Route("/api/network/company/{company_id}", network_company),
         Route("/api/network/case/{case_id}", network_case),

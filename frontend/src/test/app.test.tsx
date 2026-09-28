@@ -143,52 +143,72 @@ function mockApi(
                 ].map((k) => [k, role === "OPERATOR"]),
               ),
             }
-          : path.includes("/network")
+          : path.includes("/investigate")
             ? {
-                scope: "ALL",
-                scope_id: null,
-                nodes: [],
-                edges: [],
+                case_id: shared.case_id,
+                case_version: 1,
+                question: "Pourquoi ?",
+                answer_fr: "Cause documentée +40.",
+                citations: [
+                  {
+                    source_id: "CAUSE-1",
+                    kind: "CAUSE",
+                    label_fr: "Cause quantité",
+                    source_url: null,
+                  },
+                ],
                 calculated_at: "2026-09-27T00:00:00Z",
-                rule_version: "case-network-1",
-                note_fr: "Relations observées.",
+                rule_version: "investigation-answer-1",
+                mode: "TEMPLATE",
+                authoritative: false,
+                limitations: ["Revue humaine requise."],
               }
-            : path.includes("/notifications")
-              ? { case_id: shared.case_id, audience: role, items: [] }
-              : path.includes("/history") && historyView
-                ? historyView
-                : path.includes("/officer/queue")
-                  ? {
-                      items: [
-                        {
-                          case_id: shared.case_id,
-                          company_display_name: shared.company_display_name,
-                          case_version: 1,
-                          review_index: 40,
-                          evidence_coverage: "75.00",
-                          active_finding_count: 1,
-                          clarification_status: "NOT_REQUESTED",
-                          scope_note: "Documentaire",
-                          company_id: "DEMO-BAT",
-                          coverage_complete: false,
-                          triage_priority: 50,
-                          triage_reason_codes: [
-                            "REVIEW_FINDING_PRESENT",
-                            "CLARIFICATION_PENDING",
-                          ],
-                          sector: "Construction",
-                          synthetic_identifier: "DEMO-MF",
-                          last_activity_at: "2026-09-07",
-                          history_signal_codes: [],
-                          history_anomaly: null,
-                        },
-                      ],
-                      next_cursor: null,
-                      mode: "LIVE",
-                    }
-                  : role === "COMPANY"
-                    ? companyView
-                    : officerView;
+            : path.includes("/network")
+              ? {
+                  scope: "ALL",
+                  scope_id: null,
+                  nodes: [],
+                  edges: [],
+                  calculated_at: "2026-09-27T00:00:00Z",
+                  rule_version: "case-network-1",
+                  note_fr: "Relations observées.",
+                }
+              : path.includes("/notifications")
+                ? { case_id: shared.case_id, audience: role, items: [] }
+                : path.includes("/history") && historyView
+                  ? historyView
+                  : path.includes("/officer/queue")
+                    ? {
+                        items: [
+                          {
+                            case_id: shared.case_id,
+                            company_display_name: shared.company_display_name,
+                            case_version: 1,
+                            review_index: 40,
+                            evidence_coverage: "75.00",
+                            active_finding_count: 1,
+                            clarification_status: "NOT_REQUESTED",
+                            scope_note: "Documentaire",
+                            company_id: "DEMO-BAT",
+                            coverage_complete: false,
+                            triage_priority: 50,
+                            triage_reason_codes: [
+                              "REVIEW_FINDING_PRESENT",
+                              "CLARIFICATION_PENDING",
+                            ],
+                            sector: "Construction",
+                            synthetic_identifier: "DEMO-MF",
+                            last_activity_at: "2026-09-07",
+                            history_signal_codes: [],
+                            history_anomaly: null,
+                          },
+                        ],
+                        next_cursor: null,
+                        mode: "LIVE",
+                      }
+                    : role === "COMPANY"
+                      ? companyView
+                      : officerView;
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -1146,4 +1166,22 @@ it("compares company habit to the current period without treating uncovered mont
   expect(screen.getByTitle("2026-08 : couverture inconnue")).toHaveTextContent(
     "—",
   );
+});
+
+it("shows sourced investigation answers only in the officer dossier", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Examiner les sources" }),
+  );
+  expect(await screen.findByText("Cause documentée +40.")).toBeInTheDocument();
+  expect(screen.getByText(/CAUSE-1/)).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  await screen.findByText("Votre dossier, en un regard");
+  expect(
+    screen.queryByText("Assistant d’investigation"),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByText("Cause documentée +40.")).not.toBeInTheDocument();
 });

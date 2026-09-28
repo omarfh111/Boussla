@@ -1,6 +1,7 @@
 import {
   Component,
   useCallback,
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -56,6 +57,7 @@ import type {
   ClarificationDraft,
   DocumentView,
   ContextAssessmentView,
+  InvestigationAnswer,
 } from "./api/types";
 
 type Tab =
@@ -2180,6 +2182,7 @@ function Officer({
           crée une nouvelle version du dossier.
         </p>
       </section>
+      <InvestigationAssistant caseId={c.case_id} caseVersion={c.case_version} />
       <details className="dossier-secondary">
         <summary>Analyses complémentaires</summary>
         <div className="two-col indicator-explanations">
@@ -2795,6 +2798,110 @@ function References({ c }: { c: OfficerCaseView }) {
         )}
       </div>
     </>
+  );
+}
+
+function InvestigationAssistant({
+  caseId,
+  caseVersion,
+}: {
+  caseId: string;
+  caseVersion: number;
+}) {
+  const [question, setQuestion] = useState(
+    "Pourquoi ce dossier est prioritaire ?",
+  );
+  const [answer, setAnswer] = useState<InvestigationAnswer | null>(null);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const scope = `${caseId}:${caseVersion}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  useEffect(() => {
+    setAnswer(null);
+    setError("");
+  }, [scope]);
+  const ask = async (event: FormEvent) => {
+    event.preventDefault();
+    if (pending || question.trim().length < 3) return;
+    setPending(true);
+    setError("");
+    setAnswer(null);
+    const requestedScope = scope;
+    try {
+      const result = await api.askInvestigation(caseId, question.trim());
+      if (currentScope.current === requestedScope) setAnswer(result);
+    } catch (cause) {
+      if (currentScope.current === requestedScope)
+        setError(
+          cause instanceof Error ? cause.message : "Réponse indisponible.",
+        );
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Panel
+      eyebrow="ASSISTANCE SOURCÉE · AGENT"
+      title="Assistant d’investigation"
+    >
+      <form onSubmit={ask} className="investigation-form">
+        <label>
+          Question sur ce dossier
+          <input
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            maxLength={500}
+          />
+        </label>
+        <button
+          className="primary"
+          disabled={pending || question.trim().length < 3}
+        >
+          {pending ? "Recherche…" : "Examiner les sources"}
+        </button>
+      </form>
+      <p className="footnote">
+        Questions possibles : priorité, historique, documents, réseau,
+        références ou décisions. La réponse n’est pas une décision automatique.
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {answer && (
+        <div className="investigation-answer">
+          <p className="investigation-lines">{answer.answer_fr}</p>
+          <strong>Sources citées</strong>
+          {answer.citations.length ? (
+            <ul>
+              {answer.citations.map((citation) => (
+                <li key={citation.source_id}>
+                  {citation.source_url?.startsWith("https://") ? (
+                    <a
+                      href={citation.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {citation.label_fr}
+                    </a>
+                  ) : (
+                    citation.label_fr
+                  )}
+                  <small>
+                    {" "}
+                    · {citation.kind} · {citation.source_id}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Aucune source suffisante pour une conclusion.</p>
+          )}
+          <small>
+            v{answer.case_version} · {answer.rule_version} · {answer.mode} ·{" "}
+            {answer.limitations.join(" ")}
+          </small>
+        </div>
+      )}
+    </Panel>
   );
 }
 

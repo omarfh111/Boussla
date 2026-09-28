@@ -399,3 +399,29 @@ def test_network_does_not_infer_payment_link_without_allocation(svc, actors):
     graph = build_network(((CASE, facts),), names={})
     assert any(node.kind == "PAYMENT" for node in graph.nodes)
     assert not any(edge.kind == "PAID" for edge in graph.edges)
+
+def test_investigation_answer_is_cited_officer_only_and_read_only(svc, actors):
+    company, officer, other = actors
+    before = ver(svc)
+    answer = svc.ask_investigation(officer, CASE, "Pourquoi ce dossier est prioritaire ?")
+    assert answer.mode == "TEMPLATE" and answer.authoritative is False
+    assert "Urgence de traitement" in answer.answer_fr and "+40" in answer.answer_fr
+    assert answer.citations and all(item.source_id for item in answer.citations)
+    assert answer.case_version == before and ver(svc) == before
+    assert code(lambda: svc.ask_investigation(company, CASE, "Pourquoi ?")) is ErrorCode.FORBIDDEN
+    assert code(lambda: svc.ask_investigation(other, CASE, "Pourquoi ?")) is ErrorCode.FORBIDDEN
+    assert code(lambda: svc.ask_investigation(officer, CASE, "x")) is ErrorCode.INVALID_INPUT
+
+def test_investigation_retrieves_network_and_decision_sources(svc, actors):
+    company, officer, _ = actors
+    network = svc.ask_investigation(officer, CASE, "Quelles relations réseau ?")
+    assert "Relation enregistrée" in network.answer_fr
+    assert any(citation.kind == "TRANSACTION" for citation in network.citations)
+    documents = svc.ask_investigation(officer, CASE, "Quels documents manquent ?")
+    assert documents.citations and all(citation.source_id for citation in documents.citations)
+    response = to_proposal(svc, actors)
+    svc.accept_evidence(officer, CASE, response.proposal_ids[0], ver(svc), "investigate-decision")
+    decision = svc.ask_investigation(officer, CASE, "Quelle décision a été validée ?")
+    assert "Acceptée" in decision.answer_fr
+    assert any(citation.kind == "EVENT" for citation in decision.citations)
+    assert svc.ask_investigation(officer, CASE, "Question sans catégorie reconnue").citations

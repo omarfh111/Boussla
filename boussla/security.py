@@ -30,6 +30,7 @@ POLICY: dict[str, frozenset[Role]] = {
     "reject_evidence": frozenset({Role.OFFICER}),
     "get_history": frozenset({Role.COMPANY, Role.OFFICER}),
     "get_network": frozenset({Role.OFFICER}),
+    "ask_investigation": frozenset({Role.OFFICER}),
     "export_dossier": frozenset({Role.OFFICER}),
     "reset_demo": frozenset({Role.DEMO_OPERATOR}),
     # Synthetic data administration: local demo operator only (never COMPANY or OFFICER).

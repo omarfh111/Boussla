@@ -8,6 +8,7 @@ import type {
   HistoryView,
   NotificationFeedView,
   NetworkView,
+  InvestigationAnswer,
   ClarificationDraft,
   RequestView,
   RevisionResult,
@@ -80,6 +81,16 @@ export const api = {
     request<NotificationFeedView>(
       r,
       `/cases/${encodeURIComponent(id)}/notifications`,
+    ),
+  askInvestigation: (id: string, question: string) =>
+    request<InvestigationAnswer>(
+      "OFFICER",
+      `/cases/${encodeURIComponent(id)}/investigate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      },
     ),
   network: () => request<NetworkView>("OFFICER", "/network"),
   networkCase: (id: string) =>

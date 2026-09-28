@@ -2606,3 +2606,35 @@ button.danger {
   margin: 0 0 18px;
   color: #b9d4e0;
 }
+
+.investigation-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.investigation-form label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 330px;
+}
+.investigation-form input {
+  width: 100%;
+}
+.investigation-answer {
+  border: 1px solid #31546a;
+  border-radius: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  background: #10263b;
+}
+.investigation-lines {
+  white-space: pre-line;
+  line-height: 1.6;
+}
+.investigation-answer ul {
+  padding-left: 20px;
+}
+.investigation-answer li {
+  margin: 8px 0;
+}

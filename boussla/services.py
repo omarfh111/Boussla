@@ -56,6 +56,7 @@ from boussla.monthly_context import build_monthly_context
 from boussla.confidence_history import confidence_delta
 from boussla.impact import simulate_resolution
 from boussla.network import NetworkView, build_network
+from boussla.investigation import InvestigationAnswer, answer_investigation
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -1064,6 +1065,16 @@ class BousslaAppService(_DemoAdministration):
                 changes.append(change)
         return OfficerHistoryView(case_id=case_id, revisions=revisions, events=events,
                                   operational_confidence_changes=tuple(changes), mode=Mode.LIVE)
+
+    def ask_investigation(self, actor: Actor, case_id: str, question: str) -> InvestigationAnswer:
+        trusted, _ = self._open(actor, case_id, "ask_investigation")
+        clean_question = question.strip()
+        if not 3 <= len(clean_question) <= 500:
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Question attendue (3 à 500 caractères)")
+        view = self.get_case(trusted, case_id)
+        history = self.get_history(trusted, case_id)
+        network = self.get_network(trusted, case_id=case_id)
+        return answer_investigation(clean_question, view, history, network)
 
     def get_network(self, actor: Actor, *, company_id: str | None = None,
                     case_id: str | None = None) -> NetworkView:
