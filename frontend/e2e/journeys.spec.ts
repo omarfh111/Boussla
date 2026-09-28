@@ -72,7 +72,7 @@ test.describe("release journeys", () => {
       comparison.locator(".comparison-block").first(),
     );
 
-    await page.getByRole("button", { name: "Dossier", exact: true }).click();
+    await page.getByRole("button", { name: "Dossiers", exact: true }).click();
     const brief = page.locator(".investigator-panel");
     await expect(
       brief.getByRole("heading", { name: "Analyse assistée BOUSSLA" }),
@@ -125,7 +125,8 @@ test.describe("release journeys", () => {
   }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Entreprise", exact: true }).click();
-    await page.getByRole("button", { name: "Contexte" }).click();
+    await page.getByRole("button", { name: "Messages" }).click();
+    await page.getByText("Contexte déclaré", { exact: true }).click();
     await page
       .getByLabel("Projet concerné")
       .selectOption({ label: "Aucun projet / usage général de l’entreprise" });

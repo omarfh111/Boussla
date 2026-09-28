@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => skipSplash(page));
 
 async function officerPriority(page: Page) {
   await page.getByRole("button", { name: "Agent", exact: true }).click();
-  await page.getByRole("button", { name: "Dossier", exact: true }).click();
+  await page.getByRole("button", { name: "Dossiers", exact: true }).click();
   const ring = page.locator(".priority-ring strong");
   await expect(ring).toHaveText(/\d+/);
   return ring.textContent();
@@ -20,7 +20,8 @@ async function officerPriority(page: Page) {
 
 async function declare(page: Page, horizon: string, stage: string) {
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
-  await page.getByRole("button", { name: "Contexte" }).click();
+  await page.getByRole("button", { name: "Messages" }).click();
+  await page.locator("summary").filter({ hasText: "Contexte déclaré" }).click();
   await page.getByLabel("Horizon du projet (déclaré)").selectOption(horizon);
   await page.getByPlaceholder("Décrivez l’affectation prévue…").fill(purpose);
   await page.getByPlaceholder("Ex. projet P1").fill("Maître d’ouvrage privé");
@@ -55,7 +56,7 @@ test("context mismatch -> automatic questionnaire -> response -> investigator re
   await expect(page.locator("body")).not.toContainText(/risque|fraude/i);
 
   // The questionnaire arrived without any officer action.
-  await page.getByRole("button", { name: "Demandes" }).click();
+  await page.getByRole("button", { name: "Actions requises" }).click();
   const card = page
     .locator(".stack > div")
     .filter({ hasText: "Demande automatique BOUSSLA" })
@@ -85,7 +86,8 @@ test("context mismatch -> automatic questionnaire -> response -> investigator re
   await expect(
     page.getByText("Réponse transmise à la revue de l’agent."),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Contexte" }).click();
+  await page.getByRole("button", { name: "Messages" }).click();
+  await page.locator("summary").filter({ hasText: "Contexte déclaré" }).click();
   await expect(tiles.nth(0)).toContainText("Horizon plus long");
   await expect(tiles.nth(3)).toContainText("Cohérent");
 

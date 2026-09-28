@@ -184,6 +184,7 @@ export interface DocumentView {
 export interface TransactionSummary {
   transaction_id: string;
   counterparty_display_name: string | null;
+  counterparty_company_id?: string | null;
   invoice_number: string | null;
   issued_on: string | null;
   invoiced_gross_millimes: number | null;
@@ -381,6 +382,9 @@ export interface InvoiceComparison {
   status: "CONCORDANT" | "DIFFERENCES" | "SINGLE_OBSERVATION" | "AMBIGUOUS";
   reconciliation_status?: string;
   candidate_observation_ids?: string[];
+  payment_ids?: string[];
+  delivery_ids?: string[];
+  project_ids?: string[];
   rule_version?: string;
   calculated_at?: string | null;
   label_fr: string;

@@ -214,8 +214,10 @@ it("switches scoped views and never shows officer priority to the company", asyn
   fireEvent.click(
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
-  expect(await screen.findByText("Entreprise 360")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  expect(
+    await screen.findByText("40", { selector: ".priority-ring strong" }),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   expect(
     await screen.findByText("40", { selector: ".priority-ring strong" }),
   ).toBeInTheDocument();
@@ -255,7 +257,7 @@ it("shows backend-provided cause contributions and separates the five indicators
   fireEvent.click(
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   expect(await screen.findByText("Contributions au score")).toBeInTheDocument();
   expect(screen.getByText("40 → 20")).toBeInTheDocument();
   expect(screen.getByText("Réduction provisoire")).toBeInTheDocument();
@@ -330,7 +332,7 @@ it("shows attributed history and confidence factors only to the officer", async 
   fireEvent.click(
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   expect(
     await screen.findByText("Conflit répété de factures"),
   ).toBeInTheDocument();
@@ -390,7 +392,10 @@ it("shows factor-level confidence deltas in officer history", async () => {
   fireEvent.click(
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Historique" }));
+  fireEvent.click(screen.getByRole("button", { name: "Avancé" }));
+  fireEvent.click(
+    screen.getByText("Timeline du dossier", { selector: "summary" }),
+  );
   expect(
     await screen.findByText("Confiance : données insuffisantes → 0"),
   ).toBeInTheDocument();
@@ -401,7 +406,8 @@ it("shows an empty reference state and only officer-side synthesis", async () =>
   mockApi();
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
-  fireEvent.click(screen.getByRole("button", { name: "Références" }));
+  fireEvent.click(screen.getByRole("button", { name: "Avancé" }));
+  fireEvent.click(screen.getByText("Références", { selector: "summary" }));
   expect(
     await screen.findByText("Aucun passage candidat retourné"),
   ).toBeInTheDocument();
@@ -448,10 +454,11 @@ it("shows officer citations and disables acceptance without a source document", 
   mockApi(view);
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
-  fireEvent.click(screen.getByRole("button", { name: "Références" }));
+  fireEvent.click(screen.getByRole("button", { name: "Avancé" }));
+  fireEvent.click(screen.getByText("Références", { selector: "summary" }));
   expect(await screen.findByText("Synthèse citée.")).toBeInTheDocument();
   expect(screen.getByText("Passage candidat.")).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   expect(
     screen.getByRole("button", { name: "Accepter dans ce dossier" }),
   ).toBeDisabled();
@@ -486,7 +493,10 @@ it("refetches after a stale revision without retrying the write", async () => {
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   await screen.findByText("Votre dossier, en un regard");
-  fireEvent.click(screen.getByRole("button", { name: "Contexte" }));
+  fireEvent.click(screen.getByRole("button", { name: "Messages" }));
+  fireEvent.click(
+    await screen.findByText("Contexte déclaré", { selector: "summary" }),
+  );
   fireEvent.change(
     screen.getByPlaceholderText("Décrivez l’affectation prévue…"),
     { target: { value: "Usage prévu" } },
@@ -549,7 +559,10 @@ it("renders declared / interpreted / calculated context with neutral labels", as
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "Contexte" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Messages" }));
+  fireEvent.click(
+    await screen.findByText("Contexte déclaré", { selector: "summary" }),
+  );
   expect(await screen.findByText("Horizon court")).toBeInTheDocument();
   expect(screen.getByText("546 jours · Horizon plus long")).toBeInTheDocument();
   expect(screen.getByText("Clarification nécessaire")).toBeInTheDocument();
@@ -614,7 +627,9 @@ it("answers a CHOICE question with the backend enum, not the display label", asy
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "Demandes" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Actions requises" }),
+  );
   fireEvent.click(
     await screen.findByRole("button", { name: /Répondre à la demande/ }),
   );
@@ -662,7 +677,8 @@ it("leaves no officer reference note or passages visible after switching to the 
   });
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
-  fireEvent.click(screen.getByRole("button", { name: "Références" }));
+  fireEvent.click(screen.getByRole("button", { name: "Avancé" }));
+  fireEvent.click(screen.getByText("Références", { selector: "summary" }));
   expect(
     await screen.findByText("Synthèse réservée à l’agent."),
   ).toBeInTheDocument();
@@ -706,7 +722,9 @@ it("shows a bounded automatic request in the company inbox without an officer dr
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "Demandes" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Actions requises" }),
+  );
   expect(
     await screen.findByText("Demande automatique BOUSSLA"),
   ).toBeInTheDocument();
@@ -741,7 +759,10 @@ it("only offers general company use when the server capability permits a null pr
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
-  fireEvent.click(await screen.findByRole("button", { name: "Contexte" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Messages" }));
+  fireEvent.click(
+    await screen.findByText("Contexte déclaré", { selector: "summary" }),
+  );
   expect(
     await screen.findByRole("option", {
       name: "Aucun projet / usage général de l’entreprise",
@@ -778,7 +799,7 @@ it("shows triage separately from the review index in the officer dossier", async
   expect(
     screen.getByText("40", { selector: ".portfolio-index" }),
   ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   expect(
     await screen.findByText("Urgence de traitement (triage)"),
   ).toBeInTheDocument();
@@ -859,11 +880,30 @@ it("renders backend indicator explanations without inventing missing values", as
   fireEvent.click(
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
-  fireEvent.click(screen.getByRole("button", { name: "Dossier" }));
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   fireEvent.click(await screen.findByText("Comprendre les cinq indicateurs"));
   expect(screen.getByText("Indice de revue : 37")).toBeInTheDocument();
   expect(
     screen.getByText("Confiance opérationnelle : Données insuffisantes"),
   ).toBeInTheDocument();
   expect(screen.getByText(/confidence-test-rule/)).toBeInTheDocument();
+});
+
+
+it("keeps five primary officer spaces and four company spaces role scoped", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
+  for (const name of ["Dashboard", "Dossiers", "Réseau", "Historique", "Notifications", "Avancé"])
+    expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Réseau" }));
+  expect(await screen.findByText("Réseau", { selector: "h1" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
+  expect(await screen.findByText("Notifications", { selector: "h1" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  for (const name of ["Mes dossiers", "Actions requises", "Documents", "Messages"])
+    expect(screen.getByRole("button", { name })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Réseau" })).not.toBeInTheDocument();
+  expect(screen.queryByText("Priorité de revue")).not.toBeInTheDocument();
 });

@@ -69,21 +69,24 @@ type Tab =
   | "references"
   | "history"
   | "diagnostics"
-  | "admin";
+  | "admin"
+  | "network"
+  | "notifications"
+  | "messages"
+  | "advanced";
 const companyTabs: [Tab, string, ReactNode][] = [
-  ["overview", "Vue d’ensemble", <LayoutDashboard size={18} />],
-  ["operations", "Opérations", <Activity size={18} />],
-  ["context", "Contexte", <ClipboardList size={18} />],
-  ["requests", "Demandes", <FolderOpen size={18} />],
-  ["documents", "Pièces", <FileText size={18} />],
+  ["overview", "Mes dossiers", <LayoutDashboard size={18} />],
+  ["requests", "Actions requises", <FolderOpen size={18} />],
+  ["documents", "Documents", <FileText size={18} />],
+  ["messages", "Messages", <ClipboardList size={18} />],
 ];
 const officerTabs: [Tab, string, ReactNode][] = [
-  ["queue", "File de revue", <LayoutDashboard size={18} />],
-  ["company360", "Entreprise 360", <Building2 size={18} />],
-  ["dossier", "Dossier", <Search size={18} />],
-  ["references", "Références", <BookOpen size={18} />],
-  ["history", "Historique", <History size={18} />],
-  ["diagnostics", "Diagnostics", <Activity size={18} />],
+  ["queue", "Dashboard", <LayoutDashboard size={18} />],
+  ["dossier", "Dossiers", <Search size={18} />],
+  ["network", "Réseau", <Building2 size={18} />],
+  ["company360", "Historique", <History size={18} />],
+  ["notifications", "Notifications", <ClipboardList size={18} />],
+  ["advanced", "Avancé", <Database size={18} />],
 ];
 const operatorTabs: [Tab, string, ReactNode][] = [
   ["admin", "Données démo", <Database size={18} />],
@@ -117,6 +120,8 @@ const status: Record<string, string> = {
   ALLOCATION_REFERENCE: "Référence d’affectation",
   DELIVERY_RECORD: "Bon de livraison",
   PAYMENT_RECORD: "Preuve de règlement",
+  CONTRACT: "Contrat",
+  DECLARATION: "Déclaration",
   OTHER_OR_UNKNOWN: "Autre / inconnu",
   BUYER_RECEIVED: "Copie reçue par l’acheteur",
   SELLER_ISSUED: "Émission du vendeur",
@@ -605,7 +610,7 @@ function AppInner() {
                   return;
                 }
                 setSelectedCaseId(id);
-                setTab("company360");
+                setTab("dossier");
               }}
             />
           )}
@@ -615,6 +620,74 @@ function AppInner() {
         <Revision value={revision} close={() => setRevision(null)} />
       )}
     </div>
+  );
+}
+
+function NetworkOverview({ c }: { c: OfficerCaseView }) {
+  return (
+    <>
+      <SectionHead
+        label="RELATIONS DOCUMENTÉES"
+        title="Réseau"
+        detail="Relations du dossier courant, fondées sur les transactions enregistrées."
+      />
+      <Panel title="Acheteur · vendeur · transaction">
+        {c.transactions.length ? (
+          c.transactions.map((transaction) => {
+            const match = c.invoice_comparisons.find(
+              (entry) => entry.transaction_id === transaction.transaction_id,
+            );
+            return (
+              <article className="document" key={transaction.transaction_id}>
+                <strong>
+                  {c.company_display_name} ↔{" "}
+                  {transaction.counterparty_display_name ||
+                    transaction.counterparty_company_id ||
+                    "Contrepartie inconnue"}
+                </strong>
+                <p>
+                  {transaction.transaction_id} ·{" "}
+                  {transaction.invoice_number || "Facture non identifiée"}
+                </p>
+                <small>
+                  {match?.reconciliation_status || "Rapprochement indisponible"}{" "}
+                  · {match?.payment_ids?.length ?? 0} paiement(s) ·{" "}
+                  {match?.delivery_ids?.length ?? 0} livraison(s)
+                </small>
+              </article>
+            );
+          })
+        ) : (
+          <p>Aucune transaction enregistrée pour ce dossier.</p>
+        )}
+      </Panel>
+    </>
+  );
+}
+function ActionNotifications({ c }: { c: OfficerCaseView }) {
+  return (
+    <>
+      <SectionHead
+        label="À TRAITER"
+        title="Notifications"
+        detail="Actions internes dérivées du dossier en cours."
+      />
+      <Panel title="Priorités de revue">
+        {c.recommended_actions?.length ? (
+          c.recommended_actions.map((action) => (
+            <article className="document" key={action.action_id}>
+              <strong>{action.title_fr}</strong>
+              <p>{action.reason}</p>
+              <small>
+                Priorité {action.priority} · {action.status}
+              </small>
+            </article>
+          ))
+        ) : (
+          <p>Aucune action interne à signaler.</p>
+        )}
+      </Panel>
+    </>
   );
 }
 
@@ -662,6 +735,11 @@ function Company({
             <small>Boîte de démonstration</small>
           </div>
         </div>
+        <details>
+          <summary>Déclarer ou modifier le contexte</summary>
+          <ContextAssessment ctx={c.context_assessment} />
+          <ContextForm c={c} act={act} />
+        </details>
         <div className="two-col">
           <Operations c={c} compact />
           <Panel eyebrow="VOTRE SITUATION" title="Actions à poursuivre">
@@ -696,16 +774,34 @@ function Company({
         <Operations c={c} />
       </>
     );
-  if (tab === "context")
+  if (tab === "messages")
     return (
       <>
         <SectionHead
           label="DÉCLARATION"
-          title="Contexte de l’opération"
+          title="Messages et contexte"
           detail="Contexte déclaré par l’entreprise — il ne constitue pas à lui seul une preuve."
         />
-        <ContextAssessment ctx={c.context_assessment} />
-        <ContextForm c={c} act={act} />
+        {c.inbox.map((item) => (
+          <article className="document" key={item.request.request_id}>
+            <strong>Demande {item.request.request_id}</strong>
+            <p>{item.text_fr}</p>
+          </article>
+        ))}
+        {c.responses.map((response) => (
+          <article className="document" key={response.response_id}>
+            <strong>Réponse {response.response_id}</strong>
+            <p>
+              {Object.values(response.answers).join(" · ") ||
+                "Pièce ou répartition transmise"}
+            </p>
+          </article>
+        ))}
+        <details>
+          <summary>Contexte déclaré</summary>
+          <ContextAssessment ctx={c.context_assessment} />
+          <ContextForm c={c} act={act} />
+        </details>
       </>
     );
   if (tab === "requests")
@@ -1617,9 +1713,30 @@ function Officer({
 }) {
   if (tab === "queue") return <Queue onSelectCase={onSelectCase} />;
   if (tab === "company360") return <Company360Tab c={c} />;
-  if (tab === "references") return <References c={c} />;
-  if (tab === "history") return <HistoryPanel c={c} />;
-  if (tab === "diagnostics") return <Diagnostics c={c} />;
+  if (tab === "network") return <NetworkOverview c={c} />;
+  if (tab === "notifications") return <ActionNotifications c={c} />;
+  if (tab === "advanced")
+    return (
+      <>
+        <SectionHead
+          label="PARAMÈTRES"
+          title="Avancé"
+          detail="Références, journal et diagnostics du dossier."
+        />
+        <details>
+          <summary>Références</summary>
+          <References c={c} />
+        </details>
+        <details>
+          <summary>Timeline du dossier</summary>
+          <HistoryPanel c={c} />
+        </details>
+        <details>
+          <summary>Diagnostics</summary>
+          <Diagnostics c={c} />
+        </details>
+      </>
+    );
   return (
     <>
       <SectionHead
