@@ -817,48 +817,50 @@ function NotificationFeed({ role, caseId }: { role: Role; caseId: string }) {
           <article className="document" key={item.notification_id}>
             <strong>{item.title_fr}</strong>
             <p>{item.message_fr}</p>
-            {item.status === "CURRENT_SIGNAL" ? (
-              <small>Signal courant · à réévaluer</small>
-            ) : item.read_at ? (
+            <div className="notification-meta">
+              {item.status === "CURRENT_SIGNAL" ? (
+                <small>Signal courant · à réévaluer</small>
+              ) : item.read_at ? (
+                <small>
+                  Lu le {new Date(item.read_at).toLocaleString("fr-FR")}
+                </small>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setReadError(null);
+                      await api.markNotificationRead(
+                        role,
+                        caseId,
+                        item.notification_id,
+                      );
+                      await queryClient.invalidateQueries({
+                        queryKey: ["notifications", role, caseId],
+                      });
+                    } catch (error) {
+                      setReadError(
+                        error instanceof Error
+                          ? error.message
+                          : "Lecture non enregistrée.",
+                      );
+                    }
+                  }}
+                >
+                  Marquer comme lu
+                </button>
+              )}
+              {!!item.source_ids?.length && (
+                <small>Sources : {item.source_ids.join(", ")}</small>
+              )}
               <small>
-                Lu le {new Date(item.read_at).toLocaleString("fr-FR")}
+                {new Date(item.occurred_at).toLocaleString("fr-FR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}{" "}
+                · v{item.case_version}
               </small>
-            ) : (
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    setReadError(null);
-                    await api.markNotificationRead(
-                      role,
-                      caseId,
-                      item.notification_id,
-                    );
-                    await queryClient.invalidateQueries({
-                      queryKey: ["notifications", role, caseId],
-                    });
-                  } catch (error) {
-                    setReadError(
-                      error instanceof Error
-                        ? error.message
-                        : "Lecture non enregistrée.",
-                    );
-                  }
-                }}
-              >
-                Marquer comme lu
-              </button>
-            )}
-            {!!item.source_ids?.length && (
-              <small>Sources : {item.source_ids.join(", ")}</small>
-            )}
-            <small>
-              {new Date(item.occurred_at).toLocaleString("fr-FR", {
-                dateStyle: "short",
-                timeStyle: "short",
-              })}{" "}
-              · v{item.case_version}
-            </small>
+            </div>
           </article>
         ))
       ) : (
