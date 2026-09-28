@@ -15,6 +15,8 @@ Les quatre constats ci-dessous étaient valides pendant l'audit initial et sont 
 | BROWSER-03 — motif de preuve absent | **CORRIGÉ** — `b0a2252` | Champ de 10 à 500 caractères exigé par l'interface et l'API web pour acceptation et rejet. Motif conservé dans la proposition, la révision et l'audit ; test API et parcours Playwright. |
 | BROWSER-04 — débordement mobile/tablette | **CORRIGÉ** — `674d250` | Barre supérieure, lignes de cause et grilles adaptées. Les onglets Agent et Entreprise restent dans le document aux largeurs 320, 390 et 768 px ; trois tests Playwright dédiés. |
 
+La modification du critère de preuve porte la règle et le moteur de revue à `progressive-review-4` pour les nouveaux calculs ; les révisions anciennes conservent leur version enregistrée.
+
 Après ces corrections : **624/624 tests backend**, **34/34 tests React**, build TypeScript/Vite et formatage réussis ; **14/14 tests Playwright** sur serveur local isolé. Un contrôle navigateur supplémentaire a rejoué le rattachement tardif sur une base neuve : **30 → 30 → 20**. Aucun serveur préexistant sur le port 8000 n'a été modifié. Les fournisseurs LIVE, l'OCR, l'authentification de production et les services externes restent hors de cette validation.
 
 ## Résultats

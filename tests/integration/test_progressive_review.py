@@ -344,7 +344,7 @@ def test_public_transcription_api_reaches_coherence_and_persists_recalculation(s
                            json=payload).status_code == 403
     assert service.get_case(officer, CASE).score.review_index == 10
     snapshot = service.store.revisions(CASE)[-1].score_snapshot
-    assert snapshot.review_index == 10 and snapshot.engine_version == "progressive-review-3"
+    assert snapshot.review_index == 10 and snapshot.engine_version == "progressive-review-4"
     # A correction outside the actual source cannot keep the old corroborating span.
     service.confirm_transcription(company, CASE, extraction.proposal_id,
         {**fields, "allocation.P2.quantity": "800"}, version(service), "real-correct")
