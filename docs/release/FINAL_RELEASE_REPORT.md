@@ -1,5 +1,9 @@
 # BOUSSLA final release — integration evidence
 
+## État démonstration du 28 septembre 2026
+
+Le compte rendu actuel, la matrice des phases et le protocole de test manuel se trouvent dans [DEMO_READINESS_2026-09-28.md](DEMO_READINESS_2026-09-28.md). Sur `feat/progressive-review`, le dernier contrôle complet donne 619 tests backend, 34 tests React et 11 parcours Playwright passés, avec build et formatage valides. Les phases 6, 19 et 20 restent partielles aux limites documentées. Les sections ci-dessous décrivent des livraisons antérieures et leurs chiffres ne sont pas le résultat actuel.
+
 ## Mise à jour du 27 septembre 2026 — livraison 2 : historique et confiance
 
 La branche `feat/progressive-review` ajoute un indicateur historique séparé de la revue documentaire, calculé sur l'historique couvert propre à l'entreprise, et une confiance opérationnelle réversible. Leurs facteurs, références, versions de méthode et statuts sont renvoyés par le backend au seul agent. L'historique sans base couverte reste `null` / `INSUFFICIENT_DATA`. La confiance demande au moins deux observations attribuables (demandes publiées et propositions) ; elle tient compte des délais de réponse, demandes échues, propositions acceptées/rejetées, cohérence ou contradiction d'une pièce et signaux historiques couverts. Le score documentaire ne consomme aucun de ces deux indices. L'interface affiche les facteurs et jusqu'à douze mois de contexte fournis par l'API, sans calculer les indicateurs.

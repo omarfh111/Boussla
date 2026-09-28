@@ -357,6 +357,7 @@ Le détail est consigné dans [`docs/release/FINAL_RELEASE_REPORT.md`](docs/rele
 |---|---|
 | 🎤 [**Présentation BOUSSLA — équipe Barons**](docs/Barons.pdf) (PDF, 15 diapositives) | Problème, intégration aux systèmes existants, flux de données actuels et cibles, architecture, IA assistive et moteurs déterministes, rapprochement bilatéral, déroulement du prototype, stack, validation, limites, feuille de route et équipe |
 | 📄 [**Note de synthèse**](docs/BOUSSLA_note_de_synthese.pdf) (PDF, 2 pages) | Le projet de bout en bout : constat, parcours, modèle d'autorité, architecture, garanties, validation |
+| 🧪 [**Audit et parcours manuel de la démo du 28 septembre**](docs/release/DEMO_READINESS_2026-09-28.md) | État réel des phases, résultats actuels, limites et démarrage isolé |
 | 🧾 [**Rapport de version finale**](docs/release/FINAL_RELEASE_REPORT.md) | Intégration des quatre voies, banc d'épreuve tour 2, tests, fournisseurs, sécurité |
 
 ---
