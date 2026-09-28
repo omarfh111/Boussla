@@ -177,3 +177,34 @@ The agent’s Dossier decision area now supports reasoned internal ACCEPT, REJEC
 ## Page-cited native document retrieval
 
 New PDF uploads with a configured native-text extractor now persist their bounded, page-numbered extraction as a versioned case fact. An officer investigation question about a document can retrieve at most two lexically matching lines, each labeled as unverified native text and cited to `document_id:page`; document reports and deterministic checks remain separate. Unsupported scans or missing extractors yield no invented passage and keep the manual-review status. Company views never expose this text index. The audit records only page count, status, limitations and a text hash for this fact, not repeated full PDF text; the original case fact preserves the bounded text. This is lexical retrieval over native text, not semantic search, OCR or authenticity verification. Validation: focused upload/retrieval/page citation/read-only and audit-size test.
+
+## Acceptance status at 2026-09-28 (after 75815d6)
+
+This table replaces the *starting-state* labels above. TERMINÉ means the requested prototype behavior is implemented and exercised; PARTIEL means a named acceptance remains; MANQUANT means no implementation; CASSÉ means a known failing acceptance. Current verification: 605 backend tests, 32 React tests, production build and all 11 Playwright journeys passed. No known test is CASSÉ. Synthetic fixtures are not proof about real companies or documents.
+
+| Phase | Current state | Evidence and remaining limit |
+|---|---|---|
+| 0 Audit/stabilization | TERMINÉ | Full suites and isolated browser journeys green; this ledger records limitations. |
+| 1 Progressive review | TERMINÉ | 40 → 30 → 20 → 10 → 0, rollback, rejection, contradiction, partial resolution and scoped proof tested. All new versioned writes freeze causes, rules, engine and calculation time; old unsnapshotted revisions stay unknown. |
+| 2 Five indicators | TERMINÉ | Separate typed review, coverage, history, urgency and operational-confidence indicators with factors/metadata. |
+| 3 Operational confidence | TERMINÉ | Four dimensions, twelve-month cutoff, explicit denominator and limited-data state; no false precision for small samples. |
+| 4 Advanced history | PARTIEL | Own-company coverage-aware baseline includes requested metric families and explicit amount/response-delay deviations. Historical finding counts are calculated at current cutoff, not an archived past-state series; missing payment methods remain unknown. |
+| 5 Reconciliation | TERMINÉ | Awaiting counterpart, matched, differences, ambiguous and unmatched states; absence of second invoice alone is not an anomaly. Field/line comparisons and source-scoped payment/delivery/project links tested. |
+| 6 Document pipeline | PARTIEL | Every supported native-text PDF upload has the ten-stage report, internal checks, cause links and recalculation. Image-only scans have no OCR; external registries and visual tamper detection return UNKNOWN, never a forged-document verdict. |
+| 7 Documentary confidence | TERMINÉ | Four explanatory dimensions with unknowns and non-probabilistic label, separate from review scoring. |
+| 8 AI questionnaire | TERMINÉ | Cause-scoped, typed allowlisted questions, bounded to three per cycle with company response/document workflow and no duplicate open publication. Free model wording is non-authoritative. |
+| 9 Recommended actions | PARTIEL | Prioritized, sourced OPEN/WAITING actions exist; completed-action lifecycle is not persisted independently. |
+| 10 Agent navigation | TERMINÉ | Dashboard, Dossiers, Réseau, Historique, Notifications, Avancé. |
+| 11 Dossier page | TERMINÉ | Six zones plus explanation/proof/action/decision detail. Officer review decisions are reasoned, versioned and safeguarded. |
+| 12 Company journey | TERMINÉ | Scoped dossiers, required actions, documents and messages; real outbound messaging is not claimed. |
+| 13 Timeline | TERMINÉ | New revisions/events display actor, time, causes and frozen transitions. Legacy revisions lacking snapshots have no fabricated score delta. |
+| 14 Internal notifications | PARTIEL | Event-derived agent/company feeds and recorded score changes are available; no read/unread state, scheduler or independent historical-anomaly/urgency-change notification yet. |
+| 15 Impact if resolved | TERMINÉ | Read-only sequential cause simulation with no case mutation. |
+| 16 Historical dashboard | TERMINÉ | Monthly coverage and own-company current/baseline comparisons lead the agent view. |
+| 17 Network model | TERMINÉ | Source-attributed scoped nodes/edges and officer-only portfolio/company/case APIs. |
+| 18 3D network | TERMINÉ | Interactive projected 3D graph with navigation, filters, selection and accessible fallback. |
+| 19 Advanced network intelligence | MANQUANT — DEFERRED | The supplied sequence explicitly places this phase **after Tuesday**; 2026-09-28 is Monday. No cycle/centrality/concentration signal is claimed yet. |
+| 20 Investigation assistant/RAG | PARTIEL | Officer-only cited synthesis spans case, rules, history, decisions, network, document reports and bounded native page excerpts. No semantic index or OCR retrieval for scans. |
+| 21 Audit trail | PARTIEL | New events atomically record actor, time, reason, score/cause before-after, changed fact values, evidence and rule/engine versions; officer UI and API available. Pre-migration events cannot be retroactively enriched; local SQLite is not tamper-proof legal evidence. |
+
+The remaining work should first close supported-document and operational lifecycle gaps with the same role and provenance controls, then implement phase 19 only after its stated time gate. Do not reclassify UNKNOWN as zero or proof of authenticity.
