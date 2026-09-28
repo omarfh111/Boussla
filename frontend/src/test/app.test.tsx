@@ -511,6 +511,98 @@ it("shows officer citations and disables acceptance without a source document", 
   expect(screen.queryByText("Synthèse citée.")).not.toBeInTheDocument();
 });
 
+it("only enables acceptance when the linked document backs the quantity cause", async () => {
+  const view: OfficerCaseView = {
+    ...officer,
+    score: {
+      ...officer.score!,
+      review_index: 30,
+      cause_progress: [
+        {
+          transaction_id: "TX-001",
+          family: "QUANTITY",
+          raw_contribution: "40",
+          current_contribution: "30",
+          stage: "EXPLANATION_RECEIVED",
+          provisional: true,
+          reason_code: null,
+          source_ids: ["RESP-1"],
+          evidence_ids: [],
+        },
+      ],
+    },
+    proposals: [
+      {
+        proposal_id: "PROP-1",
+        status: "AWAITING_HUMAN_REVIEW",
+        source_document_id: "DOC-PAY-001",
+        transaction_id: "TX-001",
+        line_id: "L1",
+        unit: "pièce",
+        changes: [],
+      },
+    ],
+  };
+  mockApi(view);
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  fireEvent.change(screen.getByLabelText("Motif de la décision sur la pièce"), {
+    target: { value: "Validation documentée par l’agent" },
+  });
+  expect(
+    screen.getByRole("button", { name: "Accepter dans ce dossier" }),
+  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Rejeter" })).toBeEnabled();
+  expect(
+    screen.getByText(/La pièce liée ne justifie pas encore/),
+  ).toBeInTheDocument();
+});
+
+it("enables acceptance when the linked document backs the quantity cause", async () => {
+  const view: OfficerCaseView = {
+    ...officer,
+    score: {
+      ...officer.score!,
+      review_index: 20,
+      cause_progress: [
+        {
+          transaction_id: "TX-001",
+          family: "QUANTITY",
+          raw_contribution: "40",
+          current_contribution: "20",
+          stage: "EVIDENCE_RECEIVED",
+          provisional: true,
+          reason_code: null,
+          source_ids: ["RESP-1", "DOC-ALLOCATION-001"],
+          evidence_ids: ["DOC-ALLOCATION-001"],
+        },
+      ],
+    },
+    proposals: [
+      {
+        proposal_id: "PROP-1",
+        status: "AWAITING_HUMAN_REVIEW",
+        source_document_id: "DOC-ALLOCATION-001",
+        transaction_id: "TX-001",
+        line_id: "L1",
+        unit: "pièce",
+        changes: [],
+      },
+    ],
+  };
+  mockApi(view);
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  fireEvent.change(screen.getByLabelText("Motif de la décision sur la pièce"), {
+    target: { value: "Validation documentée par l’agent" },
+  });
+  expect(
+    screen.getByRole("button", { name: "Accepter dans ce dossier" }),
+  ).toBeEnabled();
+});
+
 it("refetches after a stale revision without retrying the write", async () => {
   const fetchMock = mockApi();
   fetchMock.mockImplementation(async (input, init) => {

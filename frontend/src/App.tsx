@@ -2925,75 +2925,88 @@ function Proposals({
   return (
     <Panel eyebrow="VALIDATION HUMAINE" title="Propositions d’affectation">
       {c.proposals.length ? (
-        c.proposals.map((p) => (
-          <article className="proposal" key={p.proposal_id}>
-            <div className="record-top">
-              <span className="mono">{p.proposal_id}</span>
-              {badge(p.status)}
-            </div>
-            <p>
-              Transaction {p.transaction_id} · ligne {p.line_id}
-            </p>
-            <p>Pièce source : {format(p.source_document_id)}</p>
-            <div className="changes">
-              {p.changes.map((ch) => (
-                <div key={ch.allocation_id}>
-                  <strong>{ch.target_project_id || "Autre"}</strong>
-                  <span>
-                    {format(ch.old_quantity)} → {ch.new_quantity} {p.unit}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {p.status === "AWAITING_HUMAN_REVIEW" && (
-              <>
-                <label htmlFor={`reason-${p.proposal_id}`}>
-                  Motif de la décision sur la pièce
-                </label>
-                <textarea
-                  id={`reason-${p.proposal_id}`}
-                  value={reasons[p.proposal_id] || ""}
-                  maxLength={500}
-                  onChange={(event) =>
-                    setReasons((current) => ({
-                      ...current,
-                      [p.proposal_id]: event.target.value,
-                    }))
-                  }
-                />
-                <div className="button-row">
-                  <button
-                    className="primary"
-                    disabled={
-                      pending ||
-                      !p.source_document_id ||
-                      (reasons[p.proposal_id] || "").trim().length < 10
-                    }
-                    onClick={() => run(p, "accept")}
-                  >
-                    Accepter dans ce dossier
-                  </button>
-                  <button
-                    className="secondary"
-                    disabled={
-                      pending ||
-                      (reasons[p.proposal_id] || "").trim().length < 10
-                    }
-                    onClick={() => run(p, "reject")}
-                  >
-                    Rejeter
-                  </button>
-                </div>
-              </>
-            )}
-            {!p.source_document_id && p.status === "AWAITING_HUMAN_REVIEW" && (
-              <p className="footnote">
-                Une déclaration seule ne suffit pas à accepter cette
-                répartition.
+        c.proposals.map((p) => {
+          const sourceBacked = c.score?.cause_progress.some(
+            (cause) =>
+              cause.family === "QUANTITY" &&
+              cause.transaction_id === p.transaction_id &&
+              !!p.source_document_id &&
+              cause.evidence_ids?.includes(p.source_document_id) &&
+              (cause.stage === "EVIDENCE_RECEIVED" ||
+                cause.stage === "EVIDENCE_COHERENT"),
+          );
+          return (
+            <article className="proposal" key={p.proposal_id}>
+              ;
+              <div className="record-top">
+                <span className="mono">{p.proposal_id}</span>
+                {badge(p.status)}
+              </div>
+              <p>
+                Transaction {p.transaction_id} · ligne {p.line_id}
               </p>
-            )}
-          </article>
-        ))
+              <p>Pièce source : {format(p.source_document_id)}</p>
+              <div className="changes">
+                {p.changes.map((ch) => (
+                  <div key={ch.allocation_id}>
+                    <strong>{ch.target_project_id || "Autre"}</strong>
+                    <span>
+                      {format(ch.old_quantity)} → {ch.new_quantity} {p.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {p.status === "AWAITING_HUMAN_REVIEW" && (
+                <>
+                  <label htmlFor={`reason-${p.proposal_id}`}>
+                    Motif de la décision sur la pièce
+                  </label>
+                  <textarea
+                    id={`reason-${p.proposal_id}`}
+                    value={reasons[p.proposal_id] || ""}
+                    maxLength={500}
+                    onChange={(event) =>
+                      setReasons((current) => ({
+                        ...current,
+                        [p.proposal_id]: event.target.value,
+                      }))
+                    }
+                  />
+                  <div className="button-row">
+                    <button
+                      className="primary"
+                      disabled={
+                        pending ||
+                        !sourceBacked ||
+                        (reasons[p.proposal_id] || "").trim().length < 10
+                      }
+                      onClick={() => run(p, "accept")}
+                    >
+                      Accepter dans ce dossier
+                    </button>
+                    <button
+                      className="secondary"
+                      disabled={
+                        pending ||
+                        (reasons[p.proposal_id] || "").trim().length < 10
+                      }
+                      onClick={() => run(p, "reject")}
+                    >
+                      Rejeter
+                    </button>
+                  </div>
+                </>
+              )}
+              {!sourceBacked && p.status === "AWAITING_HUMAN_REVIEW" && (
+                <p className="footnote">
+                  {p.source_document_id
+                    ? "La pièce liée ne justifie pas encore cette répartition. Choisir une autre pièce ou demander un complément."
+                    : "Une déclaration seule ne suffit pas à accepter cette répartition."}
+                </p>
+              )}
+            </article>
+          );
+        })
       ) : (
         <Empty>Aucune proposition en attente.</Empty>
       )}
