@@ -1115,7 +1115,8 @@ class BousslaAppService(_DemoAdministration):
         """Internal feed projected from durable events; RECORDED is not an unread claim."""
         history = self.get_history(actor, case_id)
         company = history.audience is Audience.COMPANY
-        company_document_ids = ({view.document.document_id for view in self.get_case(actor, case_id).documents}
+        case_view = self.get_case(actor, case_id)
+        company_document_ids = ({view.document.document_id for view in case_view.documents}
                                 if company else set())
         company_titles = {
             "AUTO_CLARIFICATION_PUBLISHED": "Nouvelle demande",
@@ -1148,6 +1149,31 @@ class BousslaAppService(_DemoAdministration):
                           "message_fr": event.summary, "occurred_at": event.at.isoformat(),
                           "case_version": event.case_version, "source_event_id": event.event_id,
                           "status": "RECORDED"})
+        now = self.clock()
+        request_views = case_view.inbox if company else case_view.requests
+        for request_view in request_views:
+            request = request_view.request
+            if request.status not in PENDING_STATUSES or request.target_response_at is None:
+                continue
+            days_left = (request.target_response_at.date() - now.date()).days
+            if days_left > 2:
+                continue
+            overdue = now > request.target_response_at
+            if company:
+                kind = "REQUEST_FOLLOW_UP" if overdue else "REQUEST_TARGET_APPROACHING"
+                title = "Demande à compléter" if overdue else "Date cible proche"
+                message = ("La demande reste ouverte. Vous pouvez répondre ou joindre une pièce si disponible ; "
+                           "cette date est une cible de démonstration, pas un délai légal.")
+            else:
+                kind = "REQUEST_FOLLOW_UP_OFFICER" if overdue else "REQUEST_TARGET_APPROACHING_OFFICER"
+                title = "Suivi de demande à prévoir" if overdue else "Date cible de demande proche"
+                message = ("La demande est toujours sans réponse ; vérifier la disponibilité et les éventuels "
+                           "aménagements avant toute relance. Cible de démonstration, pas un délai légal.")
+            items.append({"notification_id": f"CURRENT-REQUEST-{case_id}-{request.request_id}",
+                          "kind": kind, "title_fr": title, "message_fr": message,
+                          "occurred_at": now.isoformat(), "case_version": self.store.case_meta(case_id)["version"],
+                          "source_event_id": None, "source_ids": [request.request_id],
+                          "status": "CURRENT_SIGNAL"})
         if not company:
             by_version = {revision.version: revision for revision in history.revisions}
             for revision in history.revisions:
@@ -1162,8 +1188,8 @@ class BousslaAppService(_DemoAdministration):
                               "occurred_at": revision.created_at.isoformat(), "case_version": revision.version,
                               "source_event_id": None, "status": "RECORDED"})
         if not company:
-            view = self.get_case(actor, case_id)
-            current_at = self.clock().isoformat()
+            view = case_view
+            current_at = now.isoformat()
             for signal in (view.behavior_profile.signals if view.behavior_profile else ()):
                 items.append({"notification_id": f"CURRENT-HISTORY-{case_id}-{signal.code}-{signal.currency or 'ALL'}",
                               "kind": "HISTORY_DEVIATION", "title_fr": "Écart historique à examiner",

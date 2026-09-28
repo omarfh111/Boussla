@@ -563,3 +563,29 @@ def test_notification_read_receipts_are_actor_scoped_idempotent_and_version_neut
         url = f"/api/cases/{CASE}/notifications/{officer_item['notification_id']}/read"
         assert client.post(url, headers={"X-Boussla-Demo-Role": "OFFICER"}).status_code == 200
         assert client.post(url, headers={"X-Boussla-Demo-Role": "COMPANY"}).status_code == 400
+
+
+def test_pending_request_reminders_are_current_scoped_and_disappear_after_response(svc, actors, monkeypatch):
+    from datetime import timedelta
+    company, officer, _ = actors
+    draft = svc.prepare_clarification(officer, CASE, ver(svc))
+    request = svc.publish_clarification(officer, CASE, draft.draft_id, ver(svc), "reminder-publish")
+    target = request.request.target_response_at
+    version_before_reads = ver(svc)
+    assert target is not None
+    monkeypatch.setattr(svc, "clock", lambda: target - timedelta(days=1))
+    near = svc.get_notifications(company, CASE)["items"]
+    reminder = next(item for item in near if item["kind"] == "REQUEST_TARGET_APPROACHING")
+    assert reminder["status"] == "CURRENT_SIGNAL"
+    assert reminder["source_ids"] == [request.request.request_id]
+    assert reminder["read_at"] is None
+    assert code(lambda: svc.mark_notification_read(company, CASE, reminder["notification_id"])) is ErrorCode.INVALID_INPUT
+    monkeypatch.setattr(svc, "clock", lambda: target + timedelta(days=1))
+    assert any(item["kind"] == "REQUEST_FOLLOW_UP" for item in svc.get_notifications(company, CASE)["items"])
+    assert any(item["kind"] == "REQUEST_FOLLOW_UP_OFFICER" for item in svc.get_notifications(officer, CASE)["items"])
+    assert ver(svc) == version_before_reads
+    svc.submit_response(company, CASE, request.request.request_id,
+                        {"answers": {"Q-PROJECT-ALLOCATION": "À vérifier"}, "document_ids": []},
+                        ver(svc), "reminder-response")
+    assert not any(item["kind"].startswith("REQUEST_FOLLOW_UP")
+                   for item in svc.get_notifications(company, CASE)["items"])
