@@ -350,6 +350,7 @@ class BousslaAppService(_DemoAdministration):
             "delivery": s.facts(case_id, "delivery", Delivery, v),
             "settlement_adjustment": s.facts(case_id, "settlement_adjustment", SettlementAdjustment, v),
             "document": s.facts(case_id, "document", Document, v),
+            "document_text": s.facts(case_id, "document_text", DocumentText, v),
             "project": s.facts(case_id, "project", Project, v),
             "request": s.facts(case_id, "request", RequestView, v),
             "response": s.facts(case_id, "response", ClarificationResponse, v),
@@ -1082,7 +1083,8 @@ class BousslaAppService(_DemoAdministration):
         view = self.get_case(trusted, case_id)
         history = self.get_history(trusted, case_id)
         network = self.get_network(trusted, case_id=case_id)
-        return answer_investigation(clean_question, view, history, network)
+        return answer_investigation(clean_question, view, history, network,
+                                    tuple(self.store.facts(case_id, "document_text", DocumentText)))
 
     def get_network(self, actor: Actor, *, company_id: str | None = None,
                     case_id: str | None = None) -> NetworkView:
@@ -1253,6 +1255,8 @@ class BousslaAppService(_DemoAdministration):
                 raise BousslaError(ErrorCode.INVALID_STATE, "Pièce identique déjà déposée dans ce dossier")
             linked_response = self._upload_response_scope(case_id, actor, response_id) if response_id else None
             tx.put("document", doc_id, document)
+            if text is not None:
+                tx.put("document_text", doc_id, text)
             if linked_response is not None:
                 updated_response = linked_response.model_copy(update={
                     "document_ids": (*linked_response.document_ids, doc_id)})

@@ -409,7 +409,14 @@ class WriteTx:
             "SELECT retired, body FROM facts WHERE case_id=? AND kind=? AND fact_id=? "
             "AND valid_from<=? ORDER BY valid_from DESC LIMIT 1",
             (self.case_id, kind, fact_id, version)).fetchone()
-        return self._audit_safe(json.loads(row[1])) if row and not row[0] and row[1] else None
+        if not row or row[0] or not row[1]:
+            return None
+        value = self._audit_safe(json.loads(row[1]))
+        if kind == "document_text":
+            return {"document_id": value.get("document_id"), "status": value.get("status"),
+                    "page_count": len(value.get("pages", [])), "limitations": value.get("limitations", []),
+                    "text_sha256": hashlib.sha256(row[1].encode()).hexdigest()}
+        return value
 
     def event(self, kind: str, actor_id: str, summary: str, fact_ids: tuple[str, ...] = (),
               version: int | None = None, at: datetime | None = None,

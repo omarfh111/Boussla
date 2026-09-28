@@ -472,3 +472,22 @@ def test_case_review_decision_is_internal_versioned_and_requires_resolved_causes
     resolved = svc.record_case_decision(officer, CASE, "RESOLVE", "Toutes les causes sont résolues", ver(svc), "resolve")
     assert resolved.review_index == 0 and resolved.source_cause_ids == ()
     assert svc.get_case(officer, CASE).score.review_index == 0
+
+
+def test_investigation_retrieves_native_pdf_passage_with_page_and_no_write(svc, actors):
+    from boussla.contracts import DocumentText
+    from boussla.documents.native_text import NativePdfExtractor
+    company, officer, _ = actors
+    svc.text_extractor = NativePdfExtractor()
+    upload = svc.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf", ver(svc), "passage-upload")
+    document_id = upload.document.document_id
+    text = svc.store.fact(CASE, "document_text", document_id, DocumentText)
+    assert text is not None and text.status in ("OK", "PARTIAL")
+    version_before = ver(svc)
+    answer = svc.ask_investigation(officer, CASE, "Que dit le document sur TX-001 ?")
+    assert "Extrait natif non vérifié" in answer.answer_fr
+    assert any(c.kind == "DOCUMENT_PAGE" and c.source_id == f"{document_id}:p1" for c in answer.citations)
+    assert answer.case_version == version_before and ver(svc) == version_before
+    audit_text = next(c for record in svc.get_audit(officer, CASE)["records"]
+                      for c in record["fact_changes"] if c["kind"] == "document_text")
+    assert "pages" not in audit_text["after"] and audit_text["after"]["text_sha256"]

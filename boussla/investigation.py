@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import re
 from pydantic import Field
 
-from boussla.contracts import Contract, OfficerCaseView, OfficerHistoryView
+from boussla.contracts import Contract, OfficerCaseView, OfficerHistoryView, DocumentText
 from boussla.network import NetworkView
 
-RULE_VERSION = "investigation-answer-2"
+RULE_VERSION = "investigation-answer-3"
 FAMILIES = {"QUANTITY": "écart de quantités", "SETTLEMENT": "écart de règlement",
             "COUNTERPARTY": "écart de contrepartie"}
 
@@ -33,7 +34,7 @@ class InvestigationAnswer(Contract):
 
 
 def answer_investigation(question: str, view: OfficerCaseView, history: OfficerHistoryView,
-                         network: NetworkView) -> InvestigationAnswer:
+                         network: NetworkView, document_texts: tuple[DocumentText, ...] = ()) -> InvestigationAnswer:
     query = question.casefold()
     citations: list[InvestigationCitation] = []
     lines: list[str] = []
@@ -81,7 +82,7 @@ def answer_investigation(question: str, view: OfficerCaseView, history: OfficerH
                 cite(source, "HISTORY", f"Source de {metric.label_fr}")
             if len(lines) >= 4:
                 break
-    elif any(word in query for word in ("document", "pièce", "preuve", "manqu", "analyse", "contrôle", "authenticité")):
+    elif any(word in query for word in ("document", "pièce", "preuve", "manqu", "analyse", "contrôle", "authenticité", "facture", "mention")):
         document_question = any(word in query for word in ("analyse", "analys", "contrôle", "authenticité", "cohérence"))
         named_documents = [item for item in view.documents if item.document.document_id.casefold() in query]
         if document_question or named_documents:
@@ -107,6 +108,23 @@ def answer_investigation(question: str, view: OfficerCaseView, history: OfficerH
                         lines.append("Limites : " + " ; ".join(report.limitations[:2]))
                 if len(lines) >= 8:
                     break
+        if any(word in query for word in ("mention", "contient", "dit", "facture", "référence")) or named_documents:
+            stop = {"quel", "quelle", "quels", "quelles", "dans", "pour", "avec", "document", "pièce", "facture",
+                    "mentionne", "contient", "analyse", "texte", "page", "cette", "fait", "source"}
+            terms = [term for term in re.findall(r"[\w-]{4,}", query) if term not in stop]
+            passages = []
+            for item in document_texts:
+                if item.status not in ("OK", "PARTIAL"):
+                    continue
+                for page in item.pages:
+                    for line in page.text.splitlines():
+                        line = line.strip()
+                        hits = sum(term in line.casefold() for term in terms)
+                        if hits and line:
+                            passages.append((hits, item.document_id, page.page, line[:180]))
+            for _, document_id, page, line in sorted(passages, key=lambda value: (-value[0], value[1], value[2]))[:2]:
+                lines.append(f"Extrait natif non vérifié de {document_id}, page {page} : « {line} »")
+                cite(f"{document_id}:p{page}", "DOCUMENT_PAGE", f"Texte natif de {document_id}, page {page}")
         for action in (() if named_documents else (view.recommended_actions or ())[:4]):
             if not action.required_documents and not action.source_ids:
                 continue
