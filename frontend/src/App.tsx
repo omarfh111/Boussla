@@ -39,6 +39,7 @@ import {
   Skeleton,
   Toast,
 } from "./ui/primitives";
+import { AppShell, type Tab } from "./shell/AppShell";
 import { ApiError, api } from "./api/client";
 import { NetworkGraph3D } from "./network/NetworkGraph3D";
 import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
@@ -69,40 +70,6 @@ import type {
   InvestigationAnswer,
 } from "./api/types";
 
-type Tab =
-  | "overview"
-  | "operations"
-  | "context"
-  | "requests"
-  | "documents"
-  | "queue"
-  | "company360"
-  | "dossier"
-  | "references"
-  | "history"
-  | "diagnostics"
-  | "admin"
-  | "network"
-  | "notifications"
-  | "messages"
-  | "advanced";
-const companyTabs: [Tab, string, ReactNode][] = [
-  ["overview", "Mes dossiers", <LayoutDashboard size={18} />],
-  ["requests", "Actions requises", <FolderOpen size={18} />],
-  ["documents", "Documents", <FileText size={18} />],
-  ["messages", "Messages", <ClipboardList size={18} />],
-];
-const officerTabs: [Tab, string, ReactNode][] = [
-  ["queue", "Dashboard", <LayoutDashboard size={18} />],
-  ["dossier", "Dossiers", <Search size={18} />],
-  ["network", "Réseau", <Building2 size={18} />],
-  ["company360", "Historique", <History size={18} />],
-  ["notifications", "Notifications", <ClipboardList size={18} />],
-  ["advanced", "Avancé", <Database size={18} />],
-];
-const operatorTabs: [Tab, string, ReactNode][] = [
-  ["admin", "Données démo", <Database size={18} />],
-];
 const status: Record<string, string> = {
   UNRESOLVED: "À clarifier",
   EXPLAINED: "Expliqué",
@@ -407,140 +374,55 @@ function AppInner() {
       locked.current = false;
     }
   };
-  const tabs =
-    role === "COMPANY"
-      ? companyTabs
-      : role === "OPERATOR"
-        ? operatorTabs
-        : officerTabs;
   return (
     <div className="app-shell">
       {booting && <BootSplash onDone={endBoot} />}
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <BousslaMark size={32} />
-          </span>
-          <span>
-            BOUSSLA<small>Espace de revue</small>
-          </span>
-        </div>
-        <div className="workspace-label">
-          ESPACE{" "}
-          {role === "COMPANY"
-            ? "ENTREPRISE"
-            : role === "OPERATOR"
-              ? "OPÉRATEUR DÉMO"
-              : "AGENT"}
-        </div>
-        <nav aria-label="Navigation principale">
-          {tabs.map(([id, label, icon]) => (
-            <button
-              key={id}
-              className={`nav-item ${tab === id ? "selected" : ""}`}
-              onClick={() => setTab(id)}
-            >
-              {icon}
-              <span>{label}</span>
-              {tab === id && <ChevronRight size={15} />}
-            </button>
-          ))}
-        </nav>
-        <div className="sidebar-bottom">
-          <span className="demo-pill">DONNÉES SYNTHÉTIQUES</span>
-          <p>
-            Simulation locale de rôles — pas une authentification de production.
-          </p>
-          <div className="system">
-            <span className="live-dot" /> Service local{" "}
-            <span>{current?.mode || "—"}</span>
-          </div>
-        </div>
-      </aside>
-      <div className="workspace">
-        <header className="topbar">
-          <div className="breadcrumbs">
-            <span>Workspace</span>
-            <ChevronRight size={15} />
-            <strong>{caseId || "Dossier"}</strong>
-            {current && (
-              <span className="version">v{current.case_version}</span>
-            )}
-          </div>
-          <div className="top-actions">
-            {current && badge(current.mode)}
-            <div
-              className="role-switch"
-              role="group"
-              aria-label="Rôle de démonstration"
-            >
-              <button
-                className={role === "COMPANY" ? "active" : ""}
-                onClick={() => switchRole("COMPANY")}
-              >
-                Entreprise
-              </button>
-              <button
-                className={role === "OFFICER" ? "active" : ""}
-                onClick={() => switchRole("OFFICER")}
-              >
-                Agent
-              </button>
-              <button
-                className={role === "OPERATOR" ? "active" : ""}
-                onClick={() => switchRole("OPERATOR")}
-                title="Administration de données synthétiques — démonstration locale."
-              >
-                Opérateur démo
-              </button>
-            </div>
-            <button
-              className="icon-button"
-              onClick={refresh}
-              aria-label="Actualiser"
-              title="Actualiser"
-            >
-              <RefreshCw size={17} />
-            </button>
-          </div>
-        </header>
-        <main className="content">
-          {notice && <Toast message={notice} onClose={() => setNotice("")} />}
-          {role === "OPERATOR" ? (
-            bootstrap.isLoading ? (
-              <Skeleton />
-            ) : (
-              <DemoAdmin enabled={!!bootstrap.data?.demo_admin?.can_list} />
-            )
-          ) : bootstrap.isLoading || caseQuery.isLoading ? (
+      <AppShell
+        role={role}
+        tab={tab}
+        onTabChange={setTab}
+        onRoleChange={switchRole}
+        onRefresh={refresh}
+        caseId={caseId}
+        caseVersion={current?.case_version}
+        modeBadge={current && badge(current.mode)}
+        mode={current?.mode}
+      >
+        {notice && <Toast message={notice} onClose={() => setNotice("")} />}
+        {role === "OPERATOR" ? (
+          bootstrap.isLoading ? (
             <Skeleton />
-          ) : bootstrap.isError || caseQuery.isError ? (
-            <ErrorState
-              message={(bootstrap.error || caseQuery.error)?.message}
-              onRetry={refresh}
-            />
-          ) : !current ? (
-            <Empty>Aucun dossier accessible pour ce rôle.</Empty>
-          ) : current.audience === "COMPANY" ? (
-            <Company caseView={current} tab={tab} act={act} setTab={setTab} />
           ) : (
-            <Officer
-              caseView={current}
-              tab={tab}
-              act={act}
-              setTab={setTab}
-              onSelectCase={(id) => {
-                if (!bootstrap.data?.case_ids.includes(id)) {
-                  setNotice("Ce dossier n’est pas assigné à ce rôle.");
-                  return;
-                }
-                setSelectedCaseId(id);
-                setTab("dossier");
-              }}
-            />
-          )}
-        </main>
-      </div>
+            <DemoAdmin enabled={!!bootstrap.data?.demo_admin?.can_list} />
+          )
+        ) : bootstrap.isLoading || caseQuery.isLoading ? (
+          <Skeleton />
+        ) : bootstrap.isError || caseQuery.isError ? (
+          <ErrorState
+            message={(bootstrap.error || caseQuery.error)?.message}
+            onRetry={refresh}
+          />
+        ) : !current ? (
+          <Empty>Aucun dossier accessible pour ce rôle.</Empty>
+        ) : current.audience === "COMPANY" ? (
+          <Company caseView={current} tab={tab} act={act} setTab={setTab} />
+        ) : (
+          <Officer
+            caseView={current}
+            tab={tab}
+            act={act}
+            setTab={setTab}
+            onSelectCase={(id) => {
+              if (!bootstrap.data?.case_ids.includes(id)) {
+                setNotice("Ce dossier n’est pas assigné à ce rôle.");
+                return;
+              }
+              setSelectedCaseId(id);
+              setTab("dossier");
+            }}
+          />
+        )}
+      </AppShell>
       {revision && (
         <Revision value={revision} close={() => setRevision(null)} />
       )}

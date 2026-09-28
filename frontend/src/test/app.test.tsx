@@ -1488,3 +1488,34 @@ it("marks only recorded notifications read through the scoped API", async () => 
   );
   expect(screen.getAllByText("Signal courant · à réévaluer")).toHaveLength(1);
 });
+it("exposes the current section, role state, and a main-content skip link", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  const navigation = screen.getByRole("navigation", {
+    name: "Navigation principale",
+  });
+  expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent(
+    "Dashboard",
+  );
+  expect(
+    screen.getByRole("link", { name: "Aller au contenu principal" }),
+  ).toHaveAttribute("href", "#main-content");
+  expect(document.getElementById("main-content")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /^Agent$/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  fireEvent.click(screen.getByRole("button", { name: /^Dossiers$/ }));
+  expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent(
+    "Dossiers",
+  );
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  expect(screen.getByRole("button", { name: /^Entreprise$/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent(
+    "Mes dossiers",
+  );
+});
