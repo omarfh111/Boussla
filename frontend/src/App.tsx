@@ -631,6 +631,12 @@ function AppInner() {
   );
 }
 
+const networkSignalLabels: Record<string, string> = {
+  SUPPLIER_CONCENTRATION: "Concentration fournisseur",
+  REPEATED_AMOUNT: "Montants répétés",
+  RECIPROCAL_LINK: "Échanges réciproques",
+};
+
 function NetworkOverview({ c }: { c: OfficerCaseView }) {
   const [scope, setScope] = useState<"case" | "all">("case");
   const graph = useQuery({
@@ -701,7 +707,9 @@ function NetworkOverview({ c }: { c: OfficerCaseView }) {
             {graph.data?.signals.length ? (
               graph.data.signals.map((signal) => (
                 <article className="document" key={signal.signal_id}>
-                  <strong>{signal.kind.replaceAll("_", " ")}</strong>
+                  <strong>
+                    {networkSignalLabels[signal.kind] ?? "Signal réseau"}
+                  </strong>
                   <p>{signal.explanation_fr}</p>
                   <small>
                     {signal.sample_size} transaction(s) dans l’échantillon ·
