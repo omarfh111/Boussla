@@ -5,7 +5,7 @@ const officer = { "X-Boussla-Demo-Role": "OFFICER" };
 const company = { "X-Boussla-Demo-Role": "COMPANY" };
 test.beforeEach(async ({ page }) => skipSplash(page));
 
-test("network relationships are source-backed and officer scoped", async ({
+test("evidence network remains officer scoped, filterable and inspectable", async ({
   page,
 }) => {
   await page.goto("/");
@@ -25,104 +25,68 @@ test("network relationships are source-backed and officer scoped", async ({
   expect(
     (await page.request.get("/api/network", { headers: company })).status(),
   ).toBe(403);
-  const relation = graph.edges.find(
-    (edge: { kind: string }) => edge.kind === "SELLS_TO",
-  );
-  expect(relation).toBeTruthy();
-  const caseGraphLoaded = page.waitForResponse(
+  const loaded = page.waitForResponse(
     (result) => result.url().includes("/api/network/case/") && result.ok(),
   );
   await page.getByRole("button", { name: "Réseau", exact: true }).click();
-  await caseGraphLoaded;
+  await loaded;
+  const visual = page.locator(".evidence-network");
+  await expect(
+    page.getByRole("heading", { name: "Réseau de preuves" }),
+  ).toBeVisible();
   await expect(page.getByLabel("Périmètre du réseau")).toHaveValue("case");
-  await expect(page.locator(".network-3d canvas")).toBeVisible({
-    timeout: 15000,
-  });
-  const caseNodes = Number(
-    (await page.locator(".network-3d > p").first().textContent())?.match(
-      /\d+/,
-    )?.[0],
-  );
-  expect(caseNodes).toBeLessThan(graph.nodes.length);
-  await page.getByLabel("Périmètre du réseau").selectOption("all");
-  await expect(page.getByText("Relations entre entreprises")).toBeVisible();
-  const source = graph.nodes.find(
-    (node: { node_id: string }) => node.node_id === relation.source,
-  );
-  const target = graph.nodes.find(
-    (node: { node_id: string }) => node.node_id === relation.target,
-  );
-  await expect(
-    page.locator(".panel").filter({ hasText: "Relations entre entreprises" }),
-  ).toContainText(`${source.label} → ${target.label}`);
-  await expect(
-    page.locator(".panel").filter({ hasText: "Relations entre entreprises" }),
-  ).toContainText(relation.source_ids[0]);
-  const visual = page.locator(".network-3d");
-  const canvas = visual.getByRole("img", { name: /Réseau 3D rotatif/ });
-  await expect(canvas).toBeVisible();
-  await visual.getByRole("button", { name: "Zoom +" }).click();
-  await visual.getByRole("button", { name: "Zoom −" }).click();
-  const initialCount = Number(
-    (await visual.locator(":scope > p").first().textContent())?.match(
-      /\d+/,
-    )?.[0],
-  );
-  await visual.getByLabel("Montant minimum (TND)").fill("999999999");
-  const reducedCount = Number(
-    (await visual.locator(":scope > p").first().textContent())?.match(
-      /\d+/,
-    )?.[0],
-  );
-  expect(reducedCount).toBeLessThan(initialCount);
-  await visual.getByLabel("Montant minimum (TND)").fill("");
-  await visual.getByLabel("Depuis").fill("2030-01");
-  const futureCount = Number(
-    (await visual.locator(":scope > p").first().textContent())?.match(
-      /\d+/,
-    )?.[0],
-  );
-  expect(futureCount).toBeLessThan(initialCount);
-  await visual.getByLabel("Depuis").fill("");
-  await visual.getByLabel("Rechercher une entreprise").fill(source.label);
-  await expect(visual.locator(":scope > p").first()).not.toContainText(
-    `${initialCount} nœuds`,
-  );
-  await visual.getByLabel("Rechercher une entreprise").fill("");
-  await visual.getByLabel("Constats du dossier courant uniquement").check();
-  await expect(visual.locator(":scope > p").first()).not.toContainText(
-    `${initialCount} nœuds`,
-  );
-  await visual.getByLabel("Constats du dossier courant uniquement").uncheck();
+  await expect(visual.locator("svg.network-map")).toBeVisible();
+  const count = () =>
+    visual
+      .locator(".network-count")
+      .textContent()
+      .then((text) => Number(text?.match(/\d+/)?.[0]));
+  const overviewCount = await count();
+  await visual.getByLabel("Vue").selectOption("all");
+  const allCount = await count();
+  expect(allCount).toBeGreaterThan(overviewCount);
   await visual.getByText("Liste accessible des nœuds visibles").click();
-  await visual
-    .locator(".network-edge-list")
+  const firstCompany = visual
+    .locator(".network-entity-list")
     .first()
     .getByRole("button")
-    .filter({ hasText: source.label })
-    .first()
-    .click();
-  await expect(visual.locator(".network-selection")).toContainText(
+    .filter({ hasText: "Entreprise" })
+    .first();
+  await firstCompany.focus();
+  await page.keyboard.press("Enter");
+  await expect(visual.getByLabel("Inspecteur du réseau")).toContainText(
     "Confiance opérationnelle",
   );
   await visual.getByText("Liste accessible des relations visibles").click();
   await visual
-    .locator(".network-edge-list")
+    .locator(".network-entity-list")
     .last()
     .getByRole("button")
     .first()
     .click();
-  await expect(visual.locator(".network-selection")).toContainText("Sources :");
-  const box = await canvas.boundingBox();
-  expect(box).not.toBeNull();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(
-    box!.x + box!.width / 2 + 45,
-    box!.y + box!.height / 2 + 30,
+  await expect(visual.getByLabel("Inspecteur du réseau")).toContainText(
+    "Sources",
   );
-  await page.mouse.up();
-  await expect(canvas).toBeVisible();
+  await visual.getByText("Filtres de faits").click();
+  await visual.getByLabel("Montant minimum (TND)").fill("999999999");
+  expect(await count()).toBeLessThan(allCount);
+  await visual.getByLabel("Montant minimum (TND)").fill("");
+  await visual.getByLabel("Depuis").fill("2030-01");
+  expect(await count()).toBeLessThan(allCount);
+  await visual.getByLabel("Depuis").fill("");
+  const companyNode = graph.nodes.find(
+    (node: { kind: string }) => node.kind === "COMPANY",
+  );
+  await visual.getByLabel("Rechercher une entreprise").fill(companyNode.label);
+  expect(await count()).toBeLessThan(allCount);
+  await visual.getByLabel("Rechercher une entreprise").fill("");
+  await visual.getByLabel("Constats du dossier courant uniquement").check();
+  expect(await count()).toBeLessThan(allCount);
+  await visual.getByLabel("Constats du dossier courant uniquement").uncheck();
+  await page.getByLabel("Périmètre du réseau").selectOption("all");
+  await expect(visual.locator(".network-count")).not.toContainText("0 nœuds");
+  await page.getByText("Signaux et relations détaillés").click();
+  await expect(page.getByText("Relations entre entreprises")).toBeVisible();
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   expect(
     await page.getByRole("button", { name: "Réseau", exact: true }).count(),

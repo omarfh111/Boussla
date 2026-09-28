@@ -40,7 +40,7 @@ import {
 } from "./ui/primitives";
 import { AppShell, type Tab } from "./shell/AppShell";
 import { ApiError, api } from "./api/client";
-import { NetworkGraph3D } from "./network/NetworkGraph3D";
+import { EvidenceNetwork } from "./network/EvidenceNetwork";
 import { DossierSummary } from "./dossier/DossierSummary";
 import { CauseProgressList } from "./dossier/CauseProgress";
 import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
@@ -445,7 +445,7 @@ function NetworkOverview({ c }: { c: OfficerCaseView }) {
     <>
       <SectionHead
         label="RELATIONS DOCUMENTÉES"
-        title="Réseau"
+        title="Réseau de preuves"
         detail="Relations issues des dossiers assignés à l’agent, avec leurs sources."
       />
       <label className="network-scope">
@@ -464,98 +464,63 @@ function NetworkOverview({ c }: { c: OfficerCaseView }) {
         <p role="alert">Réseau indisponible.</p>
       ) : (
         <>
-          <div className="metric-grid four">
-            <div className="metric">
-              <span>Entreprises</span>
-              <strong>
-                {graph.data?.nodes.filter((node) => node.kind === "COMPANY")
-                  .length ?? 0}
-              </strong>
-            </div>
-            <div className="metric">
-              <span>Factures observées</span>
-              <strong>
-                {graph.data?.nodes.filter((node) => node.kind === "INVOICE")
-                  .length ?? 0}
-              </strong>
-            </div>
-            <div className="metric">
-              <span>Paiements enregistrés</span>
-              <strong>
-                {graph.data?.nodes.filter((node) => node.kind === "PAYMENT")
-                  .length ?? 0}
-              </strong>
-            </div>
-            <div className="metric">
-              <span>Relations sourcées</span>
-              <strong>{graph.data?.edges.length ?? 0}</strong>
-            </div>
-          </div>
-          {graph.data && <NetworkGraph3D graph={graph.data} dossier={c} />}
-          <Panel
-            title="Signaux réseau à examiner"
-            eyebrow="DESCRIPTIF · SOURCÉ"
-          >
-            {graph.data?.signals.length ? (
-              graph.data.signals.map((signal) => (
-                <article className="document" key={signal.signal_id}>
-                  <strong>
-                    {networkSignalLabels[signal.kind] ?? "Signal réseau"}
-                  </strong>
-                  <p>{signal.explanation_fr}</p>
-                  <small>
-                    {signal.sample_size} transaction(s) dans l’échantillon ·
-                    Sources : {signal.source_ids.join(", ")}
-                  </small>
-                </article>
-              ))
-            ) : (
-              <p>Aucun motif réseau établi sur les transactions visibles.</p>
-            )}
-            <p className="footnote">
-              Les dossiers visibles ne constituent pas une couverture exhaustive
-              du réseau. Aucun signal ne modifie l’indice de revue ni ne conclut
-              à une fraude.
-            </p>
-          </Panel>
-          <Panel
-            title="Relations entre entreprises"
-            eyebrow="ACHETEUR · VENDEUR"
-          >
-            {companyLinks.length ? (
-              companyLinks.map((edge) => (
-                <article className="document" key={edge.edge_id}>
-                  <strong>
-                    {nodes.get(edge.source)?.label ?? edge.source} →{" "}
-                    {nodes.get(edge.target)?.label ?? edge.target}
-                  </strong>
-                  <p>
-                    Dossier {edge.case_id} · {edge.source_ids.length}{" "}
-                    transaction(s) enregistrée(s)
-                  </p>
-                  <small>
-                    Sources : {edge.source_ids.join(", ")} ·{" "}
-                    {edge.provenance_status}
-                  </small>
-                </article>
-              ))
-            ) : (
-              <p>Aucune relation acheteur-vendeur établie dans ce périmètre.</p>
-            )}
-            <p className="footnote">{graph.data?.note_fr}</p>
-          </Panel>
-          <details className="dossier-secondary">
-            <summary>Explorer les nœuds du dossier {c.case_id}</summary>
-            {graph.data?.nodes
-              .filter((node) => node.case_ids.includes(c.case_id))
-              .map((node) => (
-                <article className="document" key={node.node_id}>
-                  <strong>
-                    {node.kind} · {node.label}
-                  </strong>
-                  <small>{node.node_id}</small>
-                </article>
-              ))}
+          {graph.data && <EvidenceNetwork graph={graph.data} dossier={c} />}
+          <details className="network-secondary">
+            <summary>Signaux et relations détaillés</summary>
+            <Panel
+              title="Signaux réseau à examiner"
+              eyebrow="DESCRIPTIF · SOURCÉ"
+            >
+              {graph.data?.signals.length ? (
+                graph.data.signals.map((signal) => (
+                  <article className="document" key={signal.signal_id}>
+                    <strong>
+                      {networkSignalLabels[signal.kind] ?? "Signal réseau"}
+                    </strong>
+                    <p>{signal.explanation_fr}</p>
+                    <small>
+                      {signal.sample_size} transaction(s) dans l’échantillon ·
+                      Sources : {signal.source_ids.join(", ")}
+                    </small>
+                  </article>
+                ))
+              ) : (
+                <p>Aucun motif réseau établi sur les transactions visibles.</p>
+              )}
+              <p className="footnote">
+                Les dossiers visibles ne constituent pas une couverture
+                exhaustive du réseau. Aucun signal ne modifie l’indice de revue
+                ni ne conclut à une fraude.
+              </p>
+            </Panel>
+            <Panel
+              title="Relations entre entreprises"
+              eyebrow="ACHETEUR · VENDEUR"
+            >
+              {companyLinks.length ? (
+                companyLinks.map((edge) => (
+                  <article className="document" key={edge.edge_id}>
+                    <strong>
+                      {nodes.get(edge.source)?.label ?? edge.source} →{" "}
+                      {nodes.get(edge.target)?.label ?? edge.target}
+                    </strong>
+                    <p>
+                      Dossier {edge.case_id} · {edge.source_ids.length}{" "}
+                      transaction(s) enregistrée(s)
+                    </p>
+                    <small>
+                      Sources : {edge.source_ids.join(", ")} ·{" "}
+                      {edge.provenance_status}
+                    </small>
+                  </article>
+                ))
+              ) : (
+                <p>
+                  Aucune relation acheteur-vendeur établie dans ce périmètre.
+                </p>
+              )}
+              <p className="footnote">{graph.data?.note_fr}</p>
+            </Panel>
           </details>
         </>
       )}

@@ -13,6 +13,7 @@ import "./styles.css";
 import "./shell/shell.css";
 import "./portfolio/portfolio.css";
 import "./dossier/dossier.css";
+import "./network/network.css";
 
 const client = new QueryClient({
   defaultOptions: {
