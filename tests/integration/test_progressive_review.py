@@ -348,7 +348,7 @@ def test_upload_analysis_is_persisted_idempotently_and_internal_causes_are_offic
     officer = service.registry.actors["DEMO-OFFICER"]
     view = service.get_case(officer,CASE)
     doc = next(d for d in view.documents if d.document.document_id == first.document.document_id)
-    assert doc.analysis and doc.analysis.rule_version == "document-pipeline-1"
+    assert doc.analysis and doc.analysis.rule_version == "document-pipeline-2"
     assert doc.analysis.case_version == before+1
     assert doc.analysis.linked_cause_ids == (f"{CASE}:TX-001:QUANTITY",)
     assert all(d.analysis is None for d in service.get_case(company,CASE).documents)

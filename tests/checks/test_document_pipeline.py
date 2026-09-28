@@ -61,3 +61,24 @@ def test_no_usable_text_requests_a_readable_document_and_not_a_fraud_verdict():
     result = report("illisible")
     assert result.proposed_action == "REQUEST_READABLE_DOCUMENT"
     assert all(c.status != "PASS" for c in result.checks if c.code in ("EXTRACTION","TOTAL_ARITHMETIC"))
+
+
+def test_readable_contract_without_invoice_fields_is_sent_to_review_not_resubmission():
+    result = report("Contrat de livraison de matériaux signé par les parties.")
+    assert result.classification == "CONTRACT"
+    assert result.proposed_action == "REVIEW_DOCUMENT"
+    assert next(c for c in result.checks if c.code == "EXTRACTION").status == "UNKNOWN"
+    assert result.authenticity_statement == "Authenticité à vérifier"
+
+
+def test_scan_without_native_text_still_requests_a_readable_copy():
+    inputs = _inputs()
+    document = inputs.documents[0]
+    unsupported = DocumentText(document_id=document.document_id, pages=(), status="UNSUPPORTED",
+                               limitations=("NO_NATIVE_TEXT_MANUAL_REVIEW",))
+    integrity = IntegrityReport(document_id=document.document_id, sha256=document.sha256)
+    result = analyze_document(document, None, None, integrity,
+        {"transaction": [inputs.transaction], "invoice_observation": list(inputs.invoice_observations),
+         "document": list(inputs.documents), "extraction": []}, (), inputs.as_of, 2, unsupported)
+    assert result.proposed_action == "REQUEST_READABLE_DOCUMENT"
+    assert result.authenticity_statement == "Authenticité à vérifier"

@@ -3,7 +3,7 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from boussla.contracts import DocumentAnalysisReport, DocumentCheck
 
-RULE_VERSION = "document-pipeline-1"
+RULE_VERSION = "document-pipeline-2"
 
 
 def analyze_document(document, extraction, routing, integrity, facts, findings, as_of, version, text=None):
@@ -125,8 +125,12 @@ def analyze_document(document, extraction, routing, integrity, facts, findings, 
             ("RECALCULATION","PASS","Calcul du dossier enregistré dans la même révision.")))
     from boussla.documents.confidence import calculate_document_confidence
     confidence = calculate_document_confidence(extraction, checks, class_name)
+    native_body = " ".join(page.text.strip() for page in text.pages) if text is not None and text.status in ("OK", "PARTIAL") else ""
+    needs_readable_copy = not native_body or (class_name == "OTHER_OR_UNKNOWN" and len(native_body) < 20)
+    proposed_action = ("REQUEST_READABLE_DOCUMENT" if not usable and needs_readable_copy else
+                       "REQUEST_CLARIFICATION" if failed else "REVIEW_DOCUMENT")
     return DocumentAnalysisReport(confidence=confidence, document_id=document.document_id,case_version=version,calculated_at=as_of,
         rule_version=RULE_VERSION,classification=class_name,checks=tuple(checks),stages=stages,
         linked_cause_ids=linked,transaction_ids=tuple(sorted(tx_ids)),
-        proposed_action="REQUEST_READABLE_DOCUMENT" if not usable else "REQUEST_CLARIFICATION" if failed else "REVIEW_DOCUMENT",
+        proposed_action=proposed_action,
         limitations=(*limitations,"NO_EXTERNAL_REGISTRY","NO_VISUAL_TAMPER_DETECTION"))

@@ -244,3 +244,7 @@ Phase 14 is complete for the requested in-app prototype: company and officer fee
 ## Audit-grounded decision impact answers
 
 `investigation-answer-4` answers officer questions about the effect of an evidence or review decision on the documentary index from the recorded audit before/after values, rather than the current index alone. It cites the audit record, linked fact IDs and rule version; missing pre-migration calculations are called unknown instead of reconstructed. The answer is read-only and remains TEMPLATE/non-authoritative. Existing priority, document, history and network answers keep their own citations and officer scope. Validation: focused accepted-evidence 20 → 0, audit-citation, authorization and read-only tests plus full backend suite result recorded with commit. Phase 20 remains partial for semantic document indexing and scanned-text retrieval.
+
+## Readable non-invoice documents remain reviewable
+
+`document-pipeline-2` no longer requests a clearer copy merely because a readable contract or delivery record has no invoice extraction fields. It keeps extraction UNKNOWN and proposes officer review; a PDF with no native text, or a very short unclassified body, can still request a readable copy. This avoids a false company burden while preserving all existing arithmetic, matching and authenticity limits. Validation: classified contract versus short unreadable text tests, integrated report rule version and complete suite result recorded with commit.
