@@ -1430,10 +1430,11 @@ class BousslaAppService(_DemoAdministration):
             return fallback
 
     def _text(self, document: Document, content: bytes) -> DocumentText | None:
-        if self.text_extractor is None:
-            return None
+        from boussla.documents.native_text import NativePdfExtractor
+        extractor = self.text_extractor or NativePdfExtractor(
+            max_bytes=self.settings.max_upload_bytes, max_pages=self.settings.max_pdf_pages)
         try:
-            return self.text_extractor.extract_text(document, content)
+            return extractor.extract_text(document, content)
         except Exception:  # noqa: BLE001 - unreadable text leaves the manual path
             return None
 
@@ -2038,6 +2039,14 @@ class BousslaAppService(_DemoAdministration):
             if accept:
                 self._require_supporting_document(proposal, facts, meta["company_id"])
                 new_allocations = self._apply_proposal(proposal, facts, meta["company_id"])
+                from boussla.review_evidence import _allocation_coherence
+                extraction = next((e for e in facts["extraction"]
+                                   if e.document_id == proposal.source_document_id), None)
+                if (_allocation_coherence(proposal, proposal.source_document_id, extraction,
+                                          meta["company_id"], require_confirmation=False) is not True):
+                    raise BousslaError(ErrorCode.INSUFFICIENT_INFORMATION,
+                                       "La pièce ne confirme pas l'affectation proposée",
+                                       reason="ALLOCATION_EVIDENCE_NOT_COHERENT")
                 for a in new_allocations:
                     old = next((x for x in facts["allocation"] if x.allocation_id == a.allocation_id), None)
                     if old != a:

@@ -70,8 +70,12 @@ def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, lis
             if not (scoped_proposal or scoped_question or scoped_reason or file_linked):
                 continue
             document_id = next((d for d in response.document_ids if d in documents), None)
-            if proposal is not None and scoped_proposal and proposal.source_document_id in documents:
+            if (proposal is not None and scoped_proposal and proposal.source_document_id in documents
+                    and _allocation_fields_backed(proposal, proposal.source_document_id,
+                                                  extractions.get(proposal.source_document_id))):
                 document_id = proposal.source_document_id
+            elif scoped_proposal:
+                document_id = None
             matches.append((response, proposal if scoped_proposal else None, document_id))
         if not matches:
             continue
@@ -94,9 +98,11 @@ def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, lis
     return tuple(result)
 
 
-def _allocation_coherence(proposal, document_id: str | None, extraction, company_id: str | None = None) -> bool | None:
+def _allocation_coherence(proposal, document_id: str | None, extraction, company_id: str | None = None,
+                          require_confirmation: bool = True) -> bool | None:
     """Only complete, source-backed and confirmed allocation fields can change a stage."""
-    if proposal is None or document_id is None or extraction is None or extraction.status != "CONFIRMED":
+    if (proposal is None or document_id is None or extraction is None
+            or (require_confirmation and extraction.status != "CONFIRMED")):
         return None
     backed = {}
     for candidate in extraction.candidates:
@@ -135,3 +141,18 @@ def _allocation_coherence(proposal, document_id: str | None, extraction, company
         elif actual != value:
             return False
     return True
+
+
+def _allocation_fields_backed(proposal, document_id: str, extraction) -> bool:
+    """A linked file counts as allocation evidence only if its own source spans name the allocation."""
+    if extraction is None:
+        return False
+    backed = {candidate.field_name: candidate.normalized_value for candidate in extraction.candidates
+              if candidate.normalized_value is not None and candidate.raw_value is not None
+              and not candidate.ambiguities and any(
+                  ref.document_id == document_id and ref.page is not None and ref.exact_text
+                  and candidate.raw_value in ref.exact_text for ref in candidate.evidence_refs)}
+    return (backed.get("allocation.transaction_id") == proposal.transaction_id
+            and backed.get("allocation.line_id") == proposal.line_id
+            and any(name.startswith("allocation.") and name.endswith(".quantity")
+                    for name in backed))

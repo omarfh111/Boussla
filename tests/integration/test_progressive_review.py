@@ -74,6 +74,36 @@ def test_answer_then_later_document_advances_only_linked_cause(service):
     assert proposal.source_document_id == document.document.document_id
 
 
+@pytest.mark.parametrize("document_id", ["DOC-PAY-001", "DOC-BUY-001"])
+def test_unrelated_existing_document_cannot_advance_or_resolve_allocation(service, document_id):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company = service.registry.actors["DEMO-COMPANY-BAT"]
+    draft = service.prepare_clarification(officer, CASE, version(service))
+    request = service.publish_clarification(officer, CASE, draft.draft_id, version(service), "publish-wrong")
+    response = service.submit_response(company, CASE, request.request.request_id, {
+        "answers": {"Q-PROJECT-ALLOCATION": "1000 unités P1, 1000 unités P2"},
+        "document_ids": [document_id],
+        "allocation": {"transaction_id": "TX-001", "line_id": "LINE-BUY-001",
+                       "splits": {"P1": "1000", "P2": "1000"}},
+    }, version(service), "answer-wrong")
+    assert service.get_case(officer, CASE).score.review_index == 30
+    before = version(service)
+    with pytest.raises(BousslaError) as exc:
+        service.accept_evidence(officer, CASE, response.proposal_ids[0], before, "accept-wrong")
+    assert exc.value.code is ErrorCode.INSUFFICIENT_INFORMATION
+    assert version(service) == before
+
+
+def test_unconfirmed_but_source_backed_allocation_can_be_reviewed_by_officer(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                            version(service), "upload-unconfirmed", response_id=response.response.response_id)
+    assert service.get_case(officer, CASE).score.review_index == 20
+    accepted = service.accept_evidence(officer, CASE, response.proposal_ids[0], version(service), "accept-source")
+    assert accepted.score_after.review_index == 0
+
+
 def test_unknown_response_cannot_attach_document(service):
     company = service.registry.actors["DEMO-COMPANY-BAT"]
     before = version(service)
