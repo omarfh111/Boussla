@@ -248,3 +248,7 @@ Phase 14 is complete for the requested in-app prototype: company and officer fee
 ## Readable non-invoice documents remain reviewable
 
 `document-pipeline-2` no longer requests a clearer copy merely because a readable contract or delivery record has no invoice extraction fields. It keeps extraction UNKNOWN and proposes officer review; a PDF with no native text, or a very short unclassified body, can still request a readable copy. This avoids a false company burden while preserving all existing arithmetic, matching and authenticity limits. Validation: classified contract versus short unreadable text tests, integrated report rule version and complete suite result recorded with commit.
+
+## Final local regression checkpoint, 2026-09-28
+
+After `document-pipeline-2`, `python -m pytest tests -o addopts= -q --tb=short` passed **615/615** backend tests. `npm --prefix frontend test -- --reporter=dot` passed **34/34** React tests, `npm --prefix frontend run build` succeeded, and `npm --prefix frontend run test:e2e -- --reporter=list` passed **11/11** browser journeys against a fresh isolated synthetic SQLite database with model and external-service calls disabled. The Playwright suite includes the principal company/officer evidence path, history, network and investigation. No current regression is known. These results do not validate a live tax registry, OCR on image-only PDFs, a downloaded semantic embedding model, real taxpayer data or future phase-19 network signals.
