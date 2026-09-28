@@ -1,8 +1,21 @@
-# Audit navigateur sans correction — 28 septembre 2026
+# Audit navigateur et corrections — 28 septembre 2026
 
 Branche examinée : `feat/progressive-review` au commit `22eb0dd`. L'application a été lancée hors ligne avec des bases SQLite synthétiques distinctes sur les ports 8063, 8064, 8070, 8071 et 8072. Le serveur préexistant de l'utilisateur sur 8000 n'a pas été utilisé. Aucun code produit n'a été modifié pendant cette campagne.
 
 Le navigateur @Navigateur n'a pas pu démarrer : son moteur local a quitté avant l'ouverture d'un onglet (`windows sandbox failed: helper_unknown_error: apply deny-read ACLs`). Les interactions ont donc été exécutées dans Microsoft Edge/Chromium par Playwright, avec de vraies pages et requêtes locales. Ce changement d'outil est une limite de la campagne, pas un défaut de BOUSSLA.
+
+## État après correction sur `feat/progressive-review`
+
+Les quatre constats ci-dessous étaient valides pendant l'audit initial et sont désormais corrigés par quatre commits atomiques, chacun poussé sur la branche de travail. Les résultats de la campagne initiale restent conservés plus bas comme reproduction avant correction.
+
+| Constat | État actuel | Correction et vérification |
+|---|---|---|
+| BROWSER-01 — pièce non pertinente | **CORRIGÉ** — `28238ec` | Le palier quantité 20 exige des champs d'affectation extraits et sourcés. L'acceptation vérifie transaction, ligne, projets et quantités dans la pièce. `DOC-PAY-001` et `DOC-BUY-001` restent à 30 et ne peuvent pas résoudre la cause ; tests de régression backend. |
+| BROWSER-02 — dépôt tardif non rattachable | **CORRIGÉ** — `f9a109b` | L'entreprise peut lier une pièce déjà déposée à sa réponse depuis « Actions requises ». Contrôles de rôle, entreprise, auteur, état, version et idempotence ; événement `EVIDENCE_LINKED`. API et navigateur vérifiés : 30 après réponse, 30 après dépôt isolé, 20 après lien. |
+| BROWSER-03 — motif de preuve absent | **CORRIGÉ** — `b0a2252` | Champ de 10 à 500 caractères exigé par l'interface et l'API web pour acceptation et rejet. Motif conservé dans la proposition, la révision et l'audit ; test API et parcours Playwright. |
+| BROWSER-04 — débordement mobile/tablette | **CORRIGÉ** — `674d250` | Barre supérieure, lignes de cause et grilles adaptées. Les onglets Agent et Entreprise restent dans le document aux largeurs 320, 390 et 768 px ; trois tests Playwright dédiés. |
+
+Après ces corrections : **624/624 tests backend**, **34/34 tests React**, build TypeScript/Vite et formatage réussis ; **14/14 tests Playwright** sur serveur local isolé. Un contrôle navigateur supplémentaire a rejoué le rattachement tardif sur une base neuve : **30 → 30 → 20**. Aucun serveur préexistant sur le port 8000 n'a été modifié. Les fournisseurs LIVE, l'OCR, l'authentification de production et les services externes restent hors de cette validation.
 
 ## Résultats
 
@@ -18,7 +31,7 @@ Le navigateur @Navigateur n'a pas pu démarrer : son moteur local a quitté avan
 
 Les contrôles supplémentaires comprenaient recherche, tri et filtre de portefeuille ; six zones du dossier ; simulation sans mutation ; références, timeline, audit, diagnostics ; graphe et liste accessible ; historique à données insuffisantes ; écran Entreprise sans indices internes ; écran Opérateur ; affichage mobile ; refus de rôles/identités forgés ; isolation interentreprises ; routes 404/405 ; clé d'idempotence/version manquantes ; score injecté ; fichier non PDF ; motif de décision vide ; notification inconnue. Le test d'accès à l'assistant a d'abord envoyé un champ `expected_version` non accepté et reçu 400. Rejoué avec le schéma exact `{question}`, il a reçu 403 pour le rôle Entreprise : **pas un bug produit**.
 
-## Problèmes à corriger, par priorité
+## Reproductions initiales des problèmes corrigés
 
 ### BROWSER-01 — Critique : une preuve non pertinente peut résoudre la cause quantité
 
