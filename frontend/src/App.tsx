@@ -1898,6 +1898,16 @@ function Officer({
             </strong>{" "}
             types de pièces demandés
           </span>
+          <span>
+            <strong>
+              {
+                c.proposals.filter(
+                  (item) => item.status === "AWAITING_HUMAN_REVIEW",
+                ).length
+              }
+            </strong>{" "}
+            propositions à décider
+          </span>
         </div>
         <details className="dossier-secondary">
           <summary>Examiner les pièces et leurs analyses</summary>
@@ -1906,7 +1916,7 @@ function Officer({
       </section>
       <section id="dossier-actions" className="dossier-zone">
         <h2>Actions</h2>
-        <p>
+        <p className="dossier-action-intro">
           {
             c.requests.filter(
               (item) => item.request.status === "PUBLISHED_IN_DEMO",
@@ -1925,30 +1935,37 @@ function Officer({
           eyebrow="PROCHAINE ÉTAPE · DÉCISION AGENT"
         >
           {c.recommended_actions?.length ? (
-            c.recommended_actions.map((action) => (
-              <article key={action.action_id} className="document">
-                <strong>
-                  Priorité {action.priority} · {action.title_fr}
-                </strong>
-                <span>
-                  {action.status === "COMPLETED"
-                    ? "Terminé"
-                    : action.status === "WAITING"
-                      ? "En attente"
-                      : "À traiter"}
-                </span>
-                <p>{action.reason}</p>
-                <small>
-                  Causes :{" "}
-                  {action.source_causes.join(", ") || "Aucune cause liée"}
-                </small>
-                {action.required_documents.length > 0 && (
-                  <small>
-                    Pièces requises : {action.required_documents.join(", ")}
-                  </small>
-                )}
-              </article>
-            ))
+            <div className="dossier-action-list">
+              {c.recommended_actions.map((action) => (
+                <article key={action.action_id} className="dossier-action">
+                  <div className="dossier-action-head">
+                    <span>Priorité {action.priority}</span>
+                    <strong>{action.title_fr}</strong>
+                    <em>
+                      {action.status === "COMPLETED"
+                        ? "Terminé"
+                        : action.status === "WAITING"
+                          ? "En attente"
+                          : "À traiter"}
+                    </em>
+                  </div>
+                  <p>{action.reason}</p>
+                  {action.required_documents.length > 0 && (
+                    <p className="dossier-action-docs">
+                      Pièces requises : {action.required_documents.join(", ")}
+                    </p>
+                  )}
+                  <details>
+                    <summary>Causes et référence de l’action</summary>
+                    <small>
+                      Causes :{" "}
+                      {action.source_causes.join(", ") || "Aucune cause liée"} ·{" "}
+                      {action.action_id}
+                    </small>
+                  </details>
+                </article>
+              ))}
+            </div>
           ) : (
             <p>Aucune action recommandée avec les données actuelles.</p>
           )}
