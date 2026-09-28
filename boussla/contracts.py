@@ -1052,7 +1052,22 @@ class RecommendedAction(Contract):
     rule_version: str = "recommended-actions-1"
 
 
+class ResolutionImpact(Contract):
+    step: int
+    cause_id: str
+    family: FindingFamily
+    transaction_id: str
+    before_index: int
+    after_index: int
+    source_ids: tuple[str, ...] = ()
+    case_version: int
+    calculated_at: AwareDatetime | None = None
+    rule_version: str = "resolution-impact-1"
+    hypothetical: Literal[True] = True
+
+
 class OfficerCaseView(Contract):
+    impact_if_resolved: tuple[ResolutionImpact, ...] = ()
     recommended_actions: tuple[RecommendedAction, ...] = ()
     behavior_profile: BehaviorProfile | None = None
     indicators: dict[str, CaseIndicator] = Field(default_factory=dict)

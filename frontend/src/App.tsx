@@ -1981,6 +1981,38 @@ function Officer({
             <p>Aucune contribution chiffrée pour ce dossier.</p>
           )}
         </Panel>
+        <Panel
+          eyebrow="SIMULATION · AUCUN EFFET SUR LE DOSSIER"
+          title="Impact si résolu"
+        >
+          <p>Score actuel : {format(c.score?.review_index)}</p>
+          {c.impact_if_resolved?.length ? (
+            <ol className="impact-list">
+              {c.impact_if_resolved.map((step) => (
+                <li key={step.cause_id}>
+                  <strong>
+                    Si {familyLabel[step.family] || step.family} ·{" "}
+                    {step.transaction_id} est confirmée comme résolue
+                  </strong>
+                  <span>
+                    {step.before_index} → {step.after_index}
+                  </span>
+                  <small>
+                    Sources :{" "}
+                    {step.source_ids.join(", ") || "Constat du dossier"} · règle{" "}
+                    {step.rule_version}
+                  </small>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>Simulation indisponible pour les causes de cette version.</p>
+          )}
+          <p className="footnote">
+            Simulation — aucune modification appliquée au dossier. Les étapes
+            supposent une validation successivement confirmée par l’agent.
+          </p>
+        </Panel>
       </section>
       <section id="dossier-preuves" className="dossier-zone">
         <h2>Preuves</h2>

@@ -1042,3 +1042,35 @@ it("tells the recorded cause and event story without inventing a score transitio
   expect(screen.getByText(/RESP-1/)).toBeInTheDocument();
   expect(screen.getAllByText(/Indice de revue :/)).toHaveLength(1);
 });
+
+it("shows the no-write resolution impact only to the officer", async () => {
+  mockApi({
+    ...officer,
+    impact_if_resolved: [
+      {
+        step: 1,
+        cause_id: "CAUSE-1",
+        family: "QUANTITY",
+        transaction_id: "TX-1",
+        before_index: 40,
+        after_index: 0,
+        source_ids: ["INV-1"],
+        case_version: 1,
+        calculated_at: "2026-09-27T10:00:00Z",
+        rule_version: "resolution-impact-1",
+        hypothetical: true,
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  expect(await screen.findByText("Impact si résolu")).toBeInTheDocument();
+  expect(screen.getByText("40 → 0")).toBeInTheDocument();
+  expect(
+    screen.getByText(/Simulation — aucune modification appliquée au dossier/),
+  ).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  await screen.findByText("Votre dossier, en un regard");
+  expect(screen.queryByText("Impact si résolu")).not.toBeInTheDocument();
+});

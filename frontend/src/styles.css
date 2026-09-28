@@ -2471,3 +2471,29 @@ button.danger {
   font-weight: 750;
   min-width: 45px;
 }
+
+.impact-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.impact-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 16px;
+  padding: 12px;
+  border: 1px solid #31546a;
+  border-radius: 9px;
+}
+.impact-list li span {
+  color: #62d7e5;
+  font:
+    800 20px Manrope,
+    sans-serif;
+}
+.impact-list li small {
+  flex-basis: 100%;
+  color: #a7c3d5;
+}

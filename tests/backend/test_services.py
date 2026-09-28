@@ -363,3 +363,14 @@ def test_internal_notifications_are_durable_and_role_scoped(svc, actors):
     assert all(item["status"] == "RECORDED" for item in company_feed["items"])
     assert svc.get_notifications(officer, CASE) == agent_feed
     assert code(lambda: svc.get_notifications(other, CASE)) is ErrorCode.CROSS_COMPANY
+
+def test_resolution_impact_is_officer_only_and_read_only(svc, actors):
+    company, officer, _ = actors
+    before = ver(svc)
+    view = svc.get_case(officer, CASE)
+    assert view.impact_if_resolved
+    assert view.impact_if_resolved[0].before_index == view.score.review_index == 40
+    assert view.impact_if_resolved[0].after_index == 0
+    assert all(step.hypothetical for step in view.impact_if_resolved)
+    assert "impact_if_resolved" not in svc.get_case(company, CASE).model_dump()
+    assert ver(svc) == before

@@ -52,6 +52,8 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
   await expect(page.locator(".priority-ring strong")).toHaveText("40");
+  await expect(page.getByText("Impact si résolu")).toBeVisible();
+  await expect(page.locator(".impact-list").getByText("40 → 0")).toBeVisible();
   await expect(page.locator(".request-mini")).toContainText("REQ-AUTO-");
   await expect(
     page

@@ -35,7 +35,7 @@ from boussla.contracts import (
     TransactionSummary, ActionReceipt, ExtractionProposal, DocumentClass, DocumentText, RouterResult,
     CompanyHistorySignal, SettlementAdjustment, InvestigatorBriefView, BriefObservationView, BriefHypothesisView,
     EnterpriseProfileView, MonthlyActivityView, PaymentTimelineEntry, InvoiceComparisonView, HorizonBucket,
-    AdminEnterpriseView, AdminPortfolioResult, Enterprise,
+    AdminEnterpriseView, AdminPortfolioResult, Enterprise, ResolutionImpact,
 )
 from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
@@ -54,6 +54,7 @@ from boussla.historical_indicator import calculate_historical_indicator
 from boussla.operational_confidence import calculate_operational_confidence, confidence_window_start
 from boussla.monthly_context import build_monthly_context
 from boussla.confidence_history import confidence_delta
+from boussla.impact import simulate_resolution
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -517,6 +518,14 @@ class BousslaAppService(_DemoAdministration):
                 context_assessment=self._context_assessment(case_id, company, v, facts)[0],
                 mode=Mode.LIVE, banner_fr=DEMO_BANNER_FR)
         ev = self._evaluate(case_id, company, v, facts)
+        raw_transaction_indices = {
+            transaction.transaction_id: self.checks.score_transaction(
+                [finding for finding in ev.findings if finding.transaction_id == transaction.transaction_id],
+                set(ALL_FAMILIES)).review_index
+            for transaction in facts["transaction"]
+        }
+        impact = tuple(ResolutionImpact.model_validate(item) for item in
+                       simulate_resolution(ev.score, raw_transaction_indices))
         scenarios = ev.scenarios + self._reallocation_scenarios(case_id, company, v, facts, ev)
         view = OfficerCaseView(
             case_id=case_id, company_id=company, company_display_name=self._company_name(company), case_version=v,
@@ -525,6 +534,7 @@ class BousslaAppService(_DemoAdministration):
             projects=tuple(facts["project"]), context_claims=tuple(facts["context_claim"]),
             quantity_references=tuple(facts["quantity_reference"]), allocations=tuple(facts["allocation"]),
             findings=ev.findings, hypotheses=ev.hypotheses, scenarios=scenarios, score=ev.score,
+            impact_if_resolved=impact,
             requests=self._decorated_requests(facts["request"]), responses=tuple(facts["response"]),
             proposals=tuple(facts["proposal"]), deliveries=tuple(facts["delivery"]),
             **self._enterprise_360(company, facts),

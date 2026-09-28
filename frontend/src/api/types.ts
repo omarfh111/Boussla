@@ -506,7 +506,21 @@ export interface RecommendedAction {
   source_ids: string[];
   rule_version: string;
 }
+export interface ResolutionImpact {
+  step: number;
+  cause_id: string;
+  family: "COUNTERPARTY" | "SETTLEMENT" | "QUANTITY";
+  transaction_id: string;
+  before_index: number;
+  after_index: number;
+  source_ids: string[];
+  case_version: number;
+  calculated_at: string | null;
+  rule_version: string;
+  hypothetical: true;
+}
 export interface OfficerCaseView extends BaseCase {
+  impact_if_resolved?: ResolutionImpact[];
   recommended_actions?: RecommendedAction[];
   behavior_profile?: BehaviorProfile | null;
   indicators?: Record<string, CaseIndicator>;
