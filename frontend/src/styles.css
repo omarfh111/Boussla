@@ -2497,3 +2497,36 @@ button.danger {
   flex-basis: 100%;
   color: #a7c3d5;
 }
+
+.history-comparisons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 12px;
+}
+.history-comparisons article {
+  border: 1px solid #31546a;
+  border-radius: 11px;
+  background: #10263b;
+  padding: 14px;
+}
+.history-comparisons article > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0;
+}
+.history-comparisons article span,
+.history-comparisons article small {
+  display: block;
+  color: #a7c3d5;
+}
+.history-comparisons article b {
+  display: block;
+  color: #e0f5f6;
+  font-size: 16px;
+}
+.month-unknown {
+  align-self: end;
+  color: #a7c3d5;
+  font-weight: 800;
+}

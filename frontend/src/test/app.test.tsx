@@ -1074,3 +1074,66 @@ it("shows the no-write resolution impact only to the officer", async () => {
   await screen.findByText("Votre dossier, en un regard");
   expect(screen.queryByText("Impact si résolu")).not.toBeInTheDocument();
 });
+
+it("compares company habit to the current period without treating uncovered months as zero", async () => {
+  mockApi(
+    {
+      ...officer,
+      behavior_profile: {
+        as_of: "2026-09-27T00:00:00Z",
+        observed_period: "2026-09",
+        baseline_periods: ["2026-06", "2026-07", "2026-08"],
+        rule_version: "self-baseline-2",
+        metrics: [
+          {
+            code: "INVOICE_VOLUME",
+            label_fr: "Factures par mois",
+            current_value: "8",
+            baseline_value: "3",
+            change_percent: "166.7",
+            status: "AVAILABLE",
+            unit: "factures",
+            currency: null,
+            sample_size: 3,
+            source_ids: ["INV-1"],
+            explanation_fr: "Moyenne de trois mois couverts.",
+          },
+        ],
+      },
+      monthly_activity: [
+        {
+          month: "2026-08",
+          transaction_count: 0,
+          invoice_observation_count: 0,
+          settled_outflow_millimes: 0,
+          source_label: "Couverture inconnue",
+          coverage_status: "UNKNOWN",
+          coverage_source_id: null,
+        },
+        {
+          month: "2026-09",
+          transaction_count: 8,
+          invoice_observation_count: 8,
+          settled_outflow_millimes: 0,
+          source_label: "Source COV-SEP",
+          coverage_status: "COVERED",
+          coverage_source_id: "COV-SEP",
+        },
+      ],
+    },
+    company,
+    { revisions: [], events: [] },
+  );
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Historique" }));
+  expect(
+    await screen.findByText("Habitude vs période actuelle"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Écart : 166.7 % · 3 mois exploitables"),
+  ).toBeInTheDocument();
+  expect(screen.getByTitle("2026-08 : couverture inconnue")).toHaveTextContent(
+    "—",
+  );
+});

@@ -453,7 +453,9 @@ export function Company360({
   const profile = c.enterprise_profile;
   const maxMonth = Math.max(
     1,
-    ...c.monthly_activity.map((m) => m.transaction_count),
+    ...c.monthly_activity
+      .filter((m) => m.coverage_status === "COVERED")
+      .map((m) => m.transaction_count),
   );
   const pairs = c.invoice_comparisons.filter(
     (x) => x.status !== "SINGLE_OBSERVATION",
@@ -516,6 +518,61 @@ export function Company360({
           <small>Affirmations attribuées</small>
         </div>
       </div>
+      <Card title="Habitude vs période actuelle">
+        {c.behavior_profile ? (
+          <>
+            <p className="portfolio-source">
+              Période observée : {c.behavior_profile.observed_period} ·{" "}
+              {c.behavior_profile.baseline_periods.length} mois de référence
+              couverts · règle {c.behavior_profile.rule_version}
+            </p>
+            <div className="history-comparisons">
+              {c.behavior_profile.metrics.map((metric) => (
+                <article key={`${metric.code}:${metric.currency ?? "all"}`}>
+                  <strong>
+                    {metric.label_fr}
+                    {metric.currency ? ` · ${metric.currency}` : ""}
+                  </strong>
+                  <div>
+                    <span>
+                      Actuel{" "}
+                      <b>
+                        {metric.current_value ?? "inconnu"}{" "}
+                        {metric.current_value === null ? "" : metric.unit}
+                      </b>
+                    </span>
+                    <span>
+                      Habitude{" "}
+                      <b>
+                        {metric.baseline_value ?? "données insuffisantes"}{" "}
+                        {metric.baseline_value === null ? "" : metric.unit}
+                      </b>
+                    </span>
+                  </div>
+                  <small>
+                    {metric.change_percent !== null
+                      ? `Écart : ${metric.change_percent} %`
+                      : "Écart non calculable"}{" "}
+                    · {metric.sample_size} mois exploitables
+                  </small>
+                  <details>
+                    <summary>Méthode et sources</summary>
+                    <p>{metric.explanation_fr}</p>
+                    <small>
+                      {metric.source_ids.join(", ") || "Sources insuffisantes"}
+                    </small>
+                  </details>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : (
+          <EmptyData>
+            Baseline propre à cette entreprise indisponible : comparaison non
+            calculable.
+          </EmptyData>
+        )}
+      </Card>
       <Card title="Activité sur 12 mois">
         {c.monthly_activity.length ? (
           <div
@@ -527,15 +584,25 @@ export function Company360({
               <div
                 role="listitem"
                 key={m.month}
-                title={`${m.month} : ${m.transaction_count} transaction(s)`}
+                title={
+                  m.coverage_status === "COVERED"
+                    ? `${m.month} : ${m.transaction_count} transaction(s) · ${m.source_label}`
+                    : `${m.month} : couverture inconnue`
+                }
               >
-                <span
-                  className="month-bar"
-                  style={{
-                    height: `${(m.transaction_count / maxMonth) * 100}%`,
-                  }}
-                />
-                <strong>{m.transaction_count}</strong>
+                {m.coverage_status === "COVERED" ? (
+                  <span
+                    className="month-bar"
+                    style={{
+                      height: `${(m.transaction_count / maxMonth) * 100}%`,
+                    }}
+                  />
+                ) : (
+                  <span className="month-unknown">?</span>
+                )}
+                <strong>
+                  {m.coverage_status === "COVERED" ? m.transaction_count : "—"}
+                </strong>
                 <small>{m.month.slice(5)}</small>
               </div>
             ))}
