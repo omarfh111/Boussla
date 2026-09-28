@@ -198,16 +198,16 @@ This table replaces the *starting-state* labels above. TERMINÉ means the reques
 | 11 Dossier page | TERMINÉ | Six zones plus explanation/proof/action/decision detail. Officer review decisions are reasoned, versioned and safeguarded. |
 | 12 Company journey | TERMINÉ | Scoped dossiers, required actions, documents and messages; real outbound messaging is not claimed. |
 | 13 Timeline | TERMINÉ | New revisions/events display actor, time, causes and frozen transitions. Legacy revisions lacking snapshots have no fabricated score delta. |
-| 14 Internal notifications | PARTIEL | Scoped event feeds, historical/urgency/document current signals, per-actor read receipts, request-target reminders and company evidence-decision notices are available. No background delivery scheduler or external messages. |
+| 14 Internal notifications | TERMINÉ | Scoped in-app event feeds and current history/urgency/document/request signals, per-actor read receipts and company evidence-decision notices are available. No background delivery or external messages are claimed. |
 | 15 Impact if resolved | TERMINÉ | Read-only sequential cause simulation with no case mutation. |
 | 16 Historical dashboard | TERMINÉ | Monthly coverage and own-company current/baseline comparisons lead the agent view. |
 | 17 Network model | TERMINÉ | Source-attributed scoped nodes/edges and officer-only portfolio/company/case APIs. |
 | 18 3D network | TERMINÉ | Interactive projected 3D graph with navigation, filters, selection and accessible fallback. |
 | 19 Advanced network intelligence | MANQUANT — DEFERRED | The supplied sequence explicitly places this phase **after Tuesday**; 2026-09-28 is Monday. No cycle/centrality/concentration signal is claimed yet. |
 | 20 Investigation assistant/RAG | PARTIEL | Officer-only cited synthesis spans case, rules, history, decisions, network, document reports and bounded native page excerpts. No semantic index or OCR retrieval for scans. |
-| 21 Audit trail | PARTIEL | New events atomically record actor, time, reason, score/cause before-after, changed fact values, evidence and rule/engine versions; officer UI and API available. Pre-migration events cannot be retroactively enriched; local SQLite is not tamper-proof legal evidence. |
+| 21 Audit trail | TERMINÉ | New versioned decisions atomically record actor, time, reason, score/cause before-after, changed fact values, evidence and rule/engine versions in officer UI/API. Pre-migration events retain explicit gaps; local SQLite is not tamper-proof legal evidence. |
 
-The remaining work should first close supported-document and operational lifecycle gaps with the same role and provenance controls, then implement phase 19 only after its stated time gate. Do not reclassify UNKNOWN as zero or proof of authenticity.
+The remaining work is the unsupported-document/external-check boundary and richer investigation retrieval; phase 19 starts only after its stated time gate. Do not reclassify UNKNOWN as zero or proof of authenticity.
 
 ## Current agent notification signals
 
@@ -236,3 +236,7 @@ A recorded officer acceptance or rejection of a proposal tied to a document visi
 ## Native-text scan limitation in the internal inbox
 
 When the configured native PDF extractor records `NO_NATIVE_TEXT_MANUAL_REVIEW`, both scoped roles now see a source-linked CURRENT_SIGNAL: the company may provide a clearer copy if available, and the officer must inspect the piece visually. The signal does not reject the PDF, declare forgery, change documentary scoring or claim OCR was performed. It cannot be marked as a durable read event; the stored original and document-analysis UNKNOWN states remain the authoritative processing record. Validation: an image-only synthetic PDF test covers the extractor, both role feeds, cross-company isolation and read prohibition; complete backend suite result is recorded with the commit. Phase 6 remains partial for OCR, external registries and visual alteration analysis, all explicitly UNKNOWN when unsupported.
+
+## Internal notification and new-event audit acceptance
+
+Phase 14 is complete for the requested in-app prototype: company and officer feeds cover recorded dossier events plus request, document, historical and urgency signals; actors may acknowledge only durable recorded items. A background job, guaranteed delivery, email and SMS are later integrations, not current claims. Phase 21 is complete for new versioned decisions: transactional audit rows expose who, what, when, why, old/new values, linked evidence and rule/engine versions. Legacy events cannot gain unavailable historical details retroactively, and SQLite is not tamper-proof legal evidence. These limits remain visible in the product and API.
