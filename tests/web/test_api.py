@@ -139,3 +139,16 @@ def test_notification_feed_is_role_scoped_and_event_backed(client):
     company = client.get(url, headers=headers()).json()
     assert any(item["kind"] == "REQUEST_PUBLISHED" for item in company["items"])
     assert all(item["status"] == "RECORDED" for item in company["items"])
+
+def test_network_http_routes_enforce_officer_scope(client):
+    assert client.get("/api/network", headers=headers()).status_code == 403
+    all_cases = client.get("/api/network", headers=headers("OFFICER"))
+    assert all_cases.status_code == 200, all_cases.text
+    graph = all_cases.json()
+    assert graph["scope"] == "ALL" and graph["nodes"] and graph["edges"]
+    assert "local_path" not in all_cases.text
+    case = client.get(f"/api/network/case/{CASE}", headers=headers("OFFICER"))
+    assert case.status_code == 200 and case.json()["scope_id"] == CASE
+    company = client.get("/api/network/company/DEMO-BAT", headers=headers("OFFICER"))
+    assert company.status_code == 200 and company.json()["scope"] == "COMPANY"
+    assert client.get("/api/network/case/CASE-NOT-ASSIGNED", headers=headers("OFFICER")).status_code == 403

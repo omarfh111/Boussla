@@ -438,6 +438,7 @@ function AppInner() {
     query.removeQueries({ queryKey: ["case"] });
     query.removeQueries({ queryKey: ["history"] });
     query.removeQueries({ queryKey: ["notifications"] });
+    query.removeQueries({ queryKey: ["network"] });
     query.removeQueries({ queryKey: ["queue"] });
     query.removeQueries({ queryKey: ["admin"] });
   };
@@ -457,6 +458,7 @@ function AppInner() {
       await query.invalidateQueries({ queryKey: ["queue"] });
       await query.invalidateQueries({ queryKey: ["history"] });
       await query.invalidateQueries({ queryKey: ["notifications"] });
+      await query.invalidateQueries({ queryKey: ["network"] });
       return value;
     } catch (error) {
       if (error instanceof ApiError && error.code === "STALE_REVISION") {
@@ -626,46 +628,100 @@ function AppInner() {
 }
 
 function NetworkOverview({ c }: { c: OfficerCaseView }) {
+  const graph = useQuery({
+    queryKey: ["network", "OFFICER"],
+    queryFn: () => api.network(),
+  });
+  const nodes = new Map(
+    graph.data?.nodes.map((node) => [node.node_id, node]) ?? [],
+  );
+  const companyLinks =
+    graph.data?.edges.filter((edge) => edge.kind === "SELLS_TO") ?? [];
   return (
     <>
       <SectionHead
         label="RELATIONS DOCUMENTÉES"
         title="Réseau"
-        detail="Relations du dossier courant, fondées sur les transactions enregistrées."
+        detail="Relations issues des dossiers assignés à l’agent, avec leurs sources."
       />
-      <Panel title="Acheteur · vendeur · transaction">
-        {c.transactions.length ? (
-          c.transactions.map((transaction) => {
-            const match = c.invoice_comparisons.find(
-              (entry) => entry.transaction_id === transaction.transaction_id,
-            );
-            return (
-              <article className="document" key={transaction.transaction_id}>
-                <strong>
-                  {c.company_display_name} ↔{" "}
-                  {transaction.counterparty_display_name ||
-                    transaction.counterparty_company_id ||
-                    "Contrepartie inconnue"}
-                </strong>
-                <p>
-                  {transaction.transaction_id} ·{" "}
-                  {transaction.invoice_number || "Facture non identifiée"}
-                </p>
-                <small>
-                  {match?.reconciliation_status || "Rapprochement indisponible"}{" "}
-                  · {match?.payment_ids?.length ?? 0} paiement(s) ·{" "}
-                  {match?.delivery_ids?.length ?? 0} livraison(s)
-                </small>
-              </article>
-            );
-          })
-        ) : (
-          <p>Aucune transaction enregistrée pour ce dossier.</p>
-        )}
-      </Panel>
+      {graph.isLoading ? (
+        <Skeleton />
+      ) : graph.isError ? (
+        <p role="alert">Réseau indisponible.</p>
+      ) : (
+        <>
+          <div className="metric-grid four">
+            <div className="metric">
+              <span>Entreprises</span>
+              <strong>
+                {graph.data?.nodes.filter((node) => node.kind === "COMPANY")
+                  .length ?? 0}
+              </strong>
+            </div>
+            <div className="metric">
+              <span>Factures observées</span>
+              <strong>
+                {graph.data?.nodes.filter((node) => node.kind === "INVOICE")
+                  .length ?? 0}
+              </strong>
+            </div>
+            <div className="metric">
+              <span>Paiements enregistrés</span>
+              <strong>
+                {graph.data?.nodes.filter((node) => node.kind === "PAYMENT")
+                  .length ?? 0}
+              </strong>
+            </div>
+            <div className="metric">
+              <span>Relations sourcées</span>
+              <strong>{graph.data?.edges.length ?? 0}</strong>
+            </div>
+          </div>
+          <Panel
+            title="Relations entre entreprises"
+            eyebrow="ACHETEUR · VENDEUR"
+          >
+            {companyLinks.length ? (
+              companyLinks.map((edge) => (
+                <article className="document" key={edge.edge_id}>
+                  <strong>
+                    {nodes.get(edge.source)?.label ?? edge.source} →{" "}
+                    {nodes.get(edge.target)?.label ?? edge.target}
+                  </strong>
+                  <p>
+                    Dossier {edge.case_id} · {edge.source_ids.length}{" "}
+                    transaction(s) enregistrée(s)
+                  </p>
+                  <small>
+                    Sources : {edge.source_ids.join(", ")} ·{" "}
+                    {edge.provenance_status}
+                  </small>
+                </article>
+              ))
+            ) : (
+              <p>Aucune relation acheteur-vendeur établie dans ce périmètre.</p>
+            )}
+            <p className="footnote">{graph.data?.note_fr}</p>
+          </Panel>
+          <details className="dossier-secondary">
+            <summary>Explorer les nœuds du dossier {c.case_id}</summary>
+            {graph.data?.nodes
+              .filter((node) => node.case_ids.includes(c.case_id))
+              .map((node) => (
+                <article className="document" key={node.node_id}>
+                  <strong>
+                    {node.kind} · {node.label}
+                  </strong>
+                  <small>{node.node_id}</small>
+                </article>
+              ))}
+          </details>
+        </>
+      )}
     </>
   );
 }
+
 function ActionNotifications({ c }: { c: OfficerCaseView }) {
   return (
     <>

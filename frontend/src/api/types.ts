@@ -610,6 +610,29 @@ export interface RevisionResult {
   score_after: ScoreSnapshot | null;
   replayed: boolean;
 }
+export interface NetworkView {
+  scope: "ALL" | "COMPANY" | "CASE";
+  scope_id: string | null;
+  calculated_at: string;
+  rule_version: string;
+  note_fr: string;
+  nodes: {
+    node_id: string;
+    kind: string;
+    label: string;
+    case_ids: string[];
+    attributes: Record<string, string>;
+  }[];
+  edges: {
+    edge_id: string;
+    source: string;
+    target: string;
+    kind: string;
+    case_id: string;
+    source_ids: string[];
+    provenance_status: string;
+  }[];
+}
 export interface NotificationFeedView {
   case_id: string;
   audience: "COMPANY" | "OFFICER";

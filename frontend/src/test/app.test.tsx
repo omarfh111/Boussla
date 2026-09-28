@@ -143,42 +143,52 @@ function mockApi(
                 ].map((k) => [k, role === "OPERATOR"]),
               ),
             }
-          : path.includes("/notifications")
-            ? { case_id: shared.case_id, audience: role, items: [] }
-            : path.includes("/history") && historyView
-              ? historyView
-              : path.includes("/officer/queue")
-                ? {
-                    items: [
-                      {
-                        case_id: shared.case_id,
-                        company_display_name: shared.company_display_name,
-                        case_version: 1,
-                        review_index: 40,
-                        evidence_coverage: "75.00",
-                        active_finding_count: 1,
-                        clarification_status: "NOT_REQUESTED",
-                        scope_note: "Documentaire",
-                        company_id: "DEMO-BAT",
-                        coverage_complete: false,
-                        triage_priority: 50,
-                        triage_reason_codes: [
-                          "REVIEW_FINDING_PRESENT",
-                          "CLARIFICATION_PENDING",
-                        ],
-                        sector: "Construction",
-                        synthetic_identifier: "DEMO-MF",
-                        last_activity_at: "2026-09-07",
-                        history_signal_codes: [],
-                        history_anomaly: null,
-                      },
-                    ],
-                    next_cursor: null,
-                    mode: "LIVE",
-                  }
-                : role === "COMPANY"
-                  ? companyView
-                  : officerView;
+          : path.endsWith("/network")
+            ? {
+                scope: "ALL",
+                scope_id: null,
+                nodes: [],
+                edges: [],
+                calculated_at: "2026-09-27T00:00:00Z",
+                rule_version: "case-network-1",
+                note_fr: "Relations observées.",
+              }
+            : path.includes("/notifications")
+              ? { case_id: shared.case_id, audience: role, items: [] }
+              : path.includes("/history") && historyView
+                ? historyView
+                : path.includes("/officer/queue")
+                  ? {
+                      items: [
+                        {
+                          case_id: shared.case_id,
+                          company_display_name: shared.company_display_name,
+                          case_version: 1,
+                          review_index: 40,
+                          evidence_coverage: "75.00",
+                          active_finding_count: 1,
+                          clarification_status: "NOT_REQUESTED",
+                          scope_note: "Documentaire",
+                          company_id: "DEMO-BAT",
+                          coverage_complete: false,
+                          triage_priority: 50,
+                          triage_reason_codes: [
+                            "REVIEW_FINDING_PRESENT",
+                            "CLARIFICATION_PENDING",
+                          ],
+                          sector: "Construction",
+                          synthetic_identifier: "DEMO-MF",
+                          last_activity_at: "2026-09-07",
+                          history_signal_codes: [],
+                          history_anomaly: null,
+                        },
+                      ],
+                      next_cursor: null,
+                      mode: "LIVE",
+                    }
+                  : role === "COMPANY"
+                    ? companyView
+                    : officerView;
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { "Content-Type": "application/json" },

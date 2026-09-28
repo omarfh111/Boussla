@@ -55,6 +55,7 @@ from boussla.operational_confidence import calculate_operational_confidence, con
 from boussla.monthly_context import build_monthly_context
 from boussla.confidence_history import confidence_delta
 from boussla.impact import simulate_resolution
+from boussla.network import NetworkView, build_network
 
 ALL_FAMILIES = frozenset(FindingFamily)
 AUTO_ACTOR_ID = "SYSTEM-AUTO-CLARIFICATION"
@@ -1063,6 +1064,31 @@ class BousslaAppService(_DemoAdministration):
                 changes.append(change)
         return OfficerHistoryView(case_id=case_id, revisions=revisions, events=events,
                                   operational_confidence_changes=tuple(changes), mode=Mode.LIVE)
+
+    def get_network(self, actor: Actor, *, company_id: str | None = None,
+                    case_id: str | None = None) -> NetworkView:
+        trusted = authorize(self.registry, actor, "get_network")
+        available = {meta["case_id"]: meta for meta in self.store.list_cases()
+                     if meta["case_id"] in trusted.assigned_case_ids}
+        if case_id is not None and case_id not in available:
+            raise BousslaError(ErrorCode.FORBIDDEN, "Dossier non assigné à cet agent")
+        selected = []
+        for current_id, meta in sorted(available.items()):
+            if case_id is not None and current_id != case_id:
+                continue
+            facts = self._facts(current_id, meta["version"])
+            if company_id is not None and not (
+                meta["company_id"] == company_id or
+                any(company_id in (tx.buyer_company_id, tx.seller_company_id) for tx in facts["transaction"]) or
+                any(company_id in (obs.issuer_company_id, obs.buyer_company_id)
+                    for obs in facts["invoice_observation"])):
+                continue
+            selected.append((current_id, facts))
+        if company_id is not None and not selected:
+            raise BousslaError(ErrorCode.NOT_FOUND, "Entreprise absente du réseau autorisé")
+        return build_network(selected, names={key: value.display_name for key, value in self.enterprises.items()},
+                             scope="CASE" if case_id is not None else "COMPANY" if company_id is not None else "ALL",
+                             scope_id=case_id or company_id)
 
     def get_notifications(self, actor: Actor, case_id: str) -> dict:
         """Internal feed projected from durable events; RECORDED is not an unread claim."""

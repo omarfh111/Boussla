@@ -7,6 +7,7 @@ import type {
   QueuePage,
   HistoryView,
   NotificationFeedView,
+  NetworkView,
   ClarificationDraft,
   RequestView,
   RevisionResult,
@@ -79,6 +80,14 @@ export const api = {
     request<NotificationFeedView>(
       r,
       `/cases/${encodeURIComponent(id)}/notifications`,
+    ),
+  network: () => request<NetworkView>("OFFICER", "/network"),
+  networkCase: (id: string) =>
+    request<NetworkView>("OFFICER", `/network/case/${encodeURIComponent(id)}`),
+  networkCompany: (id: string) =>
+    request<NetworkView>(
+      "OFFICER",
+      `/network/company/${encodeURIComponent(id)}`,
     ),
   post: <T>(
     r: Role,

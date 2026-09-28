@@ -134,6 +134,18 @@ async def history(request: Request):
     return result(service(request).get_history(actor(request), request.path_params["case_id"]))
 
 
+async def network(request: Request):
+    return result(service(request).get_network(actor(request)))
+
+
+async def network_company(request: Request):
+    return result(service(request).get_network(actor(request), company_id=request.path_params["company_id"]))
+
+
+async def network_case(request: Request):
+    return result(service(request).get_network(actor(request), case_id=request.path_params["case_id"]))
+
+
 async def notifications(request: Request):
     return result(service(request).get_notifications(actor(request), request.path_params["case_id"]))
 
@@ -264,6 +276,9 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}", case), Route("/api/officer/queue", queue),
         Route("/api/cases/{case_id}/history", history),
         Route("/api/cases/{case_id}/notifications", notifications),
+        Route("/api/network", network),
+        Route("/api/network/company/{company_id}", network_company),
+        Route("/api/network/case/{case_id}", network_case),
         Route("/api/cases/{case_id}/documents", upload, methods=["POST"]),
         Route("/api/cases/{case_id}/context", context, methods=["POST"]),
         Route("/api/cases/{case_id}/transcriptions/{proposal_id}/confirm", confirm_transcription, methods=["POST"]),

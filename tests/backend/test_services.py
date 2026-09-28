@@ -374,3 +374,28 @@ def test_resolution_impact_is_officer_only_and_read_only(svc, actors):
     assert all(step.hypothetical for step in view.impact_if_resolved)
     assert "impact_if_resolved" not in svc.get_case(company, CASE).model_dump()
     assert ver(svc) == before
+
+def test_network_has_source_backed_nodes_and_scoped_views(svc, actors):
+    company, officer, other = actors
+    graph = svc.get_network(officer)
+    kinds = {node.kind for node in graph.nodes}
+    assert {"COMPANY", "INVOICE", "PAYMENT", "DOCUMENT", "PROJECT", "CASE", "TRANSACTION"} <= kinds
+    assert all(edge.source_ids and edge.source in {node.node_id for node in graph.nodes}
+               and edge.target in {node.node_id for node in graph.nodes} for edge in graph.edges)
+    assert {"SELLS_TO", "BUYS_FROM", "ISSUED", "RECEIVED", "PAID", "JUSTIFIED_BY", "BELONGS_TO_PROJECT"} <= {edge.kind for edge in graph.edges}
+    assert "local_path" not in graph.model_dump_json()
+    assert svc.get_network(officer, case_id=CASE).scope == "CASE"
+    assert svc.get_network(officer, company_id="DEMO-BAT").scope == "COMPANY"
+    assert code(lambda: svc.get_network(company)) is ErrorCode.FORBIDDEN
+    assert code(lambda: svc.get_network(other)) is ErrorCode.FORBIDDEN
+    assert code(lambda: svc.get_network(officer, case_id="CASE-NOT-ASSIGNED")) is ErrorCode.FORBIDDEN
+    assert code(lambda: svc.get_network(officer, company_id="UNKNOWN-COMPANY")) is ErrorCode.NOT_FOUND
+
+
+def test_network_does_not_infer_payment_link_without_allocation(svc, actors):
+    from boussla.network import build_network
+    facts = svc._facts(CASE, ver(svc))
+    facts["payment_allocation"] = []
+    graph = build_network(((CASE, facts),), names={})
+    assert any(node.kind == "PAYMENT" for node in graph.nodes)
+    assert not any(edge.kind == "PAID" for edge in graph.edges)
