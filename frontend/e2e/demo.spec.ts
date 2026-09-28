@@ -94,9 +94,16 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   // Company first sends an unrelated document; it must not reduce the cause.
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await page.getByRole("button", { name: "Actions requises" }).click();
-  await page
+  const answeredRequest = page
     .getByRole("button", { name: "Répondre à la demande" })
     .first()
+    .locator("xpath=ancestor::section[contains(@class, 'panel')]");
+  const answeredRequestTitle = await answeredRequest
+    .locator(".eyebrow")
+    .textContent();
+  expect(answeredRequestTitle).toContain("REQ-");
+  await answeredRequest
+    .getByRole("button", { name: "Répondre à la demande" })
     .click();
   await page.locator(".attachment-row input").setInputFiles(unrelatedPdf);
   await page.getByRole("button", { name: "Déposer cette pièce" }).click();
@@ -142,10 +149,15 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await page.getByRole("button", { name: "Confirmer le dépôt" }).click();
   await expect(page.getByText("Pièce déposée dans le dossier.")).toBeVisible();
   await page.getByRole("button", { name: "Actions requises" }).click();
-  await page
+  const correctedRequest = page
+    .locator(".panel")
+    .filter({ hasText: answeredRequestTitle! });
+  await correctedRequest
     .getByLabel("Choisir ou remplacer la pièce de cette réponse")
     .selectOption({ label: "06_second_project_allocation.pdf" });
-  await page.getByRole("button", { name: "Utiliser cette pièce" }).click();
+  await correctedRequest
+    .getByRole("button", { name: "Utiliser cette pièce" })
+    .click();
   await expect(
     page.getByText(
       "Pièce choisie pour la réponse. Analyse du dossier actualisée.",
