@@ -139,6 +139,9 @@ def test_record_change_invalidates_old_draft(svc, actors):
     co, off, _ = actors
     draft = svc.prepare_clarification(off, CASE, ver(svc))
     svc.submit_context(co, CASE, {"purpose_category": "CONSTRUCTION_PROJECT", "purpose_text": "maj"}, ver(svc), "c")
+    snapshot = svc.store.revisions(CASE)[-1].score_snapshot
+    assert snapshot is not None and snapshot.case_version == ver(svc)
+    assert snapshot.calculated_at is not None and snapshot.rules_version and snapshot.engine_version
     assert code(lambda: svc.publish_clarification(off, CASE, draft.draft_id, ver(svc), "p")) is ErrorCode.STALE_REVISION
 
 
@@ -166,6 +169,9 @@ def test_request_is_local_demo_only(svc, actors):
     d = svc.prepare_clarification(off, CASE, ver(svc))
     req = svc.publish_clarification(off, CASE, d.draft_id, ver(svc), "p")
     assert req.request.target_kind == "DEMO_SERVICE_TARGET" and req.request.status is RequestStatus.PUBLISHED_IN_DEMO
+    snapshot = svc.store.revisions(CASE)[-1].score_snapshot
+    assert snapshot is not None and snapshot.case_version == ver(svc)
+    assert snapshot.calculated_at is not None and snapshot.rules_version and snapshot.engine_version
     assert "aucun envoi externe" in req.text_fr and "pas un délai légal" in req.text_fr
 
 
@@ -175,6 +181,9 @@ def test_company_analysis_questions_without_internal_data(svc, actors):
     assert an.findings == () and an.score is None
     after = svc.answer_questions(actors[0], CASE, an.analysis_id, {an.questions[0].question_id: "réponse"}, ver(svc), "ans")
     assert an.questions[0].question_id not in {q.question_id for q in after.questions}
+    snapshot = svc.store.revisions(CASE)[-1].score_snapshot
+    assert snapshot is not None and snapshot.case_version == ver(svc)
+    assert snapshot.calculated_at is not None and snapshot.rules_version and snapshot.engine_version
 
 
 def test_upload_validation(svc, actors):

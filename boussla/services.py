@@ -1449,7 +1449,11 @@ class BousslaAppService(_DemoAdministration):
                     raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE, "Transaction inconnue")
                 tx.put("context_claim", claim.claim_id, claim)
                 auto = self._auto_clarify(tx, actor, case_id, meta["company_id"], facts_after, context_codes)
-                v = tx.commit_version("Contexte déclaré par l'entreprise (affirmation attribuée)" + self._auto_reason(auto))
+                if auto is not None:
+                    facts_after["request"].append(auto)
+                snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+                v = tx.commit_version("Contexte déclaré par l'entreprise (affirmation attribuée)"
+                                      + self._auto_reason(auto), score=snapshot)
                 tx.event("CONTEXT", actor.actor_id, "Déclaration de contexte enregistrée (non vérifiée)", (claim.claim_id,))
                 self._auto_event(tx, auto)
                 tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="submit_context", case_id=case_id,
@@ -1521,6 +1525,7 @@ class BousslaAppService(_DemoAdministration):
             if tx.find_receipt("answer_questions", request_id, ihash) is None:
                 tx.require_version(expected_version)
                 ids = []
+                new_claims = []
                 for qid, text in sorted(answers.items()):
                     claim = ContextClaim(
                         claim_id=f"CLAIM-{stable_hash([ihash, qid])[:8].upper()}", company_id=meta["company_id"],
@@ -1530,13 +1535,19 @@ class BousslaAppService(_DemoAdministration):
                         submitted_at=utcnow())
                     tx.put("context_claim", claim.claim_id, claim)
                     ids.append(claim.claim_id)
+                    new_claims.append(claim)
                 superseding = self._superseding_context_claim(actor, meta["company_id"], case_id, answers, ihash)
                 from boussla.questionnaire import validate_answers
                 validate_answers([QUESTIONS[q] for q in answers], answers)
                 if superseding is not None:
                     tx.put("context_claim", superseding.claim_id, superseding)
                     ids.append(superseding.claim_id)
-                v = tx.commit_version("Réponses de l'entreprise (affirmations attribuées)")
+                    new_claims.append(superseding)
+                facts_after = self._facts(case_id, expected_version)
+                facts_after["context_claim"] = [*self._facts(case_id, expected_version)["context_claim"],
+                                               *new_claims]
+                snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+                v = tx.commit_version("Réponses de l'entreprise (affirmations attribuées)", score=snapshot)
                 tx.event("ANSWERS", actor.actor_id, "Réponses enregistrées comme affirmations de l'entreprise", tuple(ids))
                 tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="answer_questions", case_id=case_id,
                                               actor_id=actor.actor_id, input_hash=ihash, resulting_version=v,
@@ -1722,7 +1733,10 @@ class BousslaAppService(_DemoAdministration):
                 available_in_inbox_at=now)
             view = RequestView(request=req, questions=draft.questions, text_fr=draft.text_fr, mode=Mode.TEMPLATE)
             tx.put("request", req.request_id, view)
-            v = tx.commit_version("Demande de précision publiée dans la boîte de démonstration")
+            facts_after = self._facts(case_id, expected_version)
+            facts_after["request"].append(view)
+            snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
+            v = tx.commit_version("Demande de précision publiée dans la boîte de démonstration", score=snapshot)
             tx.event("REQUEST_PUBLISHED", actor.actor_id, "Demande publiée localement (aucun e-mail/SMS/portail)",
                      (req.request_id,))
             tx.save_receipt(ActionReceipt(idempotency_key=request_id, action="publish_clarification", case_id=case_id,
