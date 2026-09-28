@@ -18,7 +18,14 @@ test("investigation assistant answers from cited case and network facts only for
   await expect(assistant.locator(".investigation-answer")).toContainText(
     "Urgence de traitement",
   );
-  await expect(assistant.locator(".investigation-answer")).toContainText("+40");
+  const current = await (
+    await page.request.get("/api/cases/CASE-BRICKS-001", {
+      headers: { "X-Boussla-Demo-Role": "OFFICER" },
+    })
+  ).json();
+  await expect(assistant.locator(".investigation-answer")).toContainText(
+    `indice documentaire distinct : ${current.score.review_index}`,
+  );
   await expect(assistant.locator(".investigation-answer")).toContainText(
     "Sources citées",
   );

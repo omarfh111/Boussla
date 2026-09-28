@@ -5,6 +5,7 @@ const officer = { "X-Boussla-Demo-Role": "OFFICER" };
 
 async function openEnterprise(page: Page, name: string) {
   await page.getByRole("button", { name: `Ouvrir ${name}` }).click();
+  await page.getByRole("button", { name: "Historique", exact: true }).click();
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
 }
 
@@ -60,7 +61,7 @@ test.describe("release journeys", () => {
     const comparison = page.locator(".comparison-card");
     await expect(
       comparison
-        .getByText("Différences observées entre les deux observations")
+        .getByText("Écart détecté entre les observations")
         .first(),
     ).toBeVisible();
     await expect(
@@ -73,6 +74,10 @@ test.describe("release journeys", () => {
     );
 
     await page.getByRole("button", { name: "Dossiers", exact: true }).click();
+    await page
+      .locator("summary")
+      .filter({ hasText: "Enquête détaillée et simulations" })
+      .click();
     const brief = page.locator(".investigator-panel");
     await expect(
       brief.getByRole("heading", { name: "Analyse assistée BOUSSLA" }),

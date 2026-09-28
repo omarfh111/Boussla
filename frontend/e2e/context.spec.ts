@@ -93,6 +93,10 @@ test("context mismatch -> automatic questionnaire -> response -> investigator re
 
   // Officer: same review index; the assisted analysis reflects the new version.
   expect(await officerPriority(page)).toBe(before);
+  await page
+    .locator("summary")
+    .filter({ hasText: "Enquête détaillée et simulations" })
+    .click();
   const brief = page.locator(".investigator-panel");
   await expect(
     brief.getByText("Changements depuis la version précédente"),
