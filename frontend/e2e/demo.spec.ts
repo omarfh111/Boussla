@@ -12,6 +12,14 @@ const pdf = resolve(
   "documents",
   "06_second_project_allocation.pdf",
 );
+const unrelatedPdf = resolve(
+  "..",
+  "docs",
+  "build_lock",
+  "fixtures",
+  "documents",
+  "08_untrusted_instruction.pdf",
+);
 const officerHeaders = { "X-Boussla-Demo-Role": "OFFICER" };
 
 test.beforeEach(async ({ page }) => skipSplash(page));
@@ -83,14 +91,14 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   ).toBeVisible();
   await capture(page, "08_rag_references.png");
 
-  // Company responds to the automatic request with a document and a reallocation.
+  // Company first sends an unrelated document; it must not reduce the cause.
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await page.getByRole("button", { name: "Actions requises" }).click();
   await page
     .getByRole("button", { name: "Répondre à la demande" })
     .first()
     .click();
-  await page.locator(".attachment-row input").setInputFiles(pdf);
+  await page.locator(".attachment-row input").setInputFiles(unrelatedPdf);
   await page.getByRole("button", { name: "Déposer cette pièce" }).click();
   await expect(
     page.getByText(
@@ -114,6 +122,36 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
     page.getByText("Réponse transmise à la revue de l’agent."),
   ).toBeVisible();
 
+  await page.getByRole("button", { name: "Agent", exact: true }).click();
+  await page.getByRole("button", { name: "Dossiers", exact: true }).click();
+  await expect(page.locator(".priority-ring strong")).toHaveText("30");
+  await page
+    .getByLabel("Motif de la décision sur la pièce")
+    .fill("La pièce reçue est hors sujet pour cette répartition");
+  await expect(
+    page.getByRole("button", { name: "Accepter dans ce dossier" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText(/La pièce liée ne justifie pas encore cette répartition/),
+  ).toBeVisible();
+
+  // A corrected upload replaces the proposal's source while preserving the earlier link.
+  await page.getByRole("button", { name: "Entreprise", exact: true }).click();
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
+  await page.getByLabel("Choisir un PDF").setInputFiles(pdf);
+  await page.getByRole("button", { name: "Confirmer le dépôt" }).click();
+  await expect(page.getByText("Pièce déposée dans le dossier.")).toBeVisible();
+  await page.getByRole("button", { name: "Actions requises" }).click();
+  await page
+    .getByLabel("Choisir ou remplacer la pièce de cette réponse")
+    .selectOption({ label: "06_second_project_allocation.pdf" });
+  await page.getByRole("button", { name: "Utiliser cette pièce" }).click();
+  await expect(
+    page.getByText(
+      "Pièce choisie pour la réponse. Analyse du dossier actualisée.",
+    ),
+  ).toBeVisible();
+
   // Human decision: the officer accepts document-backed evidence (double click = one revision).
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page
@@ -133,7 +171,11 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   // Company confirms source-backed fields; the service records the provisional 10 stage.
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await page.getByRole("button", { name: "Documents", exact: true }).click();
-  await page.getByRole("button", { name: "Confirmer les champs" }).click();
+  await page
+    .locator(".panel")
+    .filter({ hasText: "06_second_project_allocation.pdf" })
+    .getByRole("button", { name: "Confirmer les champs" })
+    .click();
   await expect(
     page.getByText(
       "Champs vérifiés. Analyse mise à jour ; validation de l’agent requise.",
