@@ -1118,7 +1118,7 @@ it("keeps five primary officer spaces and four company spaces role scoped", asyn
     expect(screen.getByRole("button", { name })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Réseau" }));
   expect(
-    await screen.findByText("Réseau", { selector: "h1" }),
+    await screen.findByText("Réseau de preuves", { selector: "h1" }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
   expect(
