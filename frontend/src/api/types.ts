@@ -480,6 +480,20 @@ export interface BehaviorProfile {
   observed_period: string;
   baseline_periods: string[];
   rule_version: string;
+  signals?: {
+    code: "RESPONSE_DELAY_DEVIATION" | "MONTHLY_AMOUNT_DEVIATION";
+    metric_code: string;
+    currency: string | null;
+    observed_value: string;
+    baseline_value: string;
+    ratio: string;
+    data_quality: "AVAILABLE" | "LIMITED_DATA";
+    baseline_months: number;
+    current_sample_size: number;
+    source_ids: string[];
+    explanation_fr: string;
+    rule_version: string;
+  }[];
   metrics: {
     code: string;
     label_fr: string;

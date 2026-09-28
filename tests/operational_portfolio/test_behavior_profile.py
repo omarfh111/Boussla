@@ -34,7 +34,7 @@ def test_monthly_baseline_uses_same_currency_and_sourced_values():
     txs = {t.transaction_id for t in data["transaction"] if t.economic_period == "2025-12"}
     expected = sum(o.gross_millimes for o in data["invoice_observation"] if o.transaction_id in txs and o.perspective is Perspective.BUYER_RECEIVED)
     assert Decimal(amount.current_value) == expected
-    assert profile.observed_period == "2025-12" and profile.rule_version == "self-baseline-2"
+    assert profile.observed_period == "2025-12" and profile.rule_version == "self-baseline-3"
 
 def test_ambiguous_buyer_copies_invalidate_period_without_choosing_first():
     data = facts()
@@ -105,3 +105,17 @@ def test_anomaly_count_uses_evaluated_findings_not_missing_records():
     assert unknown.current_value is None
     counted = metric(build_behavior_profile(data,coverage(),AS_OF,findings=[finding]),"ANOMALY_COUNT")
     assert counted.current_value == "1" and "CAUSE" in counted.source_ids
+
+
+def test_large_monthly_amount_deviation_is_scoped_and_flags_small_current_sample():
+    data = facts()
+    current_tx = {t.transaction_id for t in data["transaction"] if t.economic_period == "2025-12"}
+    data["invoice_observation"] = [o.model_copy(update={"gross_millimes": o.gross_millimes * 5})
+        if o.transaction_id in current_tx and o.perspective is Perspective.BUYER_RECEIVED else o
+        for o in data["invoice_observation"]]
+    profile = build_behavior_profile(data, coverage(), AS_OF)
+    signal = next(s for s in profile.signals if s.code == "MONTHLY_AMOUNT_DEVIATION" and s.currency == "TND")
+    assert Decimal(signal.ratio) >= 2
+    assert signal.baseline_months >= 3 and signal.current_sample_size >= 1
+    assert signal.source_ids and "sans effet sur le score documentaire" in signal.explanation_fr
+    assert build_behavior_profile(data, {}, AS_OF).signals == ()

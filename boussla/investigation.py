@@ -66,6 +66,12 @@ def answer_investigation(question: str, view: OfficerCaseView, history: OfficerH
         priority()
     elif any(word in query for word in ("histori", "habit", "délai", "evolution", "évolution")):
         profile = view.behavior_profile
+        for signal in (profile.signals if profile else ())[:2]:
+            lines.append(signal.explanation_fr)
+            cite(f"{view.case_id}:SIGNAL:{signal.code}:{signal.currency or 'ALL'}", "HISTORY_SIGNAL",
+                 f"Signal descriptif {signal.metric_code} · {signal.rule_version}")
+            for source in signal.source_ids[:3]:
+                cite(source, "HISTORY", f"Source du signal {signal.code}")
         for metric in (profile.metrics if profile else ()):
             if metric.status != "AVAILABLE":
                 continue

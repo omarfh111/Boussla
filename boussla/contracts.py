@@ -1026,8 +1026,24 @@ class BehaviorMetric(Contract):
     currency: str | None = None
     baseline_periods: tuple[str, ...] = ()
     sample_size: int = Field(default=0, ge=0)
+    current_sample_size: int = Field(default=0, ge=0)
     source_ids: tuple[str, ...] = ()
     explanation_fr: str
+
+
+class BehaviorSignal(Contract):
+    code: Literal["RESPONSE_DELAY_DEVIATION", "MONTHLY_AMOUNT_DEVIATION"]
+    metric_code: str
+    currency: str | None = None
+    observed_value: DecimalStr
+    baseline_value: DecimalStr
+    ratio: DecimalStr
+    data_quality: Literal["AVAILABLE", "LIMITED_DATA"]
+    baseline_months: int = Field(ge=3)
+    current_sample_size: int = Field(ge=1)
+    source_ids: tuple[str, ...]
+    explanation_fr: str
+    rule_version: str = "self-baseline-3"
 
 
 class BehaviorProfile(Contract):
@@ -1036,6 +1052,7 @@ class BehaviorProfile(Contract):
     baseline_periods: tuple[str, ...]
     rule_version: str
     metrics: tuple[BehaviorMetric, ...]
+    signals: tuple[BehaviorSignal, ...] = ()
 
 
 class RecommendedAction(Contract):

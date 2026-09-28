@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from boussla.contracts import BehaviorMetric, BehaviorProfile, Perspective
+from boussla.contracts import BehaviorMetric, BehaviorProfile, BehaviorSignal, Perspective
 
-RULE_VERSION = "self-baseline-2"
+RULE_VERSION = "self-baseline-3"
 
 
 def month(index):
@@ -49,7 +49,7 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
     baseline = tuple(p for p in prior if p in covered)
     metrics = []
     currencies = sorted({o.currency for group in rows.values() for o in group})
-    def add(code, label, values, unit, currency=None, *, note="", sources=()):
+    def add(code, label, values, unit, currency=None, *, note="", sources=(), current_samples=None):
         value = values.get(current) if current in covered else None
         history = [values[p] for p in baseline if values.get(p) is not None]
         base = mean(history) if len(history) >= 3 else None
@@ -59,7 +59,8 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
         metrics.append(BehaviorMetric(code=code, label_fr=label, current_value=None if value is None else str(value),
             baseline_value=None if base is None else str(base), change_percent=None if change is None else str(change),
             status="AVAILABLE" if value is not None and base is not None else "INSUFFICIENT_DATA",
-            unit=unit, currency=currency, baseline_periods=tuple(p for p in baseline if values.get(p) is not None), sample_size=len(history), source_ids=refs,
+            unit=unit, currency=currency, baseline_periods=tuple(p for p in baseline if values.get(p) is not None), sample_size=len(history),
+            current_sample_size=(current_samples.get(current, 0) if current_samples else 0), source_ids=refs,
             explanation_fr=note or "Période observée comparée à la moyenne des mois couverts précédents (au moins trois)."))
     invoice_refs = tuple(o.document_id for group in rows.values() for o in group)
     add("INVOICE_VOLUME", "Factures par mois", {p: Decimal(len(v)) for p, v in rows.items()}, "factures", sources=invoice_refs)
@@ -69,7 +70,9 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
     add("DEPOSIT_DELAY", "Délai moyen de dépôt", delay, "jours", sources=invoice_refs)
     for currency in currencies:
         amounts = {p: [Decimal(o.gross_millimes) for o in v if o.currency == currency] for p, v in rows.items()}
-        add("MONTHLY_AMOUNT", "Montant mensuel facturé", {p: sum(v, Decimal(0)) for p, v in amounts.items()}, "millimes", currency, sources=invoice_refs)
+        add("MONTHLY_AMOUNT", "Montant mensuel facturé", {p: sum(v, Decimal(0)) for p, v in amounts.items()}, "millimes", currency,
+            sources=tuple(o.document_id for p in (*baseline, current) for o in rows[p] if o.currency == currency),
+            current_samples={p: len(v) for p, v in amounts.items()})
         add("MEAN_INVOICE_AMOUNT", "Montant moyen des factures", {p: mean(v) for p, v in amounts.items()}, "millimes", currency, sources=invoice_refs)
         dispersion = {p: (mean([(a - mean(v)) ** 2 for a in v]).sqrt() if len(v) >= 2 else None) for p, v in amounts.items()}
         add("AMOUNT_DISPERSION", "Dispersion des montants (écart-type)", dispersion, "millimes", currency, sources=invoice_refs)
@@ -84,7 +87,7 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
         note="Nombre de règlements réglés et affectés observés ; zéro ne démontre pas l’absence de paiement hors des sources disponibles.")
     requests = {v.request.request_id: v.request for v in facts.get("request", ())}
     response_days = {p: [] for p in rows}
-    response_sources = []
+    response_sources = {p: [] for p in rows}
     for response in facts.get("response", ()):
         request = requests.get(response.request_id)
         available = (request.available_in_inbox_at or request.published_at) if request else None
@@ -92,8 +95,10 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
         if available is not None and available <= response.submitted_at <= as_of and period in response_days:
             delta = response.submitted_at - available
             response_days[period].append(Decimal(delta.days) + Decimal(delta.seconds) / 86400)
-            response_sources.extend((request.request_id, response.response_id))
-    add("RESPONSE_DELAY", "Délai moyen de réponse", {p: mean(v) for p, v in response_days.items()}, "jours", sources=response_sources)
+            response_sources[period].extend((request.request_id, response.response_id))
+    add("RESPONSE_DELAY", "Délai moyen de réponse", {p: mean(v) for p, v in response_days.items()}, "jours",
+        sources=tuple(source for p in (*baseline, current) for source in response_sources[p]),
+        current_samples={p: len(v) for p, v in response_days.items()})
     decisions = {p: [] for p in rows}
     for proposal in facts.get("proposal", ()):
         if proposal.decided_at is not None and proposal.decided_at <= as_of and proposal.source_document_id:
@@ -151,5 +156,27 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
         for p, v in anomaly_groups.items()}, "causes",
         sources=tuple(f.finding_id for v in anomaly_groups.values() for f in v),
         note="État des causes évaluées au calcul courant, regroupées par période de transaction ; ce n’est pas une reconstruction de leur état passé.")
+    signals = []
+    for metric in metrics:
+        if metric.code not in ("RESPONSE_DELAY", "MONTHLY_AMOUNT") or metric.status != "AVAILABLE":
+            continue
+        if metric.current_sample_size < 1 or metric.sample_size < 3:
+            continue
+        observed, usual = Decimal(metric.current_value), Decimal(metric.baseline_value)
+        if usual <= 0 or observed < usual * 2:
+            continue
+        ratio = (observed / usual).quantize(Decimal("0.01"))
+        limited = metric.current_sample_size < 3
+        name = "Délai de réponse" if metric.code == "RESPONSE_DELAY" else "Montant mensuel facturé"
+        signals.append(BehaviorSignal(
+            code="RESPONSE_DELAY_DEVIATION" if metric.code == "RESPONSE_DELAY" else "MONTHLY_AMOUNT_DEVIATION",
+            metric_code=metric.code, currency=metric.currency, observed_value=str(observed),
+            baseline_value=str(usual), ratio=str(ratio),
+            data_quality="LIMITED_DATA" if limited else "AVAILABLE", baseline_months=metric.sample_size,
+            current_sample_size=metric.current_sample_size, source_ids=metric.source_ids,
+            explanation_fr=f"{name} observé : {observed} {metric.unit} ; moyenne propre à l’entreprise : "
+                           f"{usual} {metric.unit} sur {metric.sample_size} mois couverts (×{ratio}). "
+                           + (f"Données limitées : {metric.current_sample_size} observation(s) du mois. " if limited else "")
+                           + "Signal de revue descriptif, sans effet sur le score documentaire."))
     return BehaviorProfile(as_of=as_of, observed_period=current, baseline_periods=baseline,
-                           rule_version=RULE_VERSION, metrics=tuple(metrics))
+                           rule_version=RULE_VERSION, metrics=tuple(metrics), signals=tuple(signals))

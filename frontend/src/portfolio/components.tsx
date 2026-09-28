@@ -526,6 +526,34 @@ export function Company360({
               {c.behavior_profile.baseline_periods.length} mois de référence
               couverts · règle {c.behavior_profile.rule_version}
             </p>
+            {!!c.behavior_profile.signals?.length && (
+              <div
+                className="history-comparisons"
+                aria-label="Écarts à examiner"
+              >
+                {c.behavior_profile.signals.map((signal) => (
+                  <article key={`${signal.code}:${signal.currency ?? "all"}`}>
+                    <strong>
+                      {signal.code === "RESPONSE_DELAY_DEVIATION"
+                        ? "Délai de réponse inhabituel"
+                        : "Montant mensuel inhabituel"}
+                    </strong>
+                    <p>{signal.explanation_fr}</p>
+                    <small>
+                      {signal.data_quality === "LIMITED_DATA"
+                        ? "Données limitées"
+                        : "Comparaison disponible"}{" "}
+                      · {signal.current_sample_size} observation(s) actuelles ·{" "}
+                      {signal.baseline_months} mois de référence
+                    </small>
+                    <details>
+                      <summary>Sources du signal</summary>
+                      <small>{signal.source_ids.join(", ")}</small>
+                    </details>
+                  </article>
+                ))}
+              </div>
+            )}
             <div className="history-comparisons">
               {c.behavior_profile.metrics.map((metric) => (
                 <article key={`${metric.code}:${metric.currency ?? "all"}`}>

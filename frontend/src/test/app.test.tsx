@@ -1119,7 +1119,24 @@ it("compares company habit to the current period without treating uncovered mont
         as_of: "2026-09-27T00:00:00Z",
         observed_period: "2026-09",
         baseline_periods: ["2026-06", "2026-07", "2026-08"],
-        rule_version: "self-baseline-2",
+        rule_version: "self-baseline-3",
+        signals: [
+          {
+            code: "MONTHLY_AMOUNT_DEVIATION",
+            metric_code: "MONTHLY_AMOUNT",
+            currency: "TND",
+            observed_value: "800",
+            baseline_value: "300",
+            ratio: "2.67",
+            data_quality: "LIMITED_DATA",
+            baseline_months: 3,
+            current_sample_size: 1,
+            source_ids: ["INV-1"],
+            explanation_fr:
+              "Montant mensuel observé : 800 contre 300 (×2.67). Signal de revue descriptif.",
+            rule_version: "self-baseline-3",
+          },
+        ],
         metrics: [
           {
             code: "INVOICE_VOLUME",
@@ -1168,6 +1185,10 @@ it("compares company habit to the current period without treating uncovered mont
   ).toBeInTheDocument();
   expect(
     screen.getByText("Écart : 166.7 % · 3 mois exploitables"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Montant mensuel inhabituel")).toBeInTheDocument();
+  expect(
+    screen.getByText(/Données limitées · 1 observation/),
   ).toBeInTheDocument();
   expect(screen.getByTitle("2026-08 : couverture inconnue")).toHaveTextContent(
     "—",
