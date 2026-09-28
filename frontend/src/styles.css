@@ -28,14 +28,14 @@ button:disabled {
   opacity: 0.55;
 }
 a {
-  color: #63d7ec;
+  color: var(--accent);
 }
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 2px solid #16c6e3;
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 .eyebrow {
@@ -45,27 +45,27 @@ select:focus-visible {
   letter-spacing: 0.08em;
 }
 .section-head {
-  margin-bottom: 25px;
+  margin-bottom: var(--space-6);
 }
 .section-head h1 {
   font:
-    800 clamp(25px, 3vw, 38px) Manrope,
+    700 clamp(26px, 3vw, 38px)/1.16 Manrope,
     sans-serif;
-  letter-spacing: -0.045em;
-  margin: 8px 0;
+  letter-spacing: -0.035em;
+  margin: var(--space-2) 0;
 }
 .section-head p {
   margin: 0;
-  color: #91a9bb;
+  color: var(--text-secondary);
   font-size: 14px;
+  line-height: 1.55;
 }
 .panel {
-  background: #0e1b2b;
-  border: 1px solid #22374b;
-  border-radius: 15px;
-  padding: 22px;
-  box-shadow: 0 15px 35px #00000013;
   min-width: 0;
+  padding: var(--space-6);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
 }
 .panel-head {
   display: flex;
@@ -99,11 +99,11 @@ select:focus-visible {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .metric {
-  background: #0e1b2b;
-  border: 1px solid #22374b;
-  border-radius: 13px;
-  padding: 20px 22px;
   min-width: 0;
+  padding: var(--space-5) var(--space-6);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 .metric > span,
 .hero-metrics span {
@@ -150,26 +150,27 @@ select:focus-visible {
 .badge {
   display: inline-flex;
   align-items: center;
-  border: 1px solid #35506a;
-  color: #a7bed0;
-  border-radius: 6px;
-  background: #17283a;
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.045em;
-  padding: 5px 8px;
+  padding: 4px 7px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
   white-space: nowrap;
   text-decoration: none;
 }
 .badge.good {
-  border-color: #23675b;
-  color: #5ce1be;
-  background: #123b35;
+  border-color: #356b5b;
+  color: var(--success);
+  background: #17392f;
 }
 .badge.warn {
-  border-color: #80613b;
-  color: #eac583;
-  background: #3a2c20;
+  border-color: #70573c;
+  color: var(--attention);
+  background: #34291d;
 }
 .tags {
   display: flex;
@@ -236,56 +237,83 @@ td:first-child {
 }
 label {
   display: grid;
-  gap: 8px;
-  color: #bed0dc;
+  gap: var(--space-2);
+  color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 input,
 textarea,
 select {
   width: 100%;
-  border: 1px solid #345069;
-  background: #0a1929;
-  color: #eaf6ff;
-  border-radius: 8px;
-  padding: 11px 12px;
-  outline: 0;
+  border: 1px solid var(--border-default);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  min-height: 40px;
 }
 textarea {
   resize: vertical;
 }
+input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+input:disabled,
+textarea:disabled,
+select:disabled {
+  color: var(--text-muted);
+  background: var(--surface-raised);
+}
+
 input::placeholder,
 textarea::placeholder {
-  color: #607a90;
+  color: var(--text-muted);
 }
 .primary,
-.secondary {
+.secondary,
+.ghost {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-weight: 800;
+  gap: var(--space-2);
+  min-height: 38px;
+  padding: 9px 14px;
+  border-radius: var(--radius-md);
   font-size: 12px;
+  font-weight: 700;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
 }
 .primary {
-  border: 1px solid #1787df;
-  color: #fff;
-  background: #126bdb;
-  box-shadow: 0 7px 17px #126bdb25;
+  border: 1px solid #2b8190;
+  color: #f4fbfd;
+  background: #1b6172;
 }
 .primary:hover {
-  background: #2180ed;
+  background: #24778a;
 }
 .secondary {
-  border: 1px solid #3a5870;
-  background: #14293d;
-  color: #d5eaf7;
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  background: var(--surface-elevated);
+}
+.ghost {
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  background: transparent;
+}
+.ghost:hover {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
 }
 .secondary:hover {
-  border-color: #23abc8;
+  border-color: var(--border-emphasis);
 }
 .stack {
   display: grid;
@@ -320,12 +348,13 @@ textarea::placeholder {
 .empty {
   display: grid;
   place-items: center;
-  min-height: 170px;
-  color: #7893a7;
+  min-height: 150px;
+  padding: var(--space-6);
+  color: var(--text-secondary);
   text-align: center;
 }
 .empty svg {
-  color: #3e6980;
+  color: var(--text-muted);
 }
 .dropzone {
   border: 1px dashed #42637b;
@@ -850,18 +879,19 @@ textarea::placeholder {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 12px 15px;
-  margin: -8px 0 20px;
-  background: #143448;
-  border: 1px solid #2c8fa7;
-  border-radius: 9px;
-  color: #d5f3f8;
+  gap: var(--space-3);
+  margin: -8px 0 var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
 }
 .toast button {
   border: 0;
   background: none;
-  color: inherit;
+  color: var(--text-secondary);
   font-size: 20px;
 }
 .skeletons {
@@ -871,8 +901,13 @@ textarea::placeholder {
 }
 .skeletons > div {
   height: 150px;
-  border-radius: 12px;
-  background: linear-gradient(95deg, #102235, #1c3348, #102235);
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    95deg,
+    var(--surface-raised),
+    var(--surface-elevated),
+    var(--surface-raised)
+  );
   background-size: 200% 100%;
   animation: shine 1.8s infinite;
 }
@@ -880,20 +915,20 @@ textarea::placeholder {
   position: fixed;
   inset: 0;
   z-index: 20;
-  background: #020914ca;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: var(--space-4);
+  background: rgb(2 8 14 / 78%);
 }
 .revision-card {
-  width: min(600px, 100%);
   position: relative;
-  border: 1px solid #2c8fa7;
-  border-radius: 20px;
-  padding: 35px;
-  background: #0d2235;
-  box-shadow: 0 30px 90px #0009;
-  animation: rise 0.35s ease-out;
+  width: min(600px, 100%);
+  padding: var(--space-8);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-raised);
+  animation: rise var(--motion-slow) var(--ease-standard);
 }
 .revision-card h2 {
   font: 800 28px Manrope;
@@ -911,10 +946,10 @@ textarea::placeholder {
   gap: 12px;
 }
 .revision-grid > div {
-  padding: 16px;
-  border: 1px solid #31546b;
-  border-radius: 10px;
-  background: #102c42;
+  padding: var(--space-4);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
 }
 .revision-grid span {
   display: block;
@@ -951,9 +986,13 @@ textarea::placeholder {
 .fatal,
 .error-state {
   max-width: 650px;
-  margin: 15vh auto;
-  padding: 30px;
-  color: #eaf6ff;
+  margin: 12vh auto;
+  padding: var(--space-8);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-lg);
 }
 @keyframes shine {
   to {
@@ -2131,8 +2170,12 @@ input[type="number"] {
   color: #ffcf7a;
 }
 button.danger {
-  border-color: #a05a4a;
-  color: #ffd2c7;
+  border-color: #8d5555;
+  color: var(--danger);
+  background: #311e25;
+}
+button.danger:hover {
+  background: #472832;
 }
 .toast.inline {
   position: static;
