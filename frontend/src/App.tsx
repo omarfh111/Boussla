@@ -460,6 +460,7 @@ function AppInner() {
       await query.invalidateQueries({ queryKey: ["case"] });
       await query.invalidateQueries({ queryKey: ["queue"] });
       await query.invalidateQueries({ queryKey: ["history"] });
+      await query.invalidateQueries({ queryKey: ["audit"] });
       await query.invalidateQueries({ queryKey: ["notifications"] });
       await query.invalidateQueries({ queryKey: ["network"] });
       return value;
@@ -1873,6 +1874,10 @@ function Officer({
           <HistoryPanel c={c} />
         </details>
         <details>
+          <summary>Journal d’audit</summary>
+          <AuditPanel caseId={c.case_id} caseVersion={c.case_version} />
+        </details>
+        <details>
           <summary>Diagnostics</summary>
           <Diagnostics c={c} />
         </details>
@@ -2900,6 +2905,86 @@ function InvestigationAssistant({
             {answer.limitations.join(" ")}
           </small>
         </div>
+      )}
+    </Panel>
+  );
+}
+
+function AuditPanel({
+  caseId,
+  caseVersion,
+}: {
+  caseId: string;
+  caseVersion: number;
+}) {
+  const audit = useQuery({
+    queryKey: ["audit", caseId, caseVersion],
+    queryFn: () => api.audit(caseId),
+  });
+  if (audit.isLoading) return <p>Chargement du journal d’audit…</p>;
+  if (audit.isError) return <p role="alert">Journal d’audit indisponible.</p>;
+  const records = audit.data?.records ?? [];
+  return (
+    <Panel eyebrow="DÉCISIONS ET CALCULS ENREGISTRÉS" title="Journal d’audit">
+      <p className="footnote">
+        Journal local de traçabilité ; ce n’est pas une preuve légale
+        infalsifiable.
+      </p>
+      {!!audit.data?.legacy_events_without_audit && (
+        <p className="footnote">
+          {audit.data.legacy_events_without_audit} ancien(s) événement(s) sans
+          détail d’audit.
+        </p>
+      )}
+      {records.length ? (
+        <ol className="timeline">
+          {[...records].reverse().map((record) => (
+            <li key={record.audit_id}>
+              <span className="timeline-version">v{record.case_version}</span>
+              <div>
+                <strong>{record.action}</strong>
+                <p>{record.reason}</p>
+                <small>
+                  {record.actor_id} ·{" "}
+                  {new Date(record.at).toLocaleString("fr-FR")}
+                </small>
+                {(record.before || record.after) && (
+                  <p className="timeline-score">
+                    Indice de revue : {record.before?.review_index ?? "inconnu"}{" "}
+                    → {record.after?.review_index ?? "inconnu"}
+                  </p>
+                )}
+                {Object.keys({
+                  ...record.before?.cause_contributions,
+                  ...record.after?.cause_contributions,
+                })
+                  .filter(
+                    (causeId) =>
+                      record.before?.cause_contributions[causeId] !==
+                      record.after?.cause_contributions[causeId],
+                  )
+                  .map((causeId) => (
+                    <p className="timeline-cause" key={causeId}>
+                      Cause {causeId} :{" "}
+                      {record.before?.cause_contributions[causeId] ??
+                        "inconnue"}{" "}
+                      →{" "}
+                      {record.after?.cause_contributions[causeId] ?? "inconnue"}
+                    </p>
+                  ))}
+                {!!record.evidence_ids.length && (
+                  <p>Sources : {record.evidence_ids.join(", ")}</p>
+                )}
+                <small>
+                  Règle : {record.rules_version ?? "inconnue"} · Moteur :{" "}
+                  {record.engine_version ?? "inconnu"} · {record.event_id}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p>Aucune entrée d’audit enregistrée pour ce dossier.</p>
       )}
     </Panel>
   );

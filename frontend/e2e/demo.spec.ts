@@ -189,8 +189,21 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(page.locator(".timeline li").first()).toContainText(
     "Version précédente",
   );
-  await expect(page.getByText("Indice de revue : 10 → 0")).toBeVisible();
+  await expect(
+    page
+      .locator(".panel")
+      .filter({ hasText: "RÉVISIONS IMMUABLES" })
+      .getByText("Indice de revue : 10 → 0"),
+  ).toBeVisible();
   await capture(page, "11_history.png");
+  await page.locator("summary").filter({ hasText: "Journal d’audit" }).click();
+  const audit = page
+    .locator(".panel")
+    .filter({ hasText: "DÉCISIONS ET CALCULS ENREGISTRÉS" });
+  await expect(audit).toContainText("EVIDENCE_ACCEPTED");
+  await expect(audit).toContainText("Indice de revue : 10 → 0");
+  await expect(audit).toContainText("Cause ");
+  await expect(audit).toContainText("Règle :");
   await page.getByRole("button", { name: "Avancé" }).click();
   await page.getByText("Diagnostics", { exact: true }).click();
   await expect(page.getByText("Analyse assistée BOUSSLA")).toBeVisible();

@@ -153,3 +153,7 @@ The complete backend suite passes (599 tests), React passes (31 tests), the prod
 ## Frozen snapshots on every versioned workflow write
 
 Context declarations, structured answers and officer-published clarification requests now freeze a documentary `ScoreSnapshot` at their new case version, as upload, response and human evidence decisions already did. Each snapshot records calculation time, engine/rule versions and cause contributions. The prospective score uses only scoped facts from that revision, including the new attributed claims or request; replayed idempotent actions do not create another revision. A newly created empty case still has no document cause to calculate, and older revisions remain honestly unsnapshotted. Validation: targeted service/progression/API tests assert snapshot metadata for all three paths.
+
+## Officer audit journal in the dossier
+
+The Advanced agent view now exposes the officer-only audit API in a case-version-keyed panel. It shows event/action, actor, time, reason, linked source IDs, documentary review-index before/after, changed cause contributions, rule version, engine version and any count of legacy events that lack the newer audit row. The panel makes no legal-integrity claim. Its query refreshes on case mutations and the version key avoids a stale cached journal after a human decision. Validation: 31 React tests, production build and a clean main Playwright journey that accepts evidence and verifies the persisted 10 → 0 score and cause transition in the audit panel.

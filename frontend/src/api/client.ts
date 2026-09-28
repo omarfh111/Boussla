@@ -6,6 +6,7 @@ import type {
   OfficerCaseView,
   QueuePage,
   HistoryView,
+  AuditView,
   NotificationFeedView,
   NetworkView,
   InvestigationAnswer,
@@ -77,6 +78,8 @@ export const api = {
     ),
   history: (r: Role, id: string) =>
     request<HistoryView>(r, `/cases/${encodeURIComponent(id)}/history`),
+  audit: (id: string) =>
+    request<AuditView>("OFFICER", `/cases/${encodeURIComponent(id)}/audit`),
   notifications: (r: Role, id: string) =>
     request<NotificationFeedView>(
       r,

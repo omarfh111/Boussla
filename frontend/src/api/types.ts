@@ -664,6 +664,33 @@ export interface NotificationFeedView {
     status: "RECORDED";
   }[];
 }
+export interface AuditView {
+  case_id: string;
+  legacy_events_without_audit: number;
+  records: {
+    audit_id: string;
+    event_id: string;
+    actor_id: string;
+    at: string;
+    case_version: number;
+    action: string;
+    reason: string;
+    before: {
+      review_index: number | null;
+      cause_contributions: Record<string, string>;
+      calculated_at: string | null;
+    } | null;
+    after: {
+      review_index: number | null;
+      cause_contributions: Record<string, string>;
+      calculated_at: string | null;
+    } | null;
+    evidence_ids: string[];
+    rules_version: string | null;
+    engine_version: string | null;
+  }[];
+}
+
 export interface HistoryView {
   revisions: {
     version: number;
