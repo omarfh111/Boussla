@@ -690,7 +690,8 @@ export interface NotificationFeedView {
     occurred_at: string;
     case_version: number;
     source_event_id: string | null;
-    status: "RECORDED";
+    status: "RECORDED" | "CURRENT_SIGNAL";
+    source_ids?: string[];
   }[];
 }
 export interface AuditView {

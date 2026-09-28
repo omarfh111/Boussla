@@ -208,3 +208,7 @@ This table replaces the *starting-state* labels above. TERMINÉ means the reques
 | 21 Audit trail | PARTIEL | New events atomically record actor, time, reason, score/cause before-after, changed fact values, evidence and rule/engine versions; officer UI and API available. Pre-migration events cannot be retroactively enriched; local SQLite is not tamper-proof legal evidence. |
 
 The remaining work should first close supported-document and operational lifecycle gaps with the same role and provenance controls, then implement phase 19 only after its stated time gate. Do not reclassify UNKNOWN as zero or proof of authenticity.
+
+## Current agent notification signals
+
+The officer notification feed now includes own-company baseline deviations, source-backed document-review checks (duplicate bytes, structure/metadata chronology or byte integrity), and current operational urgency at 80/100 or more. These are explicitly `CURRENT_SIGNAL` projections with source IDs and no source event; they can change when coverage, facts or time change and are never called unread or durably delivered. Company feeds remain restricted to recorded, company-scoped events. Document flags say “à examiner” and “authenticité à vérifier,” never “faux document.” Validation: 606 complete backend tests, 33 React tests, production build and all 11 fresh Playwright journeys. Read/unread state and a delivery scheduler remain outstanding.

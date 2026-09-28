@@ -104,6 +104,7 @@ function mockApi(
   officerView: OfficerCaseView = officer,
   companyView: CompanyCaseView = company,
   historyView?: Record<string, unknown>,
+  notificationsView?: Record<string, unknown>,
 ) {
   const fetchMock = vi.fn(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -180,7 +181,11 @@ function mockApi(
                     legacy_events_without_audit: 0,
                   }
                 : path.includes("/notifications")
-                  ? { case_id: shared.case_id, audience: role, items: [] }
+                  ? (notificationsView ?? {
+                      case_id: shared.case_id,
+                      audience: role,
+                      items: [],
+                    })
                   : path.includes("/history") && historyView
                     ? historyView
                     : path.includes("/officer/queue")
@@ -1240,4 +1245,34 @@ it("requires a reason and resolved causes for dossier closure while allowing an 
   expect(
     screen.queryByText("Décision de revue interne"),
   ).not.toBeInTheDocument();
+});
+
+it("labels calculated agent notification signals separately from recorded events", async () => {
+  mockApi(officer, company, undefined, {
+    case_id: shared.case_id,
+    audience: "OFFICER",
+    items: [
+      {
+        notification_id: "CURRENT-URGENT",
+        kind: "CASE_URGENT",
+        title_fr: "Dossier urgent à traiter",
+        message_fr: "Urgence opérationnelle 82/100.",
+        occurred_at: "2026-09-27T00:00:00Z",
+        case_version: 1,
+        source_event_id: null,
+        source_ids: ["REVIEW_FINDING_PRESENT"],
+        status: "CURRENT_SIGNAL",
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
+  expect(
+    await screen.findByText("Dossier urgent à traiter"),
+  ).toBeInTheDocument();
+  expect(screen.getByText("Signal courant · à réévaluer")).toBeInTheDocument();
+  expect(
+    screen.getByText("Sources : REVIEW_FINDING_PRESENT"),
+  ).toBeInTheDocument();
 });

@@ -491,3 +491,32 @@ def test_investigation_retrieves_native_pdf_passage_with_page_and_no_write(svc, 
     audit_text = next(c for record in svc.get_audit(officer, CASE)["records"]
                       for c in record["fact_changes"] if c["kind"] == "document_text")
     assert "pages" not in audit_text["after"] and audit_text["after"]["text_sha256"]
+
+
+def test_officer_notifications_distinguish_current_signals_from_recorded_events(svc, actors, monkeypatch):
+    from datetime import datetime, timezone
+    from boussla.contracts import BehaviorSignal, DocumentAnalysisReport, DocumentCheck
+    company, officer, _ = actors
+    original = svc.get_case
+    view = original(officer, CASE)
+    signal = BehaviorSignal(code="RESPONSE_DELAY_DEVIATION", metric_code="RESPONSE_DELAY",
+        observed_value="13", baseline_value="2.8", ratio="4.64", data_quality="LIMITED_DATA",
+        baseline_months=6, current_sample_size=1, source_ids=("REQ-1",),
+        explanation_fr="Délai observé 13 jours contre 2,8 jours habituels ; données limitées.")
+    profile = view.behavior_profile.model_copy(update={"signals": (signal,)})
+    document = view.documents[0]
+    report = DocumentAnalysisReport(document_id=document.document.document_id, case_version=view.case_version,
+        calculated_at=datetime.now(timezone.utc), rule_version="test", classification="INVOICE",
+        checks=(DocumentCheck(code="METADATA_CHRONOLOGY", status="WARN",
+                              explanation_fr="Date à vérifier", source_ids=(document.document.document_id,)),),
+        stages=(), proposed_action="REVIEW_DOCUMENT")
+    fake = view.model_copy(update={"behavior_profile": profile,
+        "documents": (document.model_copy(update={"analysis": report}), *view.documents[1:]),
+        "triage": view.triage.model_copy(update={"triage_priority": 82})})
+    monkeypatch.setattr(svc, "get_case", lambda actor, case_id: fake if actor.role is Role.OFFICER else original(actor, case_id))
+    agent = svc.get_notifications(officer, CASE)
+    current = {item["kind"]: item for item in agent["items"] if item["status"] == "CURRENT_SIGNAL"}
+    assert set(current) == {"HISTORY_DEVIATION", "DOCUMENT_REVIEW_SIGNAL", "CASE_URGENT"}
+    assert current["HISTORY_DEVIATION"]["source_ids"] == ["REQ-1"]
+    assert current["DOCUMENT_REVIEW_SIGNAL"]["source_event_id"] is None
+    assert all(item["status"] == "RECORDED" for item in svc.get_notifications(company, CASE)["items"])

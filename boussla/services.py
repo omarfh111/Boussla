@@ -1161,6 +1161,39 @@ class BousslaAppService(_DemoAdministration):
                                              f"{revision.score_snapshot.review_index}"),
                               "occurred_at": revision.created_at.isoformat(), "case_version": revision.version,
                               "source_event_id": None, "status": "RECORDED"})
+        if not company:
+            view = self.get_case(actor, case_id)
+            current_at = self.clock().isoformat()
+            for signal in (view.behavior_profile.signals if view.behavior_profile else ()):
+                items.append({"notification_id": f"CURRENT-HISTORY-{case_id}-{signal.code}-{signal.currency or 'ALL'}",
+                              "kind": "HISTORY_DEVIATION", "title_fr": "Écart historique à examiner",
+                              "message_fr": signal.explanation_fr, "occurred_at": current_at,
+                              "case_version": view.case_version, "source_event_id": None,
+                              "source_ids": list(signal.source_ids), "status": "CURRENT_SIGNAL"})
+            for document in view.documents:
+                report = document.analysis
+                if report is None:
+                    continue
+                concerning = [check for check in report.checks
+                              if check.code in {"METADATA_CHRONOLOGY", "SOURCE_STRUCTURE", "DUPLICATE_BYTES", "BYTE_INTEGRITY"}
+                              and check.status in {"WARN", "FAIL"}]
+                if concerning:
+                    items.append({"notification_id": f"CURRENT-DOCUMENT-{case_id}-{document.document.document_id}",
+                                  "kind": "DOCUMENT_REVIEW_SIGNAL", "title_fr": "Contrôle documentaire à examiner",
+                                  "message_fr": (f"Pièce {document.document.document_id} : "
+                                                 + ", ".join(check.code for check in concerning)
+                                                 + ". Authenticité à vérifier."),
+                                  "occurred_at": current_at, "case_version": view.case_version,
+                                  "source_event_id": None,
+                                  "source_ids": [document.document.document_id], "status": "CURRENT_SIGNAL"})
+            if view.triage is not None and view.triage.triage_priority >= 80:
+                items.append({"notification_id": f"CURRENT-URGENT-{case_id}", "kind": "CASE_URGENT",
+                              "title_fr": "Dossier urgent à traiter",
+                              "message_fr": (f"Urgence opérationnelle {view.triage.triage_priority}/100 ; "
+                                             "distincte de l’indice documentaire."),
+                              "occurred_at": current_at, "case_version": view.case_version,
+                              "source_event_id": None,
+                              "source_ids": list(view.triage.reason_codes), "status": "CURRENT_SIGNAL"})
         items.sort(key=lambda item: (item["occurred_at"], item["notification_id"]), reverse=True)
         return {"case_id": case_id, "audience": history.audience.value, "items": items[:100]}
 
