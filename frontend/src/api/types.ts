@@ -691,6 +691,7 @@ export interface NotificationFeedView {
     case_version: number;
     source_event_id: string | null;
     status: "RECORDED" | "CURRENT_SIGNAL";
+    read_at: string | null;
     source_ids?: string[];
   }[];
 }

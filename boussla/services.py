@@ -1194,8 +1194,20 @@ class BousslaAppService(_DemoAdministration):
                               "occurred_at": current_at, "case_version": view.case_version,
                               "source_event_id": None,
                               "source_ids": list(view.triage.reason_codes), "status": "CURRENT_SIGNAL"})
+        reads = self.store.notification_reads(case_id, actor.actor_id)
+        for item in items:
+            item["read_at"] = reads.get(item["notification_id"]) if item["status"] == "RECORDED" else None
         items.sort(key=lambda item: (item["occurred_at"], item["notification_id"]), reverse=True)
         return {"case_id": case_id, "audience": history.audience.value, "items": items[:100]}
+
+    def mark_notification_read(self, actor: Actor, case_id: str, notification_id: str) -> dict:
+        trusted, _ = self._open(actor, case_id, "get_history")
+        item = next((item for item in self.get_notifications(trusted, case_id)["items"]
+                     if item["notification_id"] == notification_id), None)
+        if item is None or item["status"] != "RECORDED":
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Notification enregistrée introuvable")
+        at = self.store.mark_notification_read(case_id, trusted.actor_id, notification_id, self.clock())
+        return {"case_id": case_id, "notification_id": notification_id, "read_at": at}
 
     def _confidence_at_version(self, case_id: str, company_id: str, version: int,
                                as_of: datetime, signals: tuple[CompanyHistorySignal, ...]):

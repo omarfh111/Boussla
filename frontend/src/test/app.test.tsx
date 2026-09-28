@@ -1276,3 +1276,47 @@ it("labels calculated agent notification signals separately from recorded events
     screen.getByText("Sources : REVIEW_FINDING_PRESENT"),
   ).toBeInTheDocument();
 });
+
+it("marks only recorded notifications read through the scoped API", async () => {
+  const fetchMock = mockApi(officer, company, undefined, {
+    case_id: shared.case_id,
+    audience: "OFFICER",
+    items: [
+      {
+        notification_id: "EV-00001",
+        kind: "UPLOAD",
+        title_fr: "Document reçu",
+        message_fr: "Pièce reçue.",
+        occurred_at: "2026-09-27T00:00:00Z",
+        case_version: 1,
+        source_event_id: "EV-00001",
+        status: "RECORDED",
+        read_at: null,
+      },
+      {
+        notification_id: "CURRENT-URGENT",
+        kind: "CASE_URGENT",
+        title_fr: "Dossier urgent à traiter",
+        message_fr: "Urgence à réévaluer.",
+        occurred_at: "2026-09-27T00:00:00Z",
+        case_version: 1,
+        source_event_id: null,
+        status: "CURRENT_SIGNAL",
+        read_at: null,
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Marquer comme lu" }),
+  );
+  await waitFor(() =>
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/cases/CASE-BRICKS-001/notifications/EV-00001/read",
+      expect.objectContaining({ method: "POST" }),
+    ),
+  );
+  expect(screen.getAllByText("Signal courant · à réévaluer")).toHaveLength(1);
+});

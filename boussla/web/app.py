@@ -161,6 +161,11 @@ async def notifications(request: Request):
     return result(service(request).get_notifications(actor(request), request.path_params["case_id"]))
 
 
+async def mark_notification_read(request: Request):
+    return result(service(request).mark_notification_read(
+        actor(request), request.path_params["case_id"], request.path_params["notification_id"]))
+
+
 async def upload(request: Request):
     a = actor(request)
     k = key(request)
@@ -296,6 +301,7 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}/history", history),
         Route("/api/cases/{case_id}/audit", audit),
         Route("/api/cases/{case_id}/notifications", notifications),
+        Route("/api/cases/{case_id}/notifications/{notification_id}/read", mark_notification_read, methods=["POST"]),
         Route("/api/cases/{case_id}/investigate", investigate, methods=["POST"]),
         Route("/api/network", network),
         Route("/api/network/company/{company_id}", network_company),

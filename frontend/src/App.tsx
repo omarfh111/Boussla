@@ -768,6 +768,8 @@ function ActionNotifications({ c }: { c: OfficerCaseView }) {
 }
 
 function NotificationFeed({ role, caseId }: { role: Role; caseId: string }) {
+  const queryClient = useQueryClient();
+  const [readError, setReadError] = useState<string | null>(null);
   const feed = useQuery({
     queryKey: ["notifications", role, caseId],
     queryFn: () => api.notifications(role, caseId),
@@ -783,8 +785,37 @@ function NotificationFeed({ role, caseId }: { role: Role; caseId: string }) {
           <article className="document" key={item.notification_id}>
             <strong>{item.title_fr}</strong>
             <p>{item.message_fr}</p>
-            {item.status === "CURRENT_SIGNAL" && (
+            {item.status === "CURRENT_SIGNAL" ? (
               <small>Signal courant · à réévaluer</small>
+            ) : item.read_at ? (
+              <small>
+                Lu le {new Date(item.read_at).toLocaleString("fr-FR")}
+              </small>
+            ) : (
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    setReadError(null);
+                    await api.markNotificationRead(
+                      role,
+                      caseId,
+                      item.notification_id,
+                    );
+                    await queryClient.invalidateQueries({
+                      queryKey: ["notifications", role, caseId],
+                    });
+                  } catch (error) {
+                    setReadError(
+                      error instanceof Error
+                        ? error.message
+                        : "Lecture non enregistrée.",
+                    );
+                  }
+                }}
+              >
+                Marquer comme lu
+              </button>
             )}
             {!!item.source_ids?.length && (
               <small>Sources : {item.source_ids.join(", ")}</small>
@@ -801,6 +832,7 @@ function NotificationFeed({ role, caseId }: { role: Role; caseId: string }) {
       ) : (
         <p>Aucune mise à jour à signaler.</p>
       )}
+      {readError && <p role="alert">{readError}</p>}
     </Panel>
   );
 }

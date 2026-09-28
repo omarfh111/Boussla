@@ -535,3 +535,31 @@ def test_completed_recommendations_come_only_from_recorded_response_and_decision
     assert any(action.status == "COMPLETED" and action.kind == "REVIEW_DOCUMENT" for action in after)
     assert all(action.rule_version == "recommended-actions-2" for action in after)
     assert "recommended_actions" not in svc.get_case(company, CASE).model_dump()
+
+
+def test_notification_read_receipts_are_actor_scoped_idempotent_and_version_neutral(svc, actors):
+    from starlette.testclient import TestClient
+    from boussla.web.app import create_app
+
+    company, officer, other = actors
+    to_proposal(svc, actors)
+    company_item = next(item for item in svc.get_notifications(company, CASE)["items"]
+                        if item["kind"] == "REQUEST_PUBLISHED")
+    officer_item = next(item for item in svc.get_notifications(officer, CASE)["items"]
+                        if item["kind"] == "RESPONSE")
+    before = ver(svc)
+    first = svc.mark_notification_read(company, CASE, company_item["notification_id"])
+    assert svc.mark_notification_read(company, CASE, company_item["notification_id"]) == first
+    assert ver(svc) == before
+    assert next(item for item in svc.get_notifications(company, CASE)["items"]
+                if item["notification_id"] == company_item["notification_id"])["read_at"] == first["read_at"]
+    assert next(item for item in svc.get_notifications(officer, CASE)["items"]
+                if item["notification_id"] == officer_item["notification_id"])["read_at"] is None
+    assert code(lambda: svc.mark_notification_read(other, CASE, company_item["notification_id"])) is ErrorCode.CROSS_COMPANY
+    assert code(lambda: svc.mark_notification_read(company, CASE, officer_item["notification_id"])) is ErrorCode.INVALID_INPUT
+    assert code(lambda: svc.mark_notification_read(officer, CASE, "CURRENT-URGENT-CASE-BRICKS-001")) is ErrorCode.INVALID_INPUT
+    assert svc.store.notification_reads(CASE, company.actor_id)[company_item["notification_id"]] == first["read_at"]
+    with TestClient(create_app(svc)) as client:
+        url = f"/api/cases/{CASE}/notifications/{officer_item['notification_id']}/read"
+        assert client.post(url, headers={"X-Boussla-Demo-Role": "OFFICER"}).status_code == 200
+        assert client.post(url, headers={"X-Boussla-Demo-Role": "COMPANY"}).status_code == 400

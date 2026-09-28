@@ -4,7 +4,7 @@ import threading
 import pytest
 
 from boussla.contracts import ActionReceipt, BousslaError, ErrorCode, Question
-from boussla.store import CaseStore
+from boussla.store import CaseStore, SCHEMA_VERSION
 
 CASE = "CASE-T"
 
@@ -154,7 +154,7 @@ def test_existing_database_adds_audit_table_without_rewriting_events(tmp_path):
         tx.event("NEW", "A", "after audit")
     assert len(migrated.audit_records(CASE)) == 1
     with sqlite3.connect(db) as conn:
-        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == "2"
+        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == str(SCHEMA_VERSION)
 
 
 def test_audit_fact_diff_redacts_internal_paths(store):

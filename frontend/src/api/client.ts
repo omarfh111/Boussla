@@ -86,6 +86,12 @@ export const api = {
       r,
       `/cases/${encodeURIComponent(id)}/notifications`,
     ),
+  markNotificationRead: (r: Role, id: string, notificationId: string) =>
+    request<{ case_id: string; notification_id: string; read_at: string }>(
+      r,
+      `/cases/${encodeURIComponent(id)}/notifications/${encodeURIComponent(notificationId)}/read`,
+      { method: "POST" },
+    ),
   askInvestigation: (id: string, question: string) =>
     request<InvestigationAnswer>(
       "OFFICER",

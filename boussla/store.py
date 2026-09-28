@@ -31,7 +31,7 @@ from boussla.contracts import (
 
 M = TypeVar("M", bound=BaseModel)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS cases (
@@ -96,6 +96,13 @@ CREATE TABLE IF NOT EXISTS audit_records (
     evidence_ids TEXT NOT NULL,
     rules_version TEXT,
     engine_version TEXT
+);
+CREATE TABLE IF NOT EXISTS notification_reads (
+    case_id TEXT NOT NULL,
+    actor_id TEXT NOT NULL,
+    notification_id TEXT NOT NULL,
+    read_at TEXT NOT NULL,
+    PRIMARY KEY (case_id, actor_id, notification_id)
 );
 CREATE TABLE IF NOT EXISTS artifacts (
     case_id TEXT NOT NULL,
@@ -244,6 +251,25 @@ class CaseStore:
         return [CaseEvent(event_id=f"EV-{r[0]:05d}", case_id=case_id, kind=r[1], actor_id=r[2], at=r[3],
                           case_version=r[4], summary=r[5], fact_ids=tuple(json.loads(r[6]))) for r in rows]
 
+    def notification_reads(self, case_id: str, actor_id: str) -> dict[str, str]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT notification_id, read_at FROM notification_reads WHERE case_id=? AND actor_id=?",
+                (case_id, actor_id)).fetchall()
+        return dict(rows)
+
+    def mark_notification_read(self, case_id: str, actor_id: str, notification_id: str,
+                               at: datetime) -> str:
+        """An actor receipt; it does not alter case facts or version."""
+        with self._connect() as conn:
+            conn.execute("INSERT INTO notification_reads VALUES (?, ?, ?, ?) "
+                         "ON CONFLICT(case_id, actor_id, notification_id) DO NOTHING",
+                         (case_id, actor_id, notification_id, at.isoformat()))
+            row = conn.execute(
+                "SELECT read_at FROM notification_reads WHERE case_id=? AND actor_id=? AND notification_id=?",
+                (case_id, actor_id, notification_id)).fetchone()
+        return row[0]
+
     def audit_records(self, case_id: str) -> list[dict]:
         """Officer-only service consumes durable, transaction-coupled audit rows."""
         with self._connect() as conn:
@@ -267,7 +293,7 @@ class CaseStore:
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE")
             try:
-                for table in ("facts", "case_versions", "action_receipts", "audit_records", "events", "artifacts", "cases"):
+                for table in ("facts", "case_versions", "action_receipts", "audit_records", "events", "notification_reads", "artifacts", "cases"):
                     conn.execute(f"DELETE FROM {table} WHERE case_id=?", (case_id,))  # noqa: S608 - fixed names
                 conn.execute("COMMIT")
             except BaseException:
