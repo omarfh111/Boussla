@@ -1,7 +1,9 @@
+@import "./styles/tokens.css";
+
 :root {
   font-family: "DM Sans", sans-serif;
-  color: #eaf6ff;
-  background: #07111f;
+  color: var(--text-primary);
+  background: var(--surface-base);
   font-synthesis: none;
   font-size: 14px;
 }
