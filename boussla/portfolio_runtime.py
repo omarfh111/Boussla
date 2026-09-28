@@ -12,14 +12,14 @@ from __future__ import annotations
 import json
 import re
 import threading
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 
 from boussla.contracts import (
     CompanyHistorySignal, Enterprise, FinancialSnapshotView, HistorySignalCode, Mode,
 )
 from boussla.data import operational_portfolio as op
-from boussla.history_signals import analyze_history
+from boussla.history_signals import analyze_self_history
 from boussla.seed import fact_id
 from boussla.store import CaseStore, stable_hash
 
@@ -40,7 +40,7 @@ class PortfolioRuntime:
         self.path = Path(path)
         self._lock = threading.RLock()
         self._data: dict | None = None
-        self._signals: dict[str, tuple[CompanyHistorySignal, ...]] = {}
+        self._signals: dict[tuple[str, str], tuple[CompanyHistorySignal, ...]] = {}
 
     # ----------------------------------------------------------------- state
     @property
@@ -117,21 +117,31 @@ class PortfolioRuntime:
     def signals(self, company_id: str, as_of=None) -> list[CompanyHistorySignal]:
         """CompanyHistorySignalProvider: lane B ``analyze_history`` at the portfolio cutoff."""
         with self._lock:
-            if company_id not in self._signals:
+            cutoff = self.as_of
+            if as_of is not None:
+                requested = (as_of if isinstance(as_of, datetime) else
+                             datetime.combine(as_of, time.max, tzinfo=cutoff.tzinfo))
+                if requested.tzinfo is None:
+                    raise ValueError("timezone-aware cutoff required")
+                cutoff = min(cutoff, requested)
+            key = (company_id, cutoff.isoformat())
+            if key not in self._signals:
                 bundle = self.bundle(company_id)
                 if bundle is None:
-                    self._signals[company_id] = ()
+                    self._signals[key] = ()
                 else:
-                    raw = analyze_history(op.transaction_inputs(self.data, company_id), company_id=company_id,
-                                          as_of=self.as_of,
+                    raw = analyze_self_history(op.transaction_inputs(self.data, company_id), company_id=company_id,
+                                          as_of=cutoff,
                                           coverage={r["period"]: r["source_id"] for r in bundle["coverage"]})
-                    self._signals[company_id] = tuple(CompanyHistorySignal(
-                        signal_id=f"SIG-{stable_hash([s.reason_code, s.period, s.metric])[:10].upper()}",
+                    self._signals[key] = tuple(CompanyHistorySignal(
+                        signal_id=f"SIG-{stable_hash([company_id, s.reason_code, s.period, s.metric,
+                                                        s.evidence_source_ids])[:10].upper()}",
                         company_id=company_id, reason_code=HistorySignalCode(s.reason_code), period=s.period,
                         metric=s.metric, observed_value=s.observed_value, baseline_value=s.baseline_value,
                         baseline_periods=s.baseline_periods, evidence_source_ids=s.evidence_source_ids,
-                        explanation_fr=s.explanation, method=s.method, mode=Mode.LIVE) for s in raw)
-            return list(self._signals[company_id])
+                        explanation_fr=s.explanation, method=s.method, mode=Mode.LIVE,
+                        affected_transaction_ids=s.affected_transaction_ids) for s in raw)
+            return list(self._signals[key])
 
     def financial_snapshot(self, company_id: str) -> FinancialSnapshotView | None:
         bundle = self.bundle(company_id)
@@ -144,4 +154,3 @@ class PortfolioRuntime:
             documented_payable_millimes=s["documented_payable_millimes"],
             outstanding_documented_payable_millimes=s["outstanding_documented_payable_millimes"],
             scope=s["scope"], statement_fr=s["statement"], source_count=len(s["source_ids"]))
-

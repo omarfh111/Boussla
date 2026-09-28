@@ -5,7 +5,7 @@ test("stale revision is surfaced and refetched, never silently retried", async (
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Dossier", exact: true }).click();
+  await page.getByRole("button", { name: "Dossiers", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Préparer la demande" }),
   ).toBeVisible();

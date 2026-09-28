@@ -69,6 +69,10 @@ def test_twelve_enterprise_portfolio_is_operational(svc):
 
 def test_history_gap_raises_triage_not_review_index(svc):
     view = svc.get_case(officer(svc), "SYN-OP-005-CASE")
+    months = {month.month: month for month in view.monthly_activity}
+    assert len(months) == 12
+    assert months["2025-09"].coverage_status == "COVERED" and months["2025-09"].transaction_count == 0
+    assert months["2025-10"].coverage_status == "COVERED" and months["2025-10"].transaction_count == 0
     codes = {s.reason_code.value for s in view.history_signals}
     assert "ACTIVITY_GAP" in codes and all(s.affects_review_index is False for s in view.history_signals)
     gap = next(s for s in view.history_signals if s.reason_code.value == "ACTIVITY_GAP")
@@ -78,12 +82,53 @@ def test_history_gap_raises_triage_not_review_index(svc):
     assert not any("fraud" in s.explanation_fr.lower() for s in view.history_signals)
 
 
+def test_historical_indicator_is_separate_explained_and_scoped(svc):
+    view = svc.get_case(officer(svc), "SYN-OP-005-CASE")
+    assert view.score.review_index == 0
+    assert view.history_signal_status == "AVAILABLE"
+    assert view.history_signal_index is not None and view.history_signal_index > 0
+    assert view.history_signal_factors
+    assert sum(f.contribution for f in view.history_signal_factors) >= view.history_signal_index
+    assert all(f.source_signal_ids for f in view.history_signal_factors)
+    item = next(i for i in all_items(svc) if i.case_id == view.case_id)
+    assert item.history_signal_index == view.history_signal_index
+    curated = svc.get_case(officer(svc), BRICKS)
+    assert curated.history_signal_index is None
+    assert curated.history_signal_status == "INSUFFICIENT_DATA"
+    company = svc.get_case(actor(svc, "DEMO-COMPANY-BAT"), BRICKS).model_dump()
+    assert "history_signal_index" not in company
+
+
+def test_operational_confidence_is_unknown_without_interactions_and_officer_only(svc):
+    officer_view = svc.get_case(officer(svc), BRICKS)
+    assert officer_view.operational_confidence_index is None
+    assert officer_view.operational_confidence_status == "INSUFFICIENT_DATA"
+    assert officer_view.operational_confidence_eligible_observations == 0
+    assert officer_view.operational_confidence_as_of is not None
+    company_view = svc.get_case(actor(svc, "DEMO-COMPANY-BAT"), BRICKS).model_dump()
+    assert "operational_confidence_index" not in company_view
+    api = TestClient(create_app(svc), raise_server_exceptions=False)
+    agent_body = api.get(f"/api/cases/{BRICKS}", headers={"X-Boussla-Demo-Role": "OFFICER"}).json()
+    assert agent_body["operational_confidence_status"] == "INSUFFICIENT_DATA"
+    assert "operational_confidence_factors" in agent_body
+    company_body = api.get(f"/api/cases/{BRICKS}", headers={"X-Boussla-Demo-Role": "COMPANY"}).json()
+    assert "operational_confidence_factors" not in company_body
+
+    covered = svc.get_case(officer(svc), "SYN-OP-005-CASE")
+    assert covered.operational_confidence_status == "AVAILABLE"
+    assert covered.operational_confidence_eligible_observations >= 3
+    historical_factor = next(f for f in covered.operational_confidence_factors
+                             if f.code == "HISTORICAL_STABILITY")
+    assert historical_factor.denominator >= 3 and historical_factor.source_ids
+    assert covered.score.review_index == 0
+
+
 def test_buyer_seller_comparison_is_field_level_and_neutral(svc):
     view = svc.get_case(officer(svc), "SYN-OP-003-CASE")
     diff = [c for c in view.invoice_comparisons if c.status == "DIFFERENCES"]
     assert len(diff) == 1 and diff[0].difference_fields == ("line.quantity", "line.unit_price_millimes")
     same = next(c for c in view.invoice_comparisons if c.status == "CONCORDANT")
-    assert same.label_fr == "Observations concordantes"
+    assert same.label_fr == "Observations rapprochées"
     perspectives = {o.observation_id: o.perspective for o in view.invoice_observations}
     assert perspectives[same.buyer_observation_id] is Perspective.BUYER_RECEIVED
     assert perspectives[same.seller_observation_id] is Perspective.SELLER_ISSUED

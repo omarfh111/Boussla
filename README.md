@@ -14,8 +14,8 @@
   <img src="https://img.shields.io/badge/OpenAI-assistant%20encadr%C3%A9-0B2F63?style=flat-square&logo=openai&logoColor=white" alt="OpenAI">
 </p>
 <p align="center">
-  <img src="https://img.shields.io/badge/pytest-488%20r%C3%A9ussis-20D6B5?style=flat-square" alt="488 tests pytest réussis">
-  <img src="https://img.shields.io/badge/Vitest-20%2F20-20D6B5?style=flat-square" alt="20 tests Vitest">
+  <img src="https://img.shields.io/badge/pytest-522%20r%C3%A9ussis-20D6B5?style=flat-square" alt="522 tests pytest réussis">
+  <img src="https://img.shields.io/badge/Vitest-22%2F22-20D6B5?style=flat-square" alt="22 tests Vitest">
   <img src="https://img.shields.io/badge/Playwright-8%2F8%20parcours-20D6B5?style=flat-square" alt="8 parcours Playwright">
   <img src="https://img.shields.io/badge/banc%20d'%C3%A9preuve-54%20sc%C3%A9narios%20%C2%B7%200%20bug-20D6B5?style=flat-square" alt="Banc d'épreuve : 54 scénarios, 0 bug">
   <img src="https://img.shields.io/badge/secrets-0%20fuite-20D6B5?style=flat-square" alt="0 secret exposé">
@@ -49,6 +49,8 @@
 > *« Boussla ne demande pas seulement si une facture est bien calculée : il aide à comprendre à quoi elle correspond et quelles pièces expliquent un écart. »*
 
 Une facture ne prouve ni son paiement ni l'usage des biens achetés. Pour instruire un dossier, l'agent doit croiser des observations dispersées — copie reçue par l'acheteur, émission du vendeur, règlements, affectation aux projets — puis obtenir des explications de l'entreprise. Les « scores de fraude » opaques mélangent tout et ne sont ni explicables ni contestables. BOUSSLA sépare ce qui est **observé**, **déclaré**, **calculé** et **décidé**, et garde la trace de chaque changement.
+
+Depuis la première livraison du parcours progressif, chaque cause documentaire suit les états **non expliquée → réponse reçue → pièce reçue → pièce cohérente → résolue**. Pour une cause de poids 40, sa contribution passe de 40 à 30, 20, 10 puis 0 ; les réductions avant décision de l'agent sont indiquées comme provisoires. Le backend renvoie le score brut, le score courant et les contributions par cause. Une contradiction ou un rejet peut faire remonter la contribution. Couverture, urgence, signal historique et confiance opérationnelle sont affichés séparément. Le signal historique compare l'entreprise à ses propres périodes couvertes ; la confiance opérationnelle utilise uniquement des interactions attribuables. Chacun expose ses facteurs et reste « données insuffisantes » lorsque les observations manquent. Le frontend ne calcule aucun palier ni indicateur.
 
 <table>
   <tr>
@@ -355,6 +357,7 @@ Le détail est consigné dans [`docs/release/FINAL_RELEASE_REPORT.md`](docs/rele
 |---|---|
 | 🎤 [**Présentation BOUSSLA — équipe Barons**](docs/Barons.pdf) (PDF, 15 diapositives) | Problème, intégration aux systèmes existants, flux de données actuels et cibles, architecture, IA assistive et moteurs déterministes, rapprochement bilatéral, déroulement du prototype, stack, validation, limites, feuille de route et équipe |
 | 📄 [**Note de synthèse**](docs/BOUSSLA_note_de_synthese.pdf) (PDF, 2 pages) | Le projet de bout en bout : constat, parcours, modèle d'autorité, architecture, garanties, validation |
+| 🧪 [**Audit et parcours manuel de la démo du 28 septembre**](docs/release/DEMO_READINESS_2026-09-28.md) | État réel des phases, résultats actuels, limites et démarrage isolé |
 | 🧾 [**Rapport de version finale**](docs/release/FINAL_RELEASE_REPORT.md) | Intégration des quatre voies, banc d'épreuve tour 2, tests, fournisseurs, sécurité |
 
 ---

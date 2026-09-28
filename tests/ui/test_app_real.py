@@ -131,11 +131,11 @@ def test_full_release_loop_through_the_ui():
     # Officer acceptance -> new version, recomputed index, old version preserved.
     switch(at, "Agent")
     before = version(at)
-    assert {m.label: m.value for m in at.metric}["Priorité de revue"] == "40"
+    assert {m.label: m.value for m in at.metric}["Priorité de revue"] == "20"
     button(at, "Accepter dans ce dossier").click().run()
     assert not at.exception, at.exception
     assert version(at) == before + 1
-    assert any("Priorité de revue : 40 → 0" in m.value for m in at.markdown)
+    assert any("Priorité de revue : 20 → 0" in m.value for m in at.markdown)
     assert {m.label: m.value for m in at.metric}["Priorité de revue"] == "0"
     assert any(f"Version {before + 1}" in m.value for m in at.markdown)
     store = svc(at).store
@@ -172,7 +172,7 @@ def test_stale_page_click_does_not_approve():
     assert version(at) == v + 1  # only the company's change; no acceptance applied
     case = svc(at).get_case(svc(at).registry.actors["DEMO-OFFICER"], CASE)
     assert case.proposals[-1].status is ProposalStatus.AWAITING_HUMAN_REVIEW
-    assert case.score.review_index == 40
+    assert case.score.review_index == 20
 
 
 def test_state_survives_app_restart():

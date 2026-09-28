@@ -179,6 +179,14 @@ class FindingStatus(str, Enum):
     NOT_APPLICABLE = "NOT_APPLICABLE"
 
 
+class ProgressStage(str, Enum):
+    UNRESOLVED = "UNRESOLVED"
+    EXPLANATION_RECEIVED = "EXPLANATION_RECEIVED"
+    EVIDENCE_RECEIVED = "EVIDENCE_RECEIVED"
+    EVIDENCE_COHERENT = "EVIDENCE_COHERENT"
+    RESOLVED = "RESOLVED"
+
+
 class HypothesisStatus(str, Enum):
     SUPPORTED = "SUPPORTED"
     CONTRADICTED = "CONTRADICTED"
@@ -229,6 +237,8 @@ class DocumentClass(str, Enum):
     ALLOCATION_RESPONSE = "ALLOCATION_RESPONSE"
     DELIVERY_RECORD = "DELIVERY_RECORD"
     CREDIT_NOTE = "CREDIT_NOTE"
+    CONTRACT = "CONTRACT"
+    DECLARATION = "DECLARATION"
     OTHER_OR_UNKNOWN = "OTHER_OR_UNKNOWN"
 
 
@@ -424,6 +434,7 @@ class Transaction(Contract):
 
 
 class Payment(Contract):
+    payment_method: Literal["CASH", "TRANSFER", "CARD", "CHEQUE", "OTHER", "UNKNOWN"] = "UNKNOWN"
     payment_id: str
     source_record_id: str
     payer_company_id: str | None = None
@@ -611,13 +622,37 @@ class ScoreResult(Contract):
     not_fraud_probability: Literal[True] = True
 
 
+class CauseProgress(Contract):
+    cause_id: str = ""
+    initial_weight: DecimalStr | None = None
+    evidence_ids: tuple[str, ...] = ()
+    explanation_ids: tuple[str, ...] = ()
+    resolved_by: str | None = None
+    resolved_at: AwareDatetime | None = None
+    rule_version: str = "progressive-review-1"
+    transaction_id: str
+    family: FindingFamily
+    raw_contribution: DecimalStr
+    current_contribution: DecimalStr
+    stage: ProgressStage
+    provisional: bool
+    reason_code: str | None = None
+    source_ids: tuple[str, ...] = ()
+
+
 class ScoreSnapshot(Contract):
+    calculated_at: AwareDatetime | None = None
+    engine_version: str = "legacy"
+    cause_ids: tuple[str, ...] = ()
     company_id: str
     case_version: int
     cutoff: AwareDatetime
     method_id: str
     rules_version: str
     review_index: int | None
+    raw_review_index: int | None = None
+    cause_progress: tuple[CauseProgress, ...] = ()
+    decisive_transaction_id: str | None = None
     evidence_coverage: DecimalStr | None
     coverage_complete: bool
     contributions: dict[str, DecimalStr] = Field(default_factory=dict)
@@ -656,9 +691,11 @@ class TransactionInputs(Contract):
 class Question(Contract):
     question_id: str
     text_fr: str
-    answer_kind: Literal["TEXT", "PROJECT", "DATE_RANGE", "QUANTITY", "DOCUMENT", "CHOICE"] = "TEXT"
+    answer_kind: Literal["TEXT", "PROJECT", "DATE_RANGE", "QUANTITY", "DOCUMENT", "CHOICE", "NUMBER", "DATE", "TEXT_WITH_FILE"] = "TEXT"
     choices: tuple[str, ...] = ()
     related_fact_ids: tuple[str, ...] = ()
+    scope_note_fr: str | None = None
+    rule_version: str = "question-policy-2"
 
 
 class ClarificationRequest(Contract):
@@ -718,6 +755,9 @@ class EvidenceProposal(Contract):
     line_id: str
     unit: str
     budget_quantity: DecimalStr
+    decided_by: str | None = None
+    decided_at: AwareDatetime | None = None
+    decision_reason: str | None = None
     changes: tuple[AllocationChange, ...]
     status: ProposalStatus
 
@@ -770,7 +810,49 @@ class CaseEvent(Contract):
 # Service views (what the UI receives)
 # ---------------------------------------------------------------------------
 
+class DocumentCheck(Contract):
+    code: str
+    status: Literal["PASS", "WARN", "FAIL", "UNKNOWN"]
+    explanation_fr: str
+    source_ids: tuple[str, ...] = ()
+
+
+class DocumentConfidenceFactor(Contract):
+    code: str
+    value: int | None = Field(default=None, ge=0, le=100)
+    status: Literal["MEASURED", "UNKNOWN"]
+    explanation_fr: str
+    source_ids: tuple[str, ...] = ()
+
+
+class DocumentConfidence(Contract):
+    value: int | None = Field(default=None, ge=0, le=100)
+    level: Literal["HIGH", "MEDIUM", "LOW", "INSUFFICIENT_DATA"]
+    factors: tuple[DocumentConfidenceFactor, ...]
+    measured_dimensions: int = Field(ge=0, le=4)
+    rule_version: str
+    explanation_fr: str
+
+
+class DocumentAnalysisReport(Contract):
+    confidence: DocumentConfidence | None = None
+    document_id: str
+    case_version: int
+    calculated_at: AwareDatetime
+    rule_version: str
+    classification: str
+    checks: tuple[DocumentCheck, ...]
+    stages: tuple[DocumentCheck, ...]
+    linked_cause_ids: tuple[str, ...] = ()
+    transaction_ids: tuple[str, ...] = ()
+    proposed_action: Literal["REVIEW_DOCUMENT", "REQUEST_READABLE_DOCUMENT", "REQUEST_CLARIFICATION"]
+    authenticity_statement: str = "Authenticité à vérifier"
+    limitations: tuple[str, ...] = ()
+
+
 class DocumentView(Contract):
+    analysis: DocumentAnalysisReport | None = None
+    processing_status: str = "NOT_ANALYZED"
     document: Document
     extraction: ExtractionProposal | None = None
     integrity: IntegrityReport | None = None
@@ -864,7 +946,163 @@ class GroundedNoteView(Contract):
     disclaimer_fr: str = "Synthèse indicative — l'applicabilité doit être vérifiée par l'agent."
 
 
+class OperationalConfidenceFactor(Contract):
+    code: Literal["TIMELINESS", "ANSWER_COHERENCE", "EVIDENCE_CORROBORATION", "HISTORICAL_STABILITY"]
+    numerator: int = Field(ge=0)
+    denominator: int = Field(gt=0)
+    nominal_weight: int = Field(ge=0, le=100)
+    effective_weight: DecimalStr
+    weighted_contribution: DecimalStr
+    reason_codes: tuple[str, ...]
+    source_ids: tuple[str, ...]
+    explanation_fr: str
+
+
+class OperationalConfidence(Contract):
+    index: int | None = Field(default=None, ge=0, le=100)
+    status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    as_of: AwareDatetime
+    factors: tuple[OperationalConfidenceFactor, ...] = ()
+    eligible_observations: int = 0
+    method: str = "OPERATIONAL_CONFIDENCE_V3"
+    window_start: AwareDatetime | None = None
+    sample_size: int = 0
+    request_count: int = 0
+    document_count: int = 0
+    history_transaction_count: int = 0
+    data_quality: Literal["INSUFFICIENT_DATA", "LIMITED_DATA", "OBSERVED"] = "INSUFFICIENT_DATA"
+    sample_note_fr: str = "Données insuffisantes"
+
+
+class ConfidenceFactorDelta(Contract):
+    code: str
+    before_contribution: DecimalStr | None = None
+    after_contribution: DecimalStr | None = None
+    before_numerator: int | None = None
+    before_denominator: int | None = None
+    after_numerator: int | None = None
+    after_denominator: int | None = None
+    source_ids: tuple[str, ...] = ()
+    reason_codes: tuple[str, ...] = ()
+
+
+class ConfidenceHistoryEntry(Contract):
+    from_version: int
+    to_version: int
+    as_of: AwareDatetime
+    before_index: int | None = None
+    after_index: int | None = None
+    before_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    after_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    factor_deltas: tuple[ConfidenceFactorDelta, ...] = ()
+
+
+class IndicatorFactor(Contract):
+    code: str
+    value: DecimalStr | None = None
+    contribution: DecimalStr | None = None
+    source_ids: tuple[str, ...] = ()
+    explanation: str
+
+
+class CaseIndicator(Contract):
+    value: DecimalStr | None = None
+    status: Literal["AVAILABLE", "PROVISIONAL", "PARTIAL", "INSUFFICIENT_DATA", "LIMITED_DATA"]
+    factors: tuple[IndicatorFactor, ...] = ()
+    explanation: str
+    calculated_at: AwareDatetime
+    rule_version: str
+    sample_size: int = Field(ge=0)
+
+
+class BehaviorMetric(Contract):
+    code: str
+    label_fr: str
+    current_value: DecimalStr | None = None
+    baseline_value: DecimalStr | None = None
+    change_percent: DecimalStr | None = None
+    status: Literal["AVAILABLE", "INSUFFICIENT_DATA", "UNSUPPORTED"]
+    unit: str
+    currency: str | None = None
+    baseline_periods: tuple[str, ...] = ()
+    sample_size: int = Field(default=0, ge=0)
+    current_sample_size: int = Field(default=0, ge=0)
+    source_ids: tuple[str, ...] = ()
+    explanation_fr: str
+
+
+class BehaviorSignal(Contract):
+    code: Literal["RESPONSE_DELAY_DEVIATION", "MONTHLY_AMOUNT_DEVIATION"]
+    metric_code: str
+    currency: str | None = None
+    observed_value: DecimalStr
+    baseline_value: DecimalStr
+    ratio: DecimalStr
+    data_quality: Literal["AVAILABLE", "LIMITED_DATA"]
+    baseline_months: int = Field(ge=3)
+    current_sample_size: int = Field(ge=1)
+    source_ids: tuple[str, ...]
+    explanation_fr: str
+    rule_version: str = "self-baseline-4"
+
+
+class BehaviorProfile(Contract):
+    as_of: AwareDatetime
+    observed_period: str
+    baseline_periods: tuple[str, ...]
+    rule_version: str
+    metrics: tuple[BehaviorMetric, ...]
+    signals: tuple[BehaviorSignal, ...] = ()
+
+
+class CaseReviewDecision(Contract):
+    decision_id: str
+    case_id: str
+    case_version: int
+    kind: Literal["ACCEPT", "REJECT", "ESCALATE", "RESOLVE"]
+    actor_id: str
+    reason: str
+    decided_at: AwareDatetime
+    review_index: int | None = None
+    source_cause_ids: tuple[str, ...] = ()
+    rule_version: str
+    scope_note: str = "Décision de revue interne ; aucun effet juridique automatique ni modification du score."
+
+
+class RecommendedAction(Contract):
+    action_id: str
+    kind: Literal["REVIEW_EVIDENCE", "REVIEW_DOCUMENT", "REQUEST_EXPLANATION", "REQUEST_DOCUMENT",
+                  "WAIT_RESPONSE", "ESCALATE", "VALIDATE_CAUSE"]
+    title_fr: str
+    priority: int = Field(ge=1, le=5)
+    reason: str
+    source_causes: tuple[str, ...] = ()
+    required_documents: tuple[str, ...] = ()
+    status: Literal["OPEN", "WAITING", "COMPLETED"]
+    source_ids: tuple[str, ...] = ()
+    rule_version: str = "recommended-actions-2"
+
+
+class ResolutionImpact(Contract):
+    step: int
+    cause_id: str
+    family: FindingFamily
+    transaction_id: str
+    before_index: int
+    after_index: int
+    source_ids: tuple[str, ...] = ()
+    case_version: int
+    calculated_at: AwareDatetime | None = None
+    rule_version: str = "resolution-impact-1"
+    hypothetical: Literal[True] = True
+
+
 class OfficerCaseView(Contract):
+    case_decisions: tuple[CaseReviewDecision, ...] = ()
+    impact_if_resolved: tuple[ResolutionImpact, ...] = ()
+    recommended_actions: tuple[RecommendedAction, ...] = ()
+    behavior_profile: BehaviorProfile | None = None
+    indicators: dict[str, CaseIndicator] = Field(default_factory=dict)
     audience: Literal[Audience.OFFICER] = Audience.OFFICER
     case_id: str
     company_id: str
@@ -893,6 +1131,20 @@ class OfficerCaseView(Contract):
     """Officer-only queue urgency, separate from ``score.review_index``."""
     clarification_deadlines: tuple["ClarificationDeadlineView", ...] = ()
     history_signals: tuple["CompanyHistorySignal", ...] = ()
+    history_signal_index: int | None = None
+    history_signal_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
+    history_signal_factors: tuple["HistoricalFactor", ...] = ()
+    history_signal_method: str | None = None
+    operational_confidence_index: int | None = None
+    operational_confidence_status: Literal["INSUFFICIENT_DATA", "AVAILABLE"] = "INSUFFICIENT_DATA"
+    operational_confidence_as_of: AwareDatetime | None = None
+    operational_confidence_factors: tuple[OperationalConfidenceFactor, ...] = ()
+    operational_confidence_eligible_observations: int = 0
+    operational_confidence_method: str = "OPERATIONAL_CONFIDENCE_V3"
+    operational_confidence_sample_size: int = 0
+    operational_confidence_data_quality: str = "INSUFFICIENT_DATA"
+    operational_confidence_sample_note_fr: str = "Données insuffisantes"
+    operational_confidence_window_start: AwareDatetime | None = None
     investigator_brief: "InvestigatorBriefView | None" = None
     enterprise_profile: "EnterpriseProfileView | None" = None
     monthly_activity: tuple["MonthlyActivityView", ...] = ()
@@ -941,6 +1193,7 @@ class QueueItem(Contract):
     synthetic_identifier: str | None = None
     last_activity_at: date | None = None
     history_signal_codes: tuple[str, ...] = ()
+    history_signal_index: int | None = None
     history_anomaly: bool | None = None
     """True when a lane B signal other than NO_SIGNIFICANT_CHANGE/INSUFFICIENT_HISTORY exists."""
 
@@ -1003,6 +1256,11 @@ class HistoryView(Contract):
     revisions: tuple[CaseRevision, ...]
     events: tuple[CaseEvent, ...]
     mode: Mode
+
+
+class OfficerHistoryView(HistoryView):
+    audience: Literal[Audience.OFFICER] = Audience.OFFICER
+    operational_confidence_changes: tuple[ConfidenceHistoryEntry, ...] = ()
 
 
 class LocalDraftArtifact(Contract):
@@ -1073,6 +1331,11 @@ class HistorySignalCode(str, Enum):
     REPEATED_INVOICE_CONFLICT = "REPEATED_INVOICE_CONFLICT"
     NO_SIGNIFICANT_CHANGE = "NO_SIGNIFICANT_CHANGE"
     INSUFFICIENT_HISTORY = "INSUFFICIENT_HISTORY"
+    UNUSUAL_DEPOSIT_DELAY = "UNUSUAL_DEPOSIT_DELAY"
+    UNUSUAL_AMOUNT_INCREASE = "UNUSUAL_AMOUNT_INCREASE"
+    UNUSUAL_AMOUNT_DECREASE = "UNUSUAL_AMOUNT_DECREASE"
+    NEW_SUPPLIER = "NEW_SUPPLIER"
+    UNUSUAL_SPLIT_PAYMENT = "UNUSUAL_SPLIT_PAYMENT"
 
 
 class CompanyHistorySignal(Contract):
@@ -1095,6 +1358,21 @@ class CompanyHistorySignal(Contract):
     method: str
     mode: Mode
     affects_review_index: Literal[False] = False
+    affected_transaction_ids: tuple[str, ...] = ()
+
+
+class HistoricalFactor(Contract):
+    reason_code: HistorySignalCode
+    contribution: int = Field(ge=0, le=100)
+    source_signal_ids: tuple[str, ...]
+    explanation_fr: str
+
+
+class HistoricalIndicator(Contract):
+    index: int | None = Field(default=None, ge=0, le=100)
+    status: Literal["INSUFFICIENT_DATA", "AVAILABLE"]
+    factors: tuple[HistoricalFactor, ...] = ()
+    method: str = "HISTORY_CONTEXT_V1"
 
 
 class BriefObservationView(Contract):
@@ -1155,14 +1433,18 @@ class EnterpriseProfileView(Contract):
     data_kind: Literal["SYNTHETIC"] = "SYNTHETIC"
 
 
+
+
 class MonthlyActivityView(Contract):
-    """Deterministic monthly counts from the case facts (no imputation of missing months)."""
+    """Calendar window with explicit covered zero versus unknown ledger coverage."""
 
     month: str
     transaction_count: int
     invoice_observation_count: int
     settled_outflow_millimes: int
     source_label: str = "Faits synthétiques du dossier"
+    coverage_status: Literal["COVERED", "UNKNOWN"] = "UNKNOWN"
+    coverage_source_id: str | None = None
 
 
 class PaymentTimelineEntry(Contract):
@@ -1202,7 +1484,14 @@ class InvoiceComparisonView(Contract):
     transaction_id: str
     buyer_observation_id: str | None = None
     seller_observation_id: str | None = None
-    status: Literal["CONCORDANT", "DIFFERENCES", "SINGLE_OBSERVATION"]
+    status: Literal["CONCORDANT", "DIFFERENCES", "SINGLE_OBSERVATION", "AMBIGUOUS"]
+    reconciliation_status: Literal["EN_ATTENTE_DE_CONTREPARTIE", "RAPPROCHE", "ECART_DETECTE", "RAPPROCHEMENT_AMBIGU", "NON_RAPPROCHE"] = "NON_RAPPROCHE"
+    candidate_observation_ids: tuple[str, ...] = ()
+    payment_ids: tuple[str, ...] = ()
+    delivery_ids: tuple[str, ...] = ()
+    project_ids: tuple[str, ...] = ()
+    rule_version: str = "invoice-reconciliation-1"
+    calculated_at: AwareDatetime | None = None
     label_fr: str
     difference_fields: tuple[str, ...] = ()
     counterparty_reason_code: str | None = None
@@ -1299,7 +1588,7 @@ class BousslaService(Protocol):
 
     def create_case(self, actor: Actor, company_id: str, project_payload: dict, request_id: str) -> CompanyCaseView | OfficerCaseView: ...
 
-    def upload_document(self, actor: Actor, case_id: str, upload_bytes: bytes, filename: str, media_type: str, expected_version: int, request_id: str) -> DocumentView: ...
+    def upload_document(self, actor: Actor, case_id: str, upload_bytes: bytes, filename: str, media_type: str, expected_version: int, request_id: str, response_id: str | None = None) -> DocumentView: ...
 
     def confirm_transcription(self, actor: Actor, case_id: str, proposal_id: str, field_confirmations: dict[str, str], expected_version: int, request_id: str) -> CompanyCaseView: ...
 

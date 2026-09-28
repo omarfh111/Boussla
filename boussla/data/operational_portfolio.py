@@ -126,7 +126,10 @@ def _event(number: int, sequence: int, month: int, position: int) -> dict:
     for doc in source["documents"]:
         invoice = next(i for i in source["invoice_observations"] if i["document_id"] == doc["document_id"])
         doc["sha256"] = sha256(json.dumps(invoice, sort_keys=True).encode()).hexdigest()
-    return {"inputs": TransactionInputs.model_validate(source).model_dump(mode="json"),
+    # Preserve the frozen V1 fixture schema; later runtime fields are not synthetic facts.
+    serialized = TransactionInputs.model_validate(source).model_dump(
+        mode="json", exclude={"payments": {"__all__": {"payment_method"}}})
+    return {"inputs": serialized,
             "projects": [Project.model_validate(p).model_dump(mode="json") for p in projects]}
 
 

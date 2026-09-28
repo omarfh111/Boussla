@@ -1,6 +1,7 @@
-﻿import {
+import {
   Component,
   useCallback,
+  useEffect,
   useRef,
   useState,
   type FormEvent,
@@ -30,6 +31,7 @@ import {
   UploadCloud,
 } from "lucide-react";
 import { ApiError, api } from "./api/client";
+import { NetworkGraph3D } from "./network/NetworkGraph3D";
 import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
 import { BousslaMark } from "./brand/BousslaMark";
 import {
@@ -55,6 +57,7 @@ import type {
   ClarificationDraft,
   DocumentView,
   ContextAssessmentView,
+  InvestigationAnswer,
 } from "./api/types";
 
 type Tab =
@@ -69,21 +72,24 @@ type Tab =
   | "references"
   | "history"
   | "diagnostics"
-  | "admin";
+  | "admin"
+  | "network"
+  | "notifications"
+  | "messages"
+  | "advanced";
 const companyTabs: [Tab, string, ReactNode][] = [
-  ["overview", "Vue d’ensemble", <LayoutDashboard size={18} />],
-  ["operations", "Opérations", <Activity size={18} />],
-  ["context", "Contexte", <ClipboardList size={18} />],
-  ["requests", "Demandes", <FolderOpen size={18} />],
-  ["documents", "Pièces", <FileText size={18} />],
+  ["overview", "Mes dossiers", <LayoutDashboard size={18} />],
+  ["requests", "Actions requises", <FolderOpen size={18} />],
+  ["documents", "Documents", <FileText size={18} />],
+  ["messages", "Messages", <ClipboardList size={18} />],
 ];
 const officerTabs: [Tab, string, ReactNode][] = [
-  ["queue", "File de revue", <LayoutDashboard size={18} />],
-  ["company360", "Entreprise 360", <Building2 size={18} />],
-  ["dossier", "Dossier", <Search size={18} />],
-  ["references", "Références", <BookOpen size={18} />],
-  ["history", "Historique", <History size={18} />],
-  ["diagnostics", "Diagnostics", <Activity size={18} />],
+  ["queue", "Dashboard", <LayoutDashboard size={18} />],
+  ["dossier", "Dossiers", <Search size={18} />],
+  ["network", "Réseau", <Building2 size={18} />],
+  ["company360", "Historique", <History size={18} />],
+  ["notifications", "Notifications", <ClipboardList size={18} />],
+  ["advanced", "Avancé", <Database size={18} />],
 ];
 const operatorTabs: [Tab, string, ReactNode][] = [
   ["admin", "Données démo", <Database size={18} />],
@@ -117,6 +123,8 @@ const status: Record<string, string> = {
   ALLOCATION_REFERENCE: "Référence d’affectation",
   DELIVERY_RECORD: "Bon de livraison",
   PAYMENT_RECORD: "Preuve de règlement",
+  CONTRACT: "Contrat",
+  DECLARATION: "Déclaration",
   OTHER_OR_UNKNOWN: "Autre / inconnu",
   BUYER_RECEIVED: "Copie reçue par l’acheteur",
   SELLER_ISSUED: "Émission du vendeur",
@@ -129,6 +137,23 @@ const familyLabel: Record<string, string> = {
   SETTLEMENT: "Règlement observé",
   QUANTITY: "Affectation des quantités",
 };
+const progressLabel: Record<string, string> = {
+  UNRESOLVED: "Non expliquée",
+  EXPLANATION_RECEIVED: "Réponse reçue",
+  EVIDENCE_RECEIVED: "Pièce reçue, analyse en attente",
+  EVIDENCE_COHERENT: "Pièce cohérente, validation en attente",
+  RESOLVED: "Résolue après décision agent",
+};
+const confidenceUnit: Record<string, string> = {
+  TIMELINESS: "réponses dans les délais",
+  ANSWER_COHERENCE: "réponses cohérentes",
+  EVIDENCE_CORROBORATION: "pièces corroborées",
+  HISTORICAL_STABILITY: "transactions sans conflit répété",
+};
+const indicator = (value: number | null, state: string) =>
+  state === "INSUFFICIENT_DATA" || value === null
+    ? "Données insuffisantes"
+    : format(value);
 const horizonLabel: Record<string, string> = {
   SHORT_HORIZON: "Horizon court",
   LONGER_HORIZON: "Horizon plus long",
@@ -415,6 +440,8 @@ function AppInner() {
     setRevision(null);
     query.removeQueries({ queryKey: ["case"] });
     query.removeQueries({ queryKey: ["history"] });
+    query.removeQueries({ queryKey: ["notifications"] });
+    query.removeQueries({ queryKey: ["network"] });
     query.removeQueries({ queryKey: ["queue"] });
     query.removeQueries({ queryKey: ["admin"] });
   };
@@ -433,6 +460,9 @@ function AppInner() {
       await query.invalidateQueries({ queryKey: ["case"] });
       await query.invalidateQueries({ queryKey: ["queue"] });
       await query.invalidateQueries({ queryKey: ["history"] });
+      await query.invalidateQueries({ queryKey: ["audit"] });
+      await query.invalidateQueries({ queryKey: ["notifications"] });
+      await query.invalidateQueries({ queryKey: ["network"] });
       return value;
     } catch (error) {
       if (error instanceof ApiError && error.code === "STALE_REVISION") {
@@ -575,7 +605,7 @@ function AppInner() {
           ) : !current ? (
             <Empty>Aucun dossier accessible pour ce rôle.</Empty>
           ) : current.audience === "COMPANY" ? (
-            <Company caseView={current} tab={tab} act={act} />
+            <Company caseView={current} tab={tab} act={act} setTab={setTab} />
           ) : (
             <Officer
               caseView={current}
@@ -588,7 +618,7 @@ function AppInner() {
                   return;
                 }
                 setSelectedCaseId(id);
-                setTab("company360");
+                setTab("dossier");
               }}
             />
           )}
@@ -601,14 +631,256 @@ function AppInner() {
   );
 }
 
+const networkSignalLabels: Record<string, string> = {
+  SUPPLIER_CONCENTRATION: "Concentration fournisseur",
+  REPEATED_AMOUNT: "Montants répétés",
+  RECIPROCAL_LINK: "Échanges réciproques",
+};
+
+function NetworkOverview({ c }: { c: OfficerCaseView }) {
+  const [scope, setScope] = useState<"case" | "all">("case");
+  const graph = useQuery({
+    queryKey: ["network", "OFFICER", scope, c.case_id],
+    queryFn: () =>
+      scope === "case" ? api.networkCase(c.case_id) : api.network(),
+  });
+  const nodes = new Map(
+    graph.data?.nodes.map((node) => [node.node_id, node]) ?? [],
+  );
+  const companyLinks =
+    graph.data?.edges.filter((edge) => edge.kind === "SELLS_TO") ?? [];
+  return (
+    <>
+      <SectionHead
+        label="RELATIONS DOCUMENTÉES"
+        title="Réseau"
+        detail="Relations issues des dossiers assignés à l’agent, avec leurs sources."
+      />
+      <label className="network-scope">
+        Périmètre du réseau
+        <select
+          value={scope}
+          onChange={(event) => setScope(event.target.value as "case" | "all")}
+        >
+          <option value="case">Dossier courant · {c.case_id}</option>
+          <option value="all">Tous les dossiers assignés</option>
+        </select>
+      </label>
+      {graph.isLoading ? (
+        <Skeleton />
+      ) : graph.isError ? (
+        <p role="alert">Réseau indisponible.</p>
+      ) : (
+        <>
+          <div className="metric-grid four">
+            <div className="metric">
+              <span>Entreprises</span>
+              <strong>
+                {graph.data?.nodes.filter((node) => node.kind === "COMPANY")
+                  .length ?? 0}
+              </strong>
+            </div>
+            <div className="metric">
+              <span>Factures observées</span>
+              <strong>
+                {graph.data?.nodes.filter((node) => node.kind === "INVOICE")
+                  .length ?? 0}
+              </strong>
+            </div>
+            <div className="metric">
+              <span>Paiements enregistrés</span>
+              <strong>
+                {graph.data?.nodes.filter((node) => node.kind === "PAYMENT")
+                  .length ?? 0}
+              </strong>
+            </div>
+            <div className="metric">
+              <span>Relations sourcées</span>
+              <strong>{graph.data?.edges.length ?? 0}</strong>
+            </div>
+          </div>
+          {graph.data && <NetworkGraph3D graph={graph.data} dossier={c} />}
+          <Panel
+            title="Signaux réseau à examiner"
+            eyebrow="DESCRIPTIF · SOURCÉ"
+          >
+            {graph.data?.signals.length ? (
+              graph.data.signals.map((signal) => (
+                <article className="document" key={signal.signal_id}>
+                  <strong>
+                    {networkSignalLabels[signal.kind] ?? "Signal réseau"}
+                  </strong>
+                  <p>{signal.explanation_fr}</p>
+                  <small>
+                    {signal.sample_size} transaction(s) dans l’échantillon ·
+                    Sources : {signal.source_ids.join(", ")}
+                  </small>
+                </article>
+              ))
+            ) : (
+              <p>Aucun motif réseau établi sur les transactions visibles.</p>
+            )}
+            <p className="footnote">
+              Les dossiers visibles ne constituent pas une couverture exhaustive
+              du réseau. Aucun signal ne modifie l’indice de revue ni ne conclut
+              à une fraude.
+            </p>
+          </Panel>
+          <Panel
+            title="Relations entre entreprises"
+            eyebrow="ACHETEUR · VENDEUR"
+          >
+            {companyLinks.length ? (
+              companyLinks.map((edge) => (
+                <article className="document" key={edge.edge_id}>
+                  <strong>
+                    {nodes.get(edge.source)?.label ?? edge.source} →{" "}
+                    {nodes.get(edge.target)?.label ?? edge.target}
+                  </strong>
+                  <p>
+                    Dossier {edge.case_id} · {edge.source_ids.length}{" "}
+                    transaction(s) enregistrée(s)
+                  </p>
+                  <small>
+                    Sources : {edge.source_ids.join(", ")} ·{" "}
+                    {edge.provenance_status}
+                  </small>
+                </article>
+              ))
+            ) : (
+              <p>Aucune relation acheteur-vendeur établie dans ce périmètre.</p>
+            )}
+            <p className="footnote">{graph.data?.note_fr}</p>
+          </Panel>
+          <details className="dossier-secondary">
+            <summary>Explorer les nœuds du dossier {c.case_id}</summary>
+            {graph.data?.nodes
+              .filter((node) => node.case_ids.includes(c.case_id))
+              .map((node) => (
+                <article className="document" key={node.node_id}>
+                  <strong>
+                    {node.kind} · {node.label}
+                  </strong>
+                  <small>{node.node_id}</small>
+                </article>
+              ))}
+          </details>
+        </>
+      )}
+    </>
+  );
+}
+
+function ActionNotifications({ c }: { c: OfficerCaseView }) {
+  return (
+    <>
+      <SectionHead
+        label="À TRAITER"
+        title="Notifications"
+        detail="Actions internes dérivées du dossier en cours."
+      />
+      <NotificationFeed role="OFFICER" caseId={c.case_id} />
+      <Panel title="Priorités de revue">
+        {c.recommended_actions?.length ? (
+          c.recommended_actions.map((action) => (
+            <article className="document" key={action.action_id}>
+              <strong>{action.title_fr}</strong>
+              <p>{action.reason}</p>
+              <small>
+                Priorité {action.priority} · {action.status}
+              </small>
+            </article>
+          ))
+        ) : (
+          <p>Aucune action interne à signaler.</p>
+        )}
+      </Panel>
+    </>
+  );
+}
+
+function NotificationFeed({ role, caseId }: { role: Role; caseId: string }) {
+  const queryClient = useQueryClient();
+  const [readError, setReadError] = useState<string | null>(null);
+  const feed = useQuery({
+    queryKey: ["notifications", role, caseId],
+    queryFn: () => api.notifications(role, caseId),
+  });
+  return (
+    <Panel eyebrow="ÉVÉNEMENTS DU DOSSIER" title="Mises à jour internes">
+      {feed.isLoading ? (
+        <p>Chargement des mises à jour…</p>
+      ) : feed.isError ? (
+        <p role="alert">Mises à jour indisponibles.</p>
+      ) : feed.data?.items.length ? (
+        feed.data.items.map((item) => (
+          <article className="document" key={item.notification_id}>
+            <strong>{item.title_fr}</strong>
+            <p>{item.message_fr}</p>
+            <div className="notification-meta">
+              {item.status === "CURRENT_SIGNAL" ? (
+                <small>Signal courant · à réévaluer</small>
+              ) : item.read_at ? (
+                <small>
+                  Lu le {new Date(item.read_at).toLocaleString("fr-FR")}
+                </small>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      setReadError(null);
+                      await api.markNotificationRead(
+                        role,
+                        caseId,
+                        item.notification_id,
+                      );
+                      await queryClient.invalidateQueries({
+                        queryKey: ["notifications", role, caseId],
+                      });
+                    } catch (error) {
+                      setReadError(
+                        error instanceof Error
+                          ? error.message
+                          : "Lecture non enregistrée.",
+                      );
+                    }
+                  }}
+                >
+                  Marquer comme lu
+                </button>
+              )}
+              {!!item.source_ids?.length && (
+                <small>Sources : {item.source_ids.join(", ")}</small>
+              )}
+              <small>
+                {new Date(item.occurred_at).toLocaleString("fr-FR", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}{" "}
+                · v{item.case_version}
+              </small>
+            </div>
+          </article>
+        ))
+      ) : (
+        <p>Aucune mise à jour à signaler.</p>
+      )}
+      {readError && <p role="alert">{readError}</p>}
+    </Panel>
+  );
+}
+
 function Company({
   caseView: c,
   tab,
   act,
+  setTab,
 }: {
   caseView: CompanyCaseView;
   tab: Tab;
   act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+  setTab: (tab: Tab) => void;
 }) {
   if (tab === "overview")
     return (
@@ -645,25 +917,61 @@ function Company({
             <small>Boîte de démonstration</small>
           </div>
         </div>
+        <details>
+          <summary>Déclarer ou modifier le contexte</summary>
+          <ContextAssessment ctx={c.context_assessment} />
+          <ContextForm c={c} act={act} />
+        </details>
         <div className="two-col">
           <Operations c={c} compact />
           <Panel eyebrow="VOTRE SITUATION" title="Actions à poursuivre">
-            <div className="next-step">
-              <span className="step-num">01</span>
-              <div>
-                <strong>Renseigner le contexte</strong>
-                <p>Usage prévu, projet et bénéficiaire.</p>
+            {c.inbox
+              .filter((item) => item.request.status === "PUBLISHED_IN_DEMO")
+              .map((item) => (
+                <div className="next-step" key={item.request.request_id}>
+                  <span className="step-num">!</span>
+                  <div>
+                    <strong>Justification requise</strong>
+                    <p>{item.text_fr}</p>
+                    <button
+                      className="secondary"
+                      onClick={() => setTab("requests")}
+                    >
+                      Voir la demande
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {c.context_claims.length === 0 && (
+              <div className="next-step">
+                <span className="step-num">1</span>
+                <div>
+                  <strong>Renseigner le contexte</strong>
+                  <p>Précisez l’usage prévu, le projet et le bénéficiaire.</p>
+                  <button
+                    className="secondary"
+                    onClick={() => setTab("messages")}
+                  >
+                    Déclarer le contexte
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="next-step">
-              <span className="step-num">02</span>
-              <div>
-                <strong>Vérifier les demandes</strong>
-                <p>
-                  Une réponse reste une déclaration jusqu’à la revue humaine.
-                </p>
-              </div>
-            </div>
+            )}
+            {c.documents.some(
+              (document) =>
+                document.processing_status === "ANALYZED_AWAITING_REVIEW",
+            ) && (
+              <p className="footnote">
+                Analyse automatique terminée. La pièce reste disponible dans le
+                dossier.
+              </p>
+            )}
+            {c.inbox.every(
+              (item) => item.request.status !== "PUBLISHED_IN_DEMO",
+            ) &&
+              c.context_claims.length > 0 && (
+                <p>Aucune réponse requise actuellement.</p>
+              )}
           </Panel>
         </div>
       </>
@@ -679,16 +987,35 @@ function Company({
         <Operations c={c} />
       </>
     );
-  if (tab === "context")
+  if (tab === "messages")
     return (
       <>
         <SectionHead
           label="DÉCLARATION"
-          title="Contexte de l’opération"
+          title="Messages et contexte"
           detail="Contexte déclaré par l’entreprise — il ne constitue pas à lui seul une preuve."
         />
-        <ContextAssessment ctx={c.context_assessment} />
-        <ContextForm c={c} act={act} />
+        {c.inbox.map((item) => (
+          <article className="document" key={item.request.request_id}>
+            <strong>Demande {item.request.request_id}</strong>
+            <p>{item.text_fr}</p>
+          </article>
+        ))}
+        <NotificationFeed role="COMPANY" caseId={c.case_id} />
+        {c.responses.map((response) => (
+          <article className="document" key={response.response_id}>
+            <strong>Réponse {response.response_id}</strong>
+            <p>
+              {Object.values(response.answers).join(" · ") ||
+                "Pièce ou répartition transmise"}
+            </p>
+          </article>
+        ))}
+        <details>
+          <summary>Contexte déclaré</summary>
+          <ContextAssessment ctx={c.context_assessment} />
+          <ContextForm c={c} act={act} />
+        </details>
       </>
     );
   if (tab === "requests")
@@ -710,6 +1037,21 @@ function Company({
         detail="Chaque document conserve son origine et son empreinte."
       />
       <Upload c={c} act={act} />
+      {c.documents
+        .filter(
+          (d) =>
+            d.extraction?.status === "PROPOSED" &&
+            d.extraction.proposal_id &&
+            d.extraction.candidates?.length,
+        )
+        .map((d) => (
+          <TranscriptionForm
+            key={`${d.document.document_id}:${c.case_version}`}
+            c={c}
+            document={d}
+            act={act}
+          />
+        ))}
       <Documents c={c} />
     </>
   );
@@ -1084,7 +1426,10 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
       {c.documents.length ? (
         <div className="document-grid">
           {c.documents.map((d) => (
-            <article className="document" key={d.document.document_id}>
+            <article
+              className="document with-icon"
+              key={d.document.document_id}
+            >
               <div className="document-icon">
                 <FileText size={22} />
               </div>
@@ -1117,6 +1462,63 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                     <dd>{d.extraction?.status || "N/D"}</dd>
                   </div>
                 </dl>
+                {d.processing_status === "ANALYZED_AWAITING_REVIEW" && (
+                  <p>
+                    Analyse automatique terminée. La pièce reste disponible dans
+                    le dossier.
+                  </p>
+                )}
+                {d.analysis && (
+                  <details>
+                    <summary>Analyse documentaire</summary>
+                    {d.analysis.confidence && (
+                      <div>
+                        <strong>
+                          Confiance documentaire :{" "}
+                          {{
+                            HIGH: "élevée",
+                            MEDIUM: "moyenne",
+                            LOW: "faible",
+                            INSUFFICIENT_DATA: "données insuffisantes",
+                          }[d.analysis.confidence.level] ?? "inconnue"}
+                        </strong>
+                        <p>
+                          {d.analysis.confidence.value === null
+                            ? "Indice non calculable"
+                            : `${d.analysis.confidence.value}/100`}{" "}
+                          · {d.analysis.confidence.measured_dimensions}/4
+                          dimensions mesurées
+                        </p>
+                        {d.analysis.confidence.factors.map((factor) => (
+                          <p key={factor.code}>
+                            {factor.code} : {factor.value ?? "inconnu"} ·{" "}
+                            {factor.explanation_fr}
+                          </p>
+                        ))}
+                        <small>{d.analysis.confidence.explanation_fr}</small>
+                      </div>
+                    )}
+                    <p>
+                      {d.analysis.classification} ·{" "}
+                      {d.analysis.authenticity_statement}
+                    </p>
+                    <small>
+                      {d.analysis.rule_version} · {d.analysis.calculated_at}
+                    </small>
+                    {d.analysis.checks.map((check) => (
+                      <p key={check.code}>
+                        <strong>{check.status}</strong> · {check.explanation_fr}
+                        <br />
+                        <small>{check.source_ids.join(", ")}</small>
+                      </p>
+                    ))}
+                    <p>
+                      Causes proposées :{" "}
+                      {d.analysis.linked_cause_ids.join(", ") ||
+                        "Aucun lien établi"}
+                    </p>
+                  </details>
+                )}
                 {d.integrity?.limitations?.length ? (
                   <small>Limites : {d.integrity.limitations.join(", ")}</small>
                 ) : null}
@@ -1178,6 +1580,19 @@ function RequestInbox({
                     Répondre à la demande <ArrowRight size={16} />
                   </button>
                 ))}
+              {r.request.status === "RESPONDED" &&
+                c.responses
+                  .filter(
+                    (response) => response.request_id === r.request.request_id,
+                  )
+                  .map((response) => (
+                    <LateDocumentLink
+                      key={response.response_id}
+                      c={c}
+                      response={response}
+                      act={act}
+                    />
+                  ))}
               <p className="footnote">Déclaration seule ≠ preuve acceptée.</p>
             </Panel>
           </AutoRequestFrame>
@@ -1185,6 +1600,62 @@ function RequestInbox({
       ) : (
         <Empty>Aucune demande publiée pour ce dossier.</Empty>
       )}
+    </div>
+  );
+}
+
+function LateDocumentLink({
+  c,
+  response,
+  act,
+}: {
+  c: CompanyCaseView;
+  response: CompanyCaseView["responses"][number];
+  act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+}) {
+  const [documentId, setDocumentId] = useState("");
+  const available = c.documents.filter(
+    (entry) => entry.document.acquisition_channel === "COMPANY_UPLOAD",
+  );
+  if (!available.length) return null;
+  return (
+    <div className="response-form">
+      <label>
+        Choisir ou remplacer la pièce de cette réponse
+        <select
+          value={documentId}
+          onChange={(e) => setDocumentId(e.target.value)}
+        >
+          <option value="">Choisir une pièce…</option>
+          {available.map((entry) => (
+            <option
+              key={entry.document.document_id}
+              value={entry.document.document_id}
+            >
+              {entry.document.original_filename}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="secondary"
+        disabled={!documentId}
+        onClick={() =>
+          void act(
+            () =>
+              api.attachDocument(
+                c.case_id,
+                response.response_id,
+                c.case_version,
+                documentId,
+              ),
+            "Pièce choisie pour la réponse. Analyse du dossier actualisée.",
+          )
+        }
+      >
+        Utiliser cette pièce
+      </button>
     </div>
   );
 }
@@ -1328,7 +1799,11 @@ function ResponseComposer({
             document_ids: doc ? [doc] : [],
             allocation,
           }),
-        "Réponse transmise à la revue de l’agent.",
+        allocation
+          ? "Réponse et proposition de répartition transmises à l’agent."
+          : doc
+            ? "Réponse et pièce transmises. Aucune proposition de répartition créée."
+            : "Réponse transmise à la revue de l’agent.",
       );
     } catch {
       /* Notice shown by App */
@@ -1341,6 +1816,7 @@ function ResponseComposer({
       {request.questions.map((q, i) => (
         <label key={q.question_id}>
           {q.text_fr}
+          {q.scope_note_fr && <small>{q.scope_note_fr}</small>}
           {q.answer_kind === "CHOICE" && q.choices?.length ? (
             <select
               required={i === 0}
@@ -1356,10 +1832,20 @@ function ResponseComposer({
                 </option>
               ))}
             </select>
+          ) : q.answer_kind === "NUMBER" || q.answer_kind === "DATE" ? (
+            <input
+              type={q.answer_kind === "DATE" ? "date" : "number"}
+              step={q.answer_kind === "NUMBER" ? "any" : undefined}
+              min={q.answer_kind === "NUMBER" ? "0" : undefined}
+              value={answers[q.question_id] || ""}
+              onChange={(e) =>
+                setAnswers({ ...answers, [q.question_id]: e.target.value })
+              }
+            />
           ) : (
             <textarea
               rows={3}
-              required={i === 0}
+              required={i === 0 && q.answer_kind !== "DOCUMENT"}
               value={answers[q.question_id] || ""}
               onChange={(e) =>
                 setAnswers({ ...answers, [q.question_id]: e.target.value })
@@ -1419,7 +1905,10 @@ function ResponseComposer({
       </div>
       <div className="allocation-input">
         <strong>Proposition de répartition (facultatif)</strong>
-        <p>La proposition reste en attente de validation humaine.</p>
+        <p>
+          Renseignez les deux quantités pour créer une proposition à valider par
+          l’agent.
+        </p>
         <label>
           Opération et ligne concernées
           <select
@@ -1520,9 +2009,34 @@ function Officer({
 }) {
   if (tab === "queue") return <Queue onSelectCase={onSelectCase} />;
   if (tab === "company360") return <Company360Tab c={c} />;
-  if (tab === "references") return <References c={c} />;
-  if (tab === "history") return <HistoryPanel c={c} />;
-  if (tab === "diagnostics") return <Diagnostics c={c} />;
+  if (tab === "network") return <NetworkOverview c={c} />;
+  if (tab === "notifications") return <ActionNotifications c={c} />;
+  if (tab === "advanced")
+    return (
+      <>
+        <SectionHead
+          label="PARAMÈTRES"
+          title="Avancé"
+          detail="Références, journal et diagnostics du dossier."
+        />
+        <details>
+          <summary>Références</summary>
+          <References c={c} />
+        </details>
+        <details>
+          <summary>Timeline du dossier</summary>
+          <HistoryPanel c={c} />
+        </details>
+        <details>
+          <summary>Journal d’audit</summary>
+          <AuditPanel caseId={c.case_id} caseVersion={c.case_version} />
+        </details>
+        <details>
+          <summary>Diagnostics</summary>
+          <Diagnostics c={c} />
+        </details>
+      </>
+    );
   return (
     <>
       <SectionHead
@@ -1530,7 +2044,15 @@ function Officer({
         title={c.case_id}
         detail={`${c.company_display_name} · Version ${c.case_version} · Calcul déterministe`}
       />
-      <div className="dossier-hero">
+      <nav className="dossier-jump" aria-label="Sections du dossier">
+        <a href="#dossier-synthese">Synthèse</a>
+        <a href="#dossier-causes">Pourquoi ?</a>
+        <a href="#dossier-preuves">Preuves</a>
+        <a href="#dossier-actions">Actions</a>
+        <a href="#dossier-timeline">Timeline</a>
+        <a href="#dossier-decision">Décision</a>
+      </nav>
+      <div className="dossier-hero" id="dossier-synthese">
         <div className="priority-ring">
           <div>
             <span>Priorité de revue</span>
@@ -1576,6 +2098,21 @@ function Officer({
             <strong>{format(c.triage?.triage_priority)}</strong>
             <small>Distincte de l’indice de revue</small>
           </div>
+          <div>
+            <span>Signal historique</span>
+            <strong className="text-value">
+              {indicator(c.history_signal_index, c.history_signal_status)}
+            </strong>
+          </div>
+          <div>
+            <span>Confiance opérationnelle</span>
+            <strong className="text-value">
+              {indicator(
+                c.operational_confidence_index,
+                c.operational_confidence_status,
+              )}
+            </strong>
+          </div>
         </div>
       </div>
       {c.triage && c.triage.reason_codes.length > 0 && (
@@ -1591,32 +2128,410 @@ function Officer({
         <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
         les contrôles déterministes.
       </p>
-      <InvestigatorPanel
-        brief={c.investigator_brief}
-        passages={c.candidate_passages}
-      />
-      <div className="two-col">
-        <QuantityStory c={c} />
-        <Clarification c={c} act={act} />
-      </div>
-      <div className="two-col">
-        <Findings findings={c.findings} />
-        <Proposals c={c} act={act} />
-      </div>
-      <div className="two-col">
-        <InvoiceCompare
-          observations={c.invoice_observations}
-          comparisons={c.invoice_comparisons}
+      {c.operational_confidence_sample_note_fr && (
+        <p className="hero-caption">
+          {c.operational_confidence_sample_note_fr}
+        </p>
+      )}
+      {c.indicators && (
+        <details className="panel">
+          <summary>Comprendre les cinq indicateurs</summary>
+          {Object.entries(c.indicators).map(([code, value]) => (
+            <article className="indicator-factor" key={code}>
+              <strong>
+                {(
+                  {
+                    document_review: "Indice de revue",
+                    evidence_coverage: "Couverture des preuves",
+                    historical_signal: "Signal historique",
+                    urgency: "Urgence",
+                    operational_confidence: "Confiance opérationnelle",
+                  } as Record<string, string>
+                )[code] ?? code}{" "}
+                : {value.value ?? "Données insuffisantes"}
+              </strong>
+              <p>{value.explanation}</p>
+              <small>
+                Échantillon : {value.sample_size} · Calcul :{" "}
+                {date(value.calculated_at)} · Règle : {value.rule_version}
+              </small>
+              {value.factors.map((factor) => (
+                <p key={factor.code}>
+                  {factor.explanation}
+                  {factor.contribution !== null
+                    ? ` · Contribution : ${factor.contribution}`
+                    : ""}
+                </p>
+              ))}
+            </article>
+          ))}
+        </details>
+      )}
+      <section id="dossier-causes" className="dossier-zone">
+        <h2>Pourquoi ce dossier ?</h2>
+        <Panel title="Contributions au score" eyebrow="EXPLICATION PAR CAUSE">
+          {c.score?.cause_progress.length ? (
+            <div className="cause-list">
+              {c.score.cause_progress.map((cause) => (
+                <article
+                  className="cause-row"
+                  key={`${cause.transaction_id}:${cause.family}`}
+                >
+                  <div>
+                    <strong>{familyLabel[cause.family] || cause.family}</strong>
+                    <small>{cause.transaction_id}</small>
+                    <small>{cause.reason_code || "Cause documentée"}</small>
+                    <span>{progressLabel[cause.stage] || cause.stage}</span>
+                    {cause.provisional && (
+                      <>
+                        <em>Réduction provisoire</em>
+                        <small>Validation agent requise</small>
+                      </>
+                    )}
+                    <small>
+                      Cause initiale : +
+                      {cause.initial_weight ?? cause.raw_contribution} ·
+                      Contribution actuelle : +{cause.current_contribution}
+                    </small>
+                    {cause.resolved_by && (
+                      <small>
+                        Résolue par {cause.resolved_by} · {cause.resolved_at}
+                      </small>
+                    )}
+                    {cause.rule_version && (
+                      <small>Règle : {cause.rule_version}</small>
+                    )}
+                  </div>
+                  <strong className="cause-value">
+                    {cause.raw_contribution} → {cause.current_contribution}
+                  </strong>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>Aucune contribution chiffrée pour ce dossier.</p>
+          )}
+        </Panel>
+        <Panel
+          eyebrow="SIMULATION · AUCUN EFFET SUR LE DOSSIER"
+          title="Impact si résolu"
+        >
+          <p>Score actuel : {format(c.score?.review_index)}</p>
+          {c.impact_if_resolved?.length ? (
+            <ol className="impact-list">
+              {c.impact_if_resolved.map((step) => (
+                <li key={step.cause_id}>
+                  <strong>
+                    Si {familyLabel[step.family] || step.family} ·{" "}
+                    {step.transaction_id} est confirmée comme résolue
+                  </strong>
+                  <span>
+                    {step.before_index} → {step.after_index}
+                  </span>
+                  <small>
+                    Sources :{" "}
+                    {step.source_ids.join(", ") || "Constat du dossier"} · règle{" "}
+                    {step.rule_version}
+                  </small>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p>Simulation indisponible pour les causes de cette version.</p>
+          )}
+          <p className="footnote">
+            Simulation — aucune modification appliquée au dossier. Les étapes
+            supposent une validation successivement confirmée par l’agent.
+          </p>
+        </Panel>
+      </section>
+      <section id="dossier-preuves" className="dossier-zone">
+        <h2>Preuves</h2>
+        <div className="dossier-counts">
+          <span>
+            <strong>{c.documents.length}</strong> pièces disponibles
+          </span>
+          <span>
+            <strong>
+              {
+                c.documents.filter(
+                  (document) =>
+                    document.processing_status === "ANALYZED_AWAITING_REVIEW",
+                ).length
+              }
+            </strong>{" "}
+            à vérifier
+          </span>
+          <span>
+            <strong>
+              {
+                new Set(
+                  c.recommended_actions?.flatMap(
+                    (action) => action.required_documents,
+                  ) ?? [],
+                ).size
+              }
+            </strong>{" "}
+            types de pièces demandés
+          </span>
+        </div>
+        <details className="dossier-secondary">
+          <summary>Examiner les pièces et leurs analyses</summary>
+          <Documents c={c} />
+        </details>
+      </section>
+      <section id="dossier-actions" className="dossier-zone">
+        <h2>Actions</h2>
+        <p>
+          {
+            c.requests.filter(
+              (item) => item.request.status === "PUBLISHED_IN_DEMO",
+            ).length
+          }{" "}
+          demandes en attente ·{" "}
+          {
+            c.proposals.filter(
+              (item) => item.status === "AWAITING_HUMAN_REVIEW",
+            ).length
+          }{" "}
+          propositions à décider
+        </p>
+        <Panel
+          title="Actions recommandées"
+          eyebrow="PROCHAINE ÉTAPE · DÉCISION AGENT"
+        >
+          {c.recommended_actions?.length ? (
+            c.recommended_actions.map((action) => (
+              <article key={action.action_id} className="document">
+                <strong>
+                  Priorité {action.priority} · {action.title_fr}
+                </strong>
+                <span>
+                  {action.status === "COMPLETED"
+                    ? "Terminé"
+                    : action.status === "WAITING"
+                      ? "En attente"
+                      : "À traiter"}
+                </span>
+                <p>{action.reason}</p>
+                <small>
+                  Causes :{" "}
+                  {action.source_causes.join(", ") || "Aucune cause liée"}
+                </small>
+                {action.required_documents.length > 0 && (
+                  <small>
+                    Pièces requises : {action.required_documents.join(", ")}
+                  </small>
+                )}
+              </article>
+            ))
+          ) : (
+            <p>Aucune action recommandée avec les données actuelles.</p>
+          )}
+        </Panel>
+      </section>
+      <section id="dossier-timeline" className="dossier-zone">
+        <h2>Timeline</h2>
+        <HistoryPanel c={c} />
+      </section>
+      <section id="dossier-decision" className="dossier-zone">
+        <h2>Décision de l’agent</h2>
+        <div className="two-col">
+          <Clarification c={c} act={act} />
+          <Proposals c={c} act={act} />
+          <CaseReviewPanel c={c} act={act} />
+        </div>
+        <p className="footnote">
+          Accepter ou rejeter une proposition exige une pièce liée. La décision
+          crée une nouvelle version du dossier.
+        </p>
+      </section>
+      <InvestigationAssistant caseId={c.case_id} caseVersion={c.case_version} />
+      <details className="dossier-secondary">
+        <summary>Analyses complémentaires</summary>
+        <div className="two-col indicator-explanations">
+          <Panel
+            title="Facteurs historiques"
+            eyebrow="CONTEXTE · SÉPARÉ DU SCORE"
+          >
+            {c.history_signal_status === "AVAILABLE" ? (
+              <>
+                <p>
+                  Indice historique : {format(c.history_signal_index)}/100 ·{" "}
+                  {c.history_signal_method}
+                </p>
+                {c.history_signal_factors.length ? (
+                  <div className="indicator-factor-list">
+                    {c.history_signal_factors.map((factor) => (
+                      <article
+                        className="indicator-factor"
+                        key={factor.reason_code}
+                      >
+                        <strong>
+                          {factor.reason_code} · +{factor.contribution}
+                        </strong>
+                        <span>{factor.explanation_fr}</span>
+                        <small>{factor.source_signal_ids.join(", ")}</small>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p>
+                    Aucune variation significative sur les périodes couvertes.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p>
+                Données insuffisantes pour comparer l’entreprise à son
+                historique.
+              </p>
+            )}
+          </Panel>
+          <Panel
+            title="Facteurs de confiance"
+            eyebrow="INTERACTIONS · SÉPARÉE DU SCORE"
+          >
+            {c.operational_confidence_status === "AVAILABLE" ? (
+              <>
+                <p>
+                  Indice : {format(c.operational_confidence_index)}/100 ·{" "}
+                  {c.operational_confidence_eligible_observations} observations
+                  admissibles
+                </p>
+                <p>
+                  Calcul au {c.operational_confidence_as_of} ·{" "}
+                  {c.operational_confidence_method}
+                </p>
+                <div className="indicator-factor-list">
+                  {c.operational_confidence_factors.map((factor, index) => (
+                    <article
+                      className="indicator-factor"
+                      key={`${factor.code}:${index}`}
+                    >
+                      <strong>
+                        {factor.code} · {factor.weighted_contribution} points
+                      </strong>
+                      <span>
+                        {factor.numerator}/{factor.denominator}{" "}
+                        {confidenceUnit[factor.code] ||
+                          "observations favorables"}
+                      </span>
+                      <span>
+                        Poids : {factor.effective_weight} % (nominal{" "}
+                        {factor.nominal_weight} %)
+                      </span>
+                      <span>{factor.explanation_fr}</span>
+                      <small>{factor.reason_codes.join(", ")}</small>
+                      <small>{factor.source_ids.join(", ")}</small>
+                    </article>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p>
+                Données insuffisantes :{" "}
+                {c.operational_confidence_eligible_observations}/3 observations
+                admissibles.
+              </p>
+            )}
+          </Panel>
+        </div>
+        {c.behavior_profile && (
+          <Panel
+            title="Habitude et période observée"
+            eyebrow="BASELINE PROPRE À L’ENTREPRISE"
+          >
+            <p>
+              Période : {c.behavior_profile.observed_period} · Données arrêtées
+              au {c.behavior_profile.as_of} · Règle{" "}
+              {c.behavior_profile.rule_version}
+            </p>
+            <div className="monthly-context">
+              {c.behavior_profile.metrics.map((metric) => (
+                <article key={`${metric.code}-${metric.currency ?? "all"}`}>
+                  <strong>{metric.label_fr}</strong>
+                  <span>
+                    Observé : {metric.current_value ?? "inconnu"} {metric.unit}{" "}
+                    {metric.currency}
+                  </span>
+                  <span>
+                    Habitude :{" "}
+                    {metric.baseline_value ?? "données insuffisantes"}{" "}
+                    {metric.unit}
+                  </span>
+                  {metric.change_percent !== null && (
+                    <span>Écart : {metric.change_percent} %</span>
+                  )}
+                  <small>
+                    {metric.sample_size} mois de référence exploitables
+                  </small>
+                  <details>
+                    <summary>Méthode et sources</summary>
+                    <p>{metric.explanation_fr}</p>
+                    <small>
+                      {metric.source_ids.join(", ") || "Sources insuffisantes"}
+                    </small>
+                  </details>
+                </article>
+              ))}
+            </div>
+          </Panel>
+        )}
+        <Panel
+          title="Comportement sur 12 mois"
+          eyebrow="FENÊTRE CALENDAIRE · COUVERTURE EXPLICITE"
+        >
+          {c.monthly_activity.length ? (
+            <div className="monthly-context">
+              {c.monthly_activity.slice(-12).map((month) => (
+                <article key={month.month}>
+                  <strong>{month.month}</strong>
+                  <span>
+                    {month.transaction_count} transactions ·{" "}
+                    {month.invoice_observation_count} observations de factures
+                  </span>
+                  <small>{month.source_label}</small>
+                  <small>
+                    {month.coverage_status === "COVERED"
+                      ? "Période couverte"
+                      : "Couverture inconnue"}
+                  </small>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>Données insuffisantes pour la vue sur 12 mois.</p>
+          )}
+        </Panel>
+      </details>
+      <details className="dossier-secondary">
+        <summary>Enquête détaillée et simulations</summary>
+        <InvestigatorPanel
+          brief={c.investigator_brief}
+          passages={c.candidate_passages}
         />
-        <HypothesisCards
-          hypotheses={c.investigator_brief?.top_hypotheses ?? []}
+        <div className="two-col">
+          <QuantityStory c={c} />
+        </div>
+        <div className="two-col">
+          <Findings findings={c.findings} />
+        </div>
+        <div className="two-col">
+          <InvoiceCompare
+            observations={c.invoice_observations}
+            comparisons={c.invoice_comparisons}
+          />
+          <HypothesisCards
+            hypotheses={c.investigator_brief?.top_hypotheses ?? []}
+          />
+        </div>
+        <ContextAssessment ctx={c.context_assessment} />
+        <ScenarioCards
+          reviewIndex={c.score?.review_index}
+          scenarios={c.scenarios}
         />
-      </div>
-      <ContextAssessment ctx={c.context_assessment} />
-      <ScenarioCards
-        reviewIndex={c.score?.review_index}
-        scenarios={c.scenarios}
-      />
+      </details>
     </>
   );
 }
@@ -1889,6 +2804,108 @@ function Clarification({
     </Panel>
   );
 }
+function CaseReviewPanel({
+  c,
+  act,
+}: {
+  c: OfficerCaseView;
+  act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+}) {
+  const [reason, setReason] = useState("");
+  const [pending, setPending] = useState(false);
+  const canClose =
+    c.score?.review_index === 0 &&
+    !c.proposals.some(
+      (proposal) => proposal.status === "AWAITING_HUMAN_REVIEW",
+    ) &&
+    !c.requests.some(
+      (request) =>
+        request.request.status === "PUBLISHED_IN_DEMO" ||
+        request.request.status === "EXTENDED",
+    );
+  const send = async (kind: "ACCEPT" | "REJECT" | "ESCALATE" | "RESOLVE") => {
+    if (pending || reason.trim().length < 10) return;
+    setPending(true);
+    try {
+      await act(
+        () => api.caseDecision(c.case_id, c.case_version, kind, reason.trim()),
+        "Décision de revue interne enregistrée.",
+      );
+      setReason("");
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Panel eyebrow="DÉCISION DU DOSSIER" title="Décision de revue interne">
+      <p>
+        Motif obligatoire. Cette décision ne modifie pas l’indice documentaire
+        et n’a aucun effet juridique automatique.
+      </p>
+      <label htmlFor="case-review-reason">Motif de la décision</label>
+      <textarea
+        id="case-review-reason"
+        value={reason}
+        maxLength={500}
+        onChange={(event) => setReason(event.target.value)}
+      />
+      <div className="button-row">
+        <button
+          className="secondary"
+          disabled={pending || reason.trim().length < 10}
+          onClick={() => send("ESCALATE")}
+        >
+          Escalader le dossier
+        </button>
+        <button
+          className="secondary"
+          disabled={pending || reason.trim().length < 10}
+          onClick={() => send("REJECT")}
+        >
+          Rejeter la revue
+        </button>
+        <button
+          className="secondary"
+          disabled={pending || reason.trim().length < 10 || !canClose}
+          onClick={() => send("ACCEPT")}
+        >
+          Accepter la revue
+        </button>
+        <button
+          className="primary"
+          disabled={pending || reason.trim().length < 10 || !canClose}
+          onClick={() => send("RESOLVE")}
+        >
+          Résoudre le dossier
+        </button>
+      </div>
+      {!canClose && (
+        <p className="footnote">
+          Pour accepter ou résoudre, toutes les causes et propositions doivent
+          être closes et aucune demande ne doit attendre une réponse.
+        </p>
+      )}
+      {!!c.case_decisions?.length && (
+        <ol className="timeline">
+          {[...c.case_decisions].reverse().map((decision) => (
+            <li key={decision.decision_id}>
+              <span className="timeline-version">v{decision.case_version}</span>
+              <div>
+                <strong>{decision.kind}</strong>
+                <p>{decision.reason}</p>
+                <small>
+                  {decision.actor_id} · {decision.decided_at} · indice{" "}
+                  {decision.review_index ?? "inconnu"}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Panel>
+  );
+}
+
 function Proposals({
   c,
   act,
@@ -1897,16 +2914,20 @@ function Proposals({
   act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
 }) {
   const [pending, setPending] = useState(false);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const run = async (p: EvidenceProposal, action: "accept" | "reject") => {
-    if (pending) return;
+    const reason = (reasons[p.proposal_id] || "").trim();
+    if (pending || reason.length < 10) return;
     setPending(true);
     try {
       await act(
-        () => api.decide(c.case_id, p.proposal_id, c.case_version, action),
+        () =>
+          api.decide(c.case_id, p.proposal_id, c.case_version, action, reason),
         action === "accept"
           ? "Pièce acceptée dans ce dossier."
           : "Proposition rejetée.",
       );
+      setReasons((current) => ({ ...current, [p.proposal_id]: "" }));
     } catch {
       /* Notice shown by App */
     } finally {
@@ -1916,52 +2937,88 @@ function Proposals({
   return (
     <Panel eyebrow="VALIDATION HUMAINE" title="Propositions d’affectation">
       {c.proposals.length ? (
-        c.proposals.map((p) => (
-          <article className="proposal" key={p.proposal_id}>
-            <div className="record-top">
-              <span className="mono">{p.proposal_id}</span>
-              {badge(p.status)}
-            </div>
-            <p>
-              Transaction {p.transaction_id} · ligne {p.line_id}
-            </p>
-            <p>Pièce source : {format(p.source_document_id)}</p>
-            <div className="changes">
-              {p.changes.map((ch) => (
-                <div key={ch.allocation_id}>
-                  <strong>{ch.target_project_id || "Autre"}</strong>
-                  <span>
-                    {format(ch.old_quantity)} → {ch.new_quantity} {p.unit}
-                  </span>
-                </div>
-              ))}
-            </div>
-            {p.status === "AWAITING_HUMAN_REVIEW" && (
-              <div className="button-row">
-                <button
-                  className="primary"
-                  disabled={pending || !p.source_document_id}
-                  onClick={() => run(p, "accept")}
-                >
-                  Accepter dans ce dossier
-                </button>
-                <button
-                  className="secondary"
-                  disabled={pending}
-                  onClick={() => run(p, "reject")}
-                >
-                  Rejeter
-                </button>
+        c.proposals.map((p) => {
+          const sourceBacked = c.score?.cause_progress.some(
+            (cause) =>
+              cause.family === "QUANTITY" &&
+              cause.transaction_id === p.transaction_id &&
+              !!p.source_document_id &&
+              cause.evidence_ids?.includes(p.source_document_id) &&
+              (cause.stage === "EVIDENCE_RECEIVED" ||
+                cause.stage === "EVIDENCE_COHERENT"),
+          );
+          return (
+            <article className="proposal" key={p.proposal_id}>
+              ;
+              <div className="record-top">
+                <span className="mono">{p.proposal_id}</span>
+                {badge(p.status)}
               </div>
-            )}
-            {!p.source_document_id && p.status === "AWAITING_HUMAN_REVIEW" && (
-              <p className="footnote">
-                Une déclaration seule ne suffit pas à accepter cette
-                répartition.
+              <p>
+                Transaction {p.transaction_id} · ligne {p.line_id}
               </p>
-            )}
-          </article>
-        ))
+              <p>Pièce source : {format(p.source_document_id)}</p>
+              <div className="changes">
+                {p.changes.map((ch) => (
+                  <div key={ch.allocation_id}>
+                    <strong>{ch.target_project_id || "Autre"}</strong>
+                    <span>
+                      {format(ch.old_quantity)} → {ch.new_quantity} {p.unit}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {p.status === "AWAITING_HUMAN_REVIEW" && (
+                <>
+                  <label htmlFor={`reason-${p.proposal_id}`}>
+                    Motif de la décision sur la pièce
+                  </label>
+                  <textarea
+                    id={`reason-${p.proposal_id}`}
+                    value={reasons[p.proposal_id] || ""}
+                    maxLength={500}
+                    onChange={(event) =>
+                      setReasons((current) => ({
+                        ...current,
+                        [p.proposal_id]: event.target.value,
+                      }))
+                    }
+                  />
+                  <div className="button-row">
+                    <button
+                      className="primary"
+                      disabled={
+                        pending ||
+                        !sourceBacked ||
+                        (reasons[p.proposal_id] || "").trim().length < 10
+                      }
+                      onClick={() => run(p, "accept")}
+                    >
+                      Accepter dans ce dossier
+                    </button>
+                    <button
+                      className="secondary"
+                      disabled={
+                        pending ||
+                        (reasons[p.proposal_id] || "").trim().length < 10
+                      }
+                      onClick={() => run(p, "reject")}
+                    >
+                      Rejeter
+                    </button>
+                  </div>
+                </>
+              )}
+              {!sourceBacked && p.status === "AWAITING_HUMAN_REVIEW" && (
+                <p className="footnote">
+                  {p.source_document_id
+                    ? "La pièce liée ne justifie pas encore cette répartition. Choisir une autre pièce ou demander un complément."
+                    : "Une déclaration seule ne suffit pas à accepter cette répartition."}
+                </p>
+              )}
+            </article>
+          );
+        })
       ) : (
         <Empty>Aucune proposition en attente.</Empty>
       )}
@@ -2050,6 +3107,213 @@ function References({ c }: { c: OfficerCaseView }) {
   );
 }
 
+function InvestigationAssistant({
+  caseId,
+  caseVersion,
+}: {
+  caseId: string;
+  caseVersion: number;
+}) {
+  const [question, setQuestion] = useState(
+    "Pourquoi ce dossier est prioritaire ?",
+  );
+  const [answer, setAnswer] = useState<InvestigationAnswer | null>(null);
+  const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
+  const scope = `${caseId}:${caseVersion}`;
+  const currentScope = useRef(scope);
+  currentScope.current = scope;
+  useEffect(() => {
+    setAnswer(null);
+    setError("");
+  }, [scope]);
+  const ask = async (event: FormEvent) => {
+    event.preventDefault();
+    if (pending || question.trim().length < 3) return;
+    setPending(true);
+    setError("");
+    setAnswer(null);
+    const requestedScope = scope;
+    try {
+      const result = await api.askInvestigation(caseId, question.trim());
+      if (currentScope.current === requestedScope) setAnswer(result);
+    } catch (cause) {
+      if (currentScope.current === requestedScope)
+        setError(
+          cause instanceof Error ? cause.message : "Réponse indisponible.",
+        );
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Panel
+      eyebrow="ASSISTANCE SOURCÉE · AGENT"
+      title="Assistant d’investigation"
+    >
+      <form onSubmit={ask} className="investigation-form">
+        <label>
+          Question sur ce dossier
+          <input
+            value={question}
+            onChange={(event) => setQuestion(event.target.value)}
+            maxLength={500}
+          />
+        </label>
+        <button
+          className="primary"
+          disabled={pending || question.trim().length < 3}
+        >
+          {pending ? "Recherche…" : "Examiner les sources"}
+        </button>
+      </form>
+      <p className="footnote">
+        Questions possibles : priorité, historique, documents, réseau,
+        références ou décisions. La réponse n’est pas une décision automatique.
+      </p>
+      {error && <p role="alert">{error}</p>}
+      {answer && (
+        <div className="investigation-answer">
+          <p className="investigation-lines">{answer.answer_fr}</p>
+          <strong>Sources citées</strong>
+          {answer.citations.length ? (
+            <ul>
+              {answer.citations.map((citation) => (
+                <li key={citation.source_id}>
+                  {citation.source_url?.startsWith("https://") ? (
+                    <a
+                      href={citation.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      {citation.label_fr}
+                    </a>
+                  ) : (
+                    citation.label_fr
+                  )}
+                  <small>
+                    {" "}
+                    · {citation.kind} · {citation.source_id}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p>Aucune source suffisante pour une conclusion.</p>
+          )}
+          <small>
+            v{answer.case_version} · {answer.rule_version} · {answer.mode} ·{" "}
+            {answer.limitations.join(" ")}
+          </small>
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function AuditPanel({
+  caseId,
+  caseVersion,
+}: {
+  caseId: string;
+  caseVersion: number;
+}) {
+  const audit = useQuery({
+    queryKey: ["audit", caseId, caseVersion],
+    queryFn: () => api.audit(caseId),
+  });
+  if (audit.isLoading) return <p>Chargement du journal d’audit…</p>;
+  if (audit.isError) return <p role="alert">Journal d’audit indisponible.</p>;
+  const records = audit.data?.records ?? [];
+  return (
+    <Panel eyebrow="DÉCISIONS ET CALCULS ENREGISTRÉS" title="Journal d’audit">
+      <p className="footnote">
+        Journal local de traçabilité ; ce n’est pas une preuve légale
+        infalsifiable.
+      </p>
+      {!!audit.data?.legacy_events_without_audit && (
+        <p className="footnote">
+          {audit.data.legacy_events_without_audit} ancien(s) événement(s) sans
+          détail d’audit.
+        </p>
+      )}
+      {records.length ? (
+        <ol className="timeline">
+          {[...records].reverse().map((record) => (
+            <li key={record.audit_id}>
+              <span className="timeline-version">v{record.case_version}</span>
+              <div>
+                <strong>{record.action}</strong>
+                <p>{record.reason}</p>
+                <small>
+                  {record.actor_id} ·{" "}
+                  {new Date(record.at).toLocaleString("fr-FR")}
+                </small>
+                {(record.before || record.after) && (
+                  <p className="timeline-score">
+                    Indice de revue : {record.before?.review_index ?? "inconnu"}{" "}
+                    → {record.after?.review_index ?? "inconnu"}
+                  </p>
+                )}
+                {Object.keys({
+                  ...record.before?.cause_contributions,
+                  ...record.after?.cause_contributions,
+                })
+                  .filter(
+                    (causeId) =>
+                      record.before?.cause_contributions?.[causeId] !==
+                      record.after?.cause_contributions?.[causeId],
+                  )
+                  .map((causeId) => (
+                    <p className="timeline-cause" key={causeId}>
+                      Cause {causeId} :{" "}
+                      {record.before?.cause_contributions?.[causeId] ??
+                        "inconnue"}{" "}
+                      →{" "}
+                      {record.after?.cause_contributions?.[causeId] ??
+                        "inconnue"}
+                    </p>
+                  ))}
+                {!!record.evidence_ids.length && (
+                  <p>Sources : {record.evidence_ids.join(", ")}</p>
+                )}
+                {!!record.fact_changes?.length && (
+                  <details className="audit-facts">
+                    <summary>
+                      Valeurs modifiées ({record.fact_changes.length})
+                    </summary>
+                    {record.fact_changes.map((change) => (
+                      <div key={`${change.kind}:${change.fact_id}`}>
+                        <strong>
+                          {change.kind} · {change.fact_id}
+                        </strong>
+                        <pre>
+                          Avant :{" "}
+                          {JSON.stringify(change.before ?? "absent", null, 2)}
+                        </pre>
+                        <pre>
+                          Après :{" "}
+                          {JSON.stringify(change.after ?? "retiré", null, 2)}
+                        </pre>
+                      </div>
+                    ))}
+                  </details>
+                )}
+                <small>
+                  Règle : {record.rules_version ?? "inconnue"} · Moteur :{" "}
+                  {record.engine_version ?? "inconnu"} · {record.event_id}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p>Aucune entrée d’audit enregistrée pour ce dossier.</p>
+      )}
+    </Panel>
+  );
+}
+
 function HistoryPanel({ c }: { c: OfficerCaseView }) {
   const q = useQuery({
     queryKey: ["history", "OFFICER", c.case_id],
@@ -2067,38 +3331,153 @@ function HistoryPanel({ c }: { c: OfficerCaseView }) {
       ) : q.isError ? (
         <p role="alert">Historique indisponible.</p>
       ) : (
-        <Timeline value={q.data!} />
+        <>
+          <Timeline value={q.data!} />
+          {q.data?.operational_confidence_changes?.length ? (
+            <Panel
+              eyebrow="CONFIANCE OPÉRATIONNELLE · AGENT"
+              title="Évolution expliquée"
+            >
+              <div className="indicator-factor-list">
+                {q.data.operational_confidence_changes.map((change, index) => (
+                  <article
+                    className="indicator-factor"
+                    key={`${change.to_version}:${change.as_of}:${index}`}
+                  >
+                    <strong>
+                      Confiance :{" "}
+                      {change.before_index === null
+                        ? "données insuffisantes"
+                        : format(change.before_index)}{" "}
+                      →{" "}
+                      {change.after_index === null
+                        ? "données insuffisantes"
+                        : format(change.after_index)}
+                    </strong>
+                    <small>
+                      Version {change.from_version} → {change.to_version} ·{" "}
+                      {change.as_of}
+                    </small>
+                    {change.factor_deltas.map((factor) => (
+                      <div key={factor.code}>
+                        <span>
+                          {factor.code} :{" "}
+                          {factor.before_contribution ?? "inconnu"} →{" "}
+                          {factor.after_contribution ?? "inconnu"} points
+                        </span>
+                        <small>{factor.source_ids.join(", ")}</small>
+                      </div>
+                    ))}
+                  </article>
+                ))}
+              </div>
+            </Panel>
+          ) : null}
+        </>
       )}
     </>
   );
 }
 function Timeline({ value }: { value: HistoryView }) {
+  const revisions = [...(value.revisions ?? [])].reverse();
+  const byVersion = new Map(
+    (value.revisions ?? []).map((revision) => [revision.version, revision]),
+  );
   return (
     <Panel eyebrow="RÉVISIONS IMMUABLES" title="Chronologie">
       <ol className="timeline">
-        {[...value.revisions].reverse().map((r) => (
-          <li key={r.version}>
-            <span className="timeline-version">v{r.version}</span>
-            <div>
-              <strong>{r.reason}</strong>
-              <p>
-                {date(r.created_at)} ·{" "}
-                {value.events
-                  .filter((e) => e.case_version === r.version)
-                  .map((e) => e.summary)
-                  .join(" · ")}
-              </p>
-              <small>
-                Version précédente :{" "}
-                {r.parent_version === null ? "origine" : `v${r.parent_version}`}
-              </small>
-            </div>
-          </li>
-        ))}
+        {revisions.map((revision) => {
+          const previous =
+            revision.parent_version === null
+              ? null
+              : byVersion.get(revision.parent_version);
+          const before = previous?.score_snapshot;
+          const after = revision.score_snapshot;
+          const changedCauses =
+            before && after
+              ? after.cause_progress.flatMap((cause) => {
+                  const prior = before.cause_progress.find(
+                    (item) =>
+                      item.cause_id === cause.cause_id ||
+                      (item.transaction_id === cause.transaction_id &&
+                        item.family === cause.family),
+                  );
+                  return prior &&
+                    prior.current_contribution !== cause.current_contribution
+                    ? [{ cause, prior }]
+                    : [];
+                })
+              : [];
+          const events = (value.events ?? [])
+            .filter((event) => event.case_version === revision.version)
+            .sort((left, right) => left.at.localeCompare(right.at));
+          return (
+            <li key={revision.version}>
+              <span className="timeline-version">v{revision.version}</span>
+              <div>
+                <strong>{revision.reason}</strong>
+                <p>
+                  {new Date(revision.created_at).toLocaleString("fr-FR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </p>
+                {before &&
+                  after &&
+                  before.review_index !== after.review_index && (
+                    <p className="timeline-score">
+                      Indice de revue : {format(before.review_index)} →{" "}
+                      {format(after.review_index)}
+                    </p>
+                  )}
+                {changedCauses.map(({ cause, prior }) => (
+                  <p
+                    className="timeline-cause"
+                    key={`${cause.transaction_id}:${cause.family}`}
+                  >
+                    {familyLabel[cause.family] || cause.family} ·{" "}
+                    {cause.transaction_id} : {prior.current_contribution} →{" "}
+                    {cause.current_contribution}
+                    {cause.provisional
+                      ? " · provisoire"
+                      : cause.resolved_by
+                        ? " · validée par l’agent"
+                        : ""}
+                    {cause.evidence_ids?.length
+                      ? ` · preuves ${cause.evidence_ids?.join(", ")}`
+                      : ""}
+                  </p>
+                ))}
+                {events.map((event) => (
+                  <div className="timeline-event" key={event.event_id}>
+                    <time dateTime={event.at}>
+                      {new Date(event.at).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                    <span>{event.summary}</span>
+                    {event.actor_id && <small> · {event.actor_id}</small>}
+                    {!!event.fact_ids?.length && (
+                      <small> · {event.fact_ids.join(", ")}</small>
+                    )}
+                  </div>
+                ))}
+                <small>
+                  Version précédente :{" "}
+                  {revision.parent_version === null
+                    ? "origine"
+                    : `v${revision.parent_version}`}
+                </small>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </Panel>
   );
 }
+
 function Diagnostics({ c }: { c: OfficerCaseView }) {
   const modes = c.mode_by_node;
   return (
@@ -2162,5 +3541,82 @@ export default function App() {
     <ErrorBoundary>
       <AppInner />
     </ErrorBoundary>
+  );
+}
+
+function TranscriptionForm({
+  c,
+  document,
+  act,
+}: {
+  c: CompanyCaseView;
+  document: DocumentView;
+  act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+}) {
+  const proposal = document.extraction!;
+  const [fields, setFields] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      (proposal.candidates ?? []).map((field) => [
+        field.field_name,
+        field.normalized_value ?? field.raw_value ?? "",
+      ]),
+    ),
+  );
+  const [pending, setPending] = useState(false);
+  const labels: Record<string, string> = {
+    "allocation.transaction_id": "Transaction",
+    "allocation.line_id": "Ligne de facture",
+    "allocation.company_id": "Entreprise",
+  };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    try {
+      await act(
+        () =>
+          api.confirmTranscription(
+            c.case_id,
+            proposal.proposal_id!,
+            c.case_version,
+            fields,
+          ),
+        "Champs vérifiés. Analyse mise à jour ; validation de l’agent requise.",
+      );
+    } catch {
+      /* App displays the typed error. */
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Panel
+      title="Vérifier les champs du document"
+      eyebrow={document.document.original_filename}
+    >
+      <p>
+        Comparez les valeurs avec votre pièce. Cette confirmation porte sur la
+        transcription ; la décision appartient à l’agent.
+      </p>
+      <form className="context-form transcription-form" onSubmit={submit}>
+        {Object.entries(fields).map(([name, value]) => (
+          <label key={name}>
+            {labels[name] ??
+              (name.startsWith("allocation.")
+                ? `Quantité · ${name.split(".")[1]}`
+                : name)}
+            <input
+              value={value}
+              onChange={(event) =>
+                setFields({ ...fields, [name]: event.target.value })
+              }
+            />
+          </label>
+        ))}
+        <button className="primary" disabled={pending}>
+          {pending ? "Vérification…" : "Confirmer les champs"}
+        </button>
+      </form>
+    </Panel>
   );
 }

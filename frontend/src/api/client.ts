@@ -6,6 +6,11 @@ import type {
   OfficerCaseView,
   QueuePage,
   HistoryView,
+  AuditView,
+  NotificationFeedView,
+  NetworkView,
+  InvestigationAnswer,
+  CaseReviewDecision,
   ClarificationDraft,
   RequestView,
   RevisionResult,
@@ -74,6 +79,37 @@ export const api = {
     ),
   history: (r: Role, id: string) =>
     request<HistoryView>(r, `/cases/${encodeURIComponent(id)}/history`),
+  audit: (id: string) =>
+    request<AuditView>("OFFICER", `/cases/${encodeURIComponent(id)}/audit`),
+  notifications: (r: Role, id: string) =>
+    request<NotificationFeedView>(
+      r,
+      `/cases/${encodeURIComponent(id)}/notifications`,
+    ),
+  markNotificationRead: (r: Role, id: string, notificationId: string) =>
+    request<{ case_id: string; notification_id: string; read_at: string }>(
+      r,
+      `/cases/${encodeURIComponent(id)}/notifications/${encodeURIComponent(notificationId)}/read`,
+      { method: "POST" },
+    ),
+  askInvestigation: (id: string, question: string) =>
+    request<InvestigationAnswer>(
+      "OFFICER",
+      `/cases/${encodeURIComponent(id)}/investigate`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question }),
+      },
+    ),
+  network: () => request<NetworkView>("OFFICER", "/network"),
+  networkCase: (id: string) =>
+    request<NetworkView>("OFFICER", `/network/case/${encodeURIComponent(id)}`),
+  networkCompany: (id: string) =>
+    request<NetworkView>(
+      "OFFICER",
+      `/network/company/${encodeURIComponent(id)}`,
+    ),
   post: <T>(
     r: Role,
     path: string,
@@ -101,6 +137,20 @@ export const api = {
       { method: "POST", headers: { "Idempotency-Key": key }, body: form },
     );
   },
+  confirmTranscription: (
+    id: string,
+    proposal: string,
+    version: number,
+    fields: Record<string, string>,
+  ) =>
+    api.post<CompanyCaseView>(
+      "COMPANY",
+      `/cases/${encodeURIComponent(id)}/transcriptions/${encodeURIComponent(proposal)}/confirm`,
+      {
+        expected_version: version,
+        fields,
+      },
+    ),
   context: (id: string, version: number, context: object) =>
     api.post<CompanyCaseView>("COMPANY", `/cases/${id}/context`, {
       expected_version: version,
@@ -123,20 +173,43 @@ export const api = {
       expected_version: version,
       response,
     }),
+  attachDocument: (
+    id: string,
+    responseId: string,
+    version: number,
+    documentId: string,
+  ) =>
+    api.post<ResponseView>(
+      "COMPANY",
+      `/cases/${encodeURIComponent(id)}/responses/by-id/${encodeURIComponent(responseId)}/documents`,
+      { expected_version: version, document_id: documentId },
+    ),
+  caseDecision: (
+    id: string,
+    version: number,
+    kind: CaseReviewDecision["kind"],
+    reason: string,
+  ) =>
+    api.post<CaseReviewDecision>(
+      "OFFICER",
+      `/cases/${encodeURIComponent(id)}/decisions`,
+      {
+        expected_version: version,
+        kind,
+        reason,
+      },
+    ),
   decide: (
     id: string,
     proposal: string,
     version: number,
     action: "accept" | "reject",
+    reason: string,
   ) =>
     api.post<RevisionResult>(
       "OFFICER",
       `/cases/${id}/proposals/${proposal}/${action}`,
-      {
-        expected_version: version,
-        reason:
-          action === "reject" ? "Pièce non retenue dans ce dossier" : undefined,
-      },
+      { expected_version: version, reason },
     ),
   /** Synthetic demo administration: DEMO_OPERATOR role only (server-enforced). */
   admin: {

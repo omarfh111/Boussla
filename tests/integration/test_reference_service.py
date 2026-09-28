@@ -188,7 +188,7 @@ def test_brick_quantity_case_is_not_forced_into_references(base):
     assert seen == [view.score.cutoff.date()]  # trusted server-side cutoff, not user input
 
 
-def test_enrichment_is_cached_per_version_and_40_to_0_unchanged(base):
+def test_enrichment_is_cached_per_version_and_progressive_review_unchanged(base):
     stub = OpenAIStub("valid")
     svc = with_assistant(base, ReferenceAssistant(qdrant_retriever(), generator(stub)))
     for _ in range(3):
@@ -206,7 +206,8 @@ def test_enrichment_is_cached_per_version_and_40_to_0_unchanged(base):
         "allocation": {"transaction_id": "TX-001", "line_id": "LINE-BUY-001", "splits": {"P1": "1000", "P2": "1000"}}}, v(), "r")
     before = v()
     result = svc.accept_evidence(off, BRICKS, resp.proposal_ids[0], before, "a")
-    assert (result.score_before.review_index, result.score_after.review_index) == (40, 0)
+    assert (result.score_before.review_index, result.score_after.review_index) == (20, 0)
+    assert result.score_before.raw_review_index == 40
     assert [a.quantity for a in svc.store.facts(BRICKS, "allocation", Allocation, version=before)] == ["2000"]
 
 

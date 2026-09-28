@@ -4,7 +4,7 @@ import threading
 import pytest
 
 from boussla.contracts import ActionReceipt, BousslaError, ErrorCode, Question
-from boussla.store import CaseStore
+from boussla.store import CaseStore, SCHEMA_VERSION
 
 CASE = "CASE-T"
 
@@ -55,6 +55,7 @@ def test_error_rolls_back_everything(store):
     assert store.case_meta(CASE)["version"] == 1
     assert store.facts(CASE, "question", Question)[0].text_fr == "v1"
     assert store.events(CASE) == []
+    assert store.audit_records(CASE) == []
 
 
 def test_stale_version_rejected(store):
@@ -113,3 +114,56 @@ def test_duplicate_case_rejected(store):
     with pytest.raises(BousslaError):
         with store.write(CASE) as tx:
             tx.create_case("CO-1", "again")
+
+
+def test_audit_event_is_atomic_and_preserves_unknown_scores(store):
+    with store.write(CASE) as tx:
+        tx.put("question", "Q1", q("Q1", "new"))
+        tx.commit_version("updated question")
+        tx.event("ANSWERS", "COMPANY-1", "Question answered", ("Q1",))
+    record = store.audit_records(CASE)[0]
+    assert record["event_id"] == store.events(CASE)[0].event_id
+    assert record["actor_id"] == "COMPANY-1"
+    assert record["reason"] == "Question answered"
+    assert record["evidence_ids"] == ["Q1"]
+    assert record["before"] is None and record["after"].get("review_index") is None
+    assert record["fact_changes"] == [{
+        "kind": "question", "fact_id": "Q1",
+        "before": q("Q1", "v1").model_dump(mode="json"),
+        "after": q("Q1", "new").model_dump(mode="json") }]
+    assert record["rules_version"] is None
+
+
+def test_existing_database_adds_audit_table_without_rewriting_events(tmp_path):
+    import sqlite3
+    db = tmp_path / "legacy.sqlite"
+    store = CaseStore(db, tmp_path / "uploads")
+    with store.write(CASE) as tx:
+        tx.create_case("CO-1", "seed")
+        tx.commit_version("seed")
+    with sqlite3.connect(db) as conn:
+        conn.execute("INSERT INTO events (case_id, kind, actor_id, at, case_version, summary, fact_ids) "
+                     "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                     (CASE, "LEGACY", "A", "2026-01-01T00:00:00+00:00", 1, "before audit", "[]"))
+        conn.execute("DROP TABLE audit_records")
+        conn.execute("UPDATE schema_meta SET value='1' WHERE key='schema_version'")
+    migrated = CaseStore(db, tmp_path / "uploads")
+    assert len(migrated.events(CASE)) == 1
+    assert migrated.audit_records(CASE) == []
+    with migrated.write(CASE) as tx:
+        tx.event("NEW", "A", "after audit")
+    assert len(migrated.audit_records(CASE)) == 1
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == str(SCHEMA_VERSION)
+
+
+def test_audit_fact_diff_redacts_internal_paths(store):
+    with store.write(CASE) as tx:
+        tx.put("document", "D1", {"document_id": "D1", "local_path": "private.pdf",
+                                  "nested": {"_secrets": "token", "status": "RECEIVED"}})
+        tx.commit_version("document added")
+        tx.event("UPLOAD", "A", "Document received", ("D1",))
+    change = store.audit_records(CASE)[0]["fact_changes"][0]
+    assert change["before"] is None
+    assert change["after"] == {"document_id": "D1", "nested": {"status": "RECEIVED"}}
+    assert "private.pdf" not in str(store.audit_records(CASE))

@@ -287,8 +287,11 @@ class MockBousslaService:
     def create_case(self, actor, company_id, project_payload, request_id):
         raise BousslaError(ErrorCode.INVALID_STATE, "MOCK : un seul dossier synthétique préchargé (CASE-BRICKS-001)")
 
-    def upload_document(self, actor, case_id, upload_bytes, filename, media_type, expected_version, request_id):
+    def upload_document(self, actor, case_id, upload_bytes, filename, media_type, expected_version, request_id,
+                        response_id=None):
         self._authorize(actor, case_id, roles=(Role.COMPANY, Role.OFFICER))
+        if response_id is not None:
+            raise BousslaError(ErrorCode.INVALID_STATE, "Rattachement différé indisponible en mode MOCK")
         payload = [filename, media_type, hashlib.sha256(upload_bytes).hexdigest(), expected_version]
         if (prior := self._idempotent(actor, "upload_document", request_id, payload)) is not None:
             return prior

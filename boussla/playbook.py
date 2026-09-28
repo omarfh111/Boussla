@@ -23,6 +23,12 @@ QUESTIONS: dict[str, Question] = {q.question_id: q for q in (
              text_fr="Une partie de cet achat est-elle conservée en stock ? Si oui, quelle quantité ?"),
     Question(question_id="Q-COUNTERPART-RECORD", answer_kind="DOCUMENT",
              text_fr="Disposez-vous d'un autre justificatif de cette opération (bon de livraison, relevé du fournisseur) ?"),
+    Question(question_id="Q-PAYMENT-DETAILS", answer_kind="TEXT_WITH_FILE",
+             text_fr="Pouvez-vous expliquer le règlement de cette opération et joindre un justificatif si disponible ?"),
+    Question(question_id="Q-PAYMENT-AMOUNT", answer_kind="NUMBER",
+             text_fr="Quel montant a été réglé, dans la devise de la facture ?"),
+    Question(question_id="Q-PAYMENT-DATE", answer_kind="DATE",
+             text_fr="À quelle date le règlement a-t-il été effectué ?"),
     # Project-context questions (lane C context layer; fixed IDs and wording, never model-written).
     Question(question_id="Q-HORIZON-CONFIRM", answer_kind="CHOICE", choices=("SHORT_HORIZON", "LONGER_HORIZON"),
              text_fr="Les éléments fournis sur la durée du projet ne concordent pas entièrement. Pouvez-vous confirmer "
@@ -58,7 +64,13 @@ AUTO_REQUEST_TEXT_FR = (
 
 def deterministic_plan(findings, has_context_claim: bool, answered_ids: set[str]) -> list[str]:
     """Rule-based question selection from unresolved prerequisites (fallback planner)."""
-    by_family = {f.family: f for f in findings}
+    # One explained transaction must not hide an unresolved transaction of the same family.
+    by_family = {}
+    rank = {FindingStatus.UNRESOLVED: 2, FindingStatus.INSUFFICIENT: 1}
+    for finding in findings:
+        prior = by_family.get(finding.family)
+        if prior is None or rank.get(finding.status, 0) > rank.get(prior.status, 0):
+            by_family[finding.family] = finding
     wanted: list[str] = []
     qty = by_family.get(FindingFamily.QUANTITY)
     if qty and qty.status is FindingStatus.UNRESOLVED:
@@ -66,8 +78,11 @@ def deterministic_plan(findings, has_context_claim: bool, answered_ids: set[str]
     elif qty and qty.status is FindingStatus.INSUFFICIENT:
         wanted += ["Q-PROJECT-DATES"]
     cpty = by_family.get(FindingFamily.COUNTERPARTY)
-    if cpty and cpty.status is FindingStatus.INSUFFICIENT:
+    if cpty and cpty.status in (FindingStatus.INSUFFICIENT, FindingStatus.UNRESOLVED):
         wanted.append("Q-COUNTERPART-RECORD")
+    settlement = by_family.get(FindingFamily.SETTLEMENT)
+    if settlement and settlement.status is FindingStatus.UNRESOLVED:
+        wanted += ["Q-PAYMENT-DETAILS", "Q-PAYMENT-AMOUNT", "Q-PAYMENT-DATE"]
     if not has_context_claim:
         wanted.insert(0, "Q-PURPOSE")
     out = [q for q in dict.fromkeys(wanted) if q not in answered_ids]
@@ -103,3 +118,44 @@ def merge_question_plan(context_reason_codes, planner_ids, answered_ids) -> list
     merged = [q for q in dict.fromkeys(tiers[1] + tiers[2] + tiers[3] + tiers[4])
               if q in QUESTIONS and q not in answered]
     return merged[:MAX_QUESTIONS_PER_ROUND]
+
+
+QUESTION_FAMILY = {
+    "Q-PROJECT-ALLOCATION": FindingFamily.QUANTITY, "Q-SUPPORTING-DOC": FindingFamily.QUANTITY,
+    "Q-STOCK": FindingFamily.QUANTITY, "Q-COUNTERPART-RECORD": FindingFamily.COUNTERPARTY,
+    "Q-PAYMENT-DETAILS": FindingFamily.SETTLEMENT, "Q-PAYMENT-AMOUNT": FindingFamily.SETTLEMENT,
+    "Q-PAYMENT-DATE": FindingFamily.SETTLEMENT,
+}
+
+
+def scoped_questions(question_ids, findings, requests=()):
+    result = []
+    for qid in question_ids:
+        question = QUESTIONS[qid]
+        family = QUESTION_FAMILY.get(qid)
+        candidates = sorted({f.transaction_id for f in findings if f.family == family
+                             and f.status in (FindingStatus.UNRESOLVED, FindingStatus.INSUFFICIENT)})
+        already = {tx for request in requests for q in request.questions if q.question_id == qid
+                   for tx in q.related_fact_ids}
+        remaining = [tx for tx in candidates if tx not in already]
+        if family and not remaining:
+            continue
+        related = tuple(remaining[:1])
+        result.append(question.model_copy(update={"related_fact_ids": related,
+            "scope_note_fr": "Opération concernée : " + related[0] if related else None}))
+    return tuple(result)
+
+
+def fully_asked_questions(findings, requests):
+    result = set()
+    for qid in QUESTIONS:
+        asked = [q for request in requests for q in request.questions if q.question_id == qid]
+        if not asked:
+            continue
+        family = QUESTION_FAMILY.get(qid)
+        candidates = {f.transaction_id for f in findings if f.family == family
+                      and f.status in (FindingStatus.UNRESOLVED, FindingStatus.INSUFFICIENT)}
+        covered = {tx for q in asked for tx in q.related_fact_ids}
+        if not family or any(not q.related_fact_ids for q in asked) or candidates <= covered:
+            result.add(qid)
+    return result

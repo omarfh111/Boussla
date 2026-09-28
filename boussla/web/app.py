@@ -134,25 +134,68 @@ async def history(request: Request):
     return result(service(request).get_history(actor(request), request.path_params["case_id"]))
 
 
+async def audit(request: Request):
+    return result(service(request).get_audit(actor(request), request.path_params["case_id"]))
+
+
+async def investigate(request: Request):
+    payload = await body(request)
+    if set(payload) != {"question"} or not isinstance(payload.get("question"), str):
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Question attendue")
+    return result(service(request).ask_investigation(actor(request), request.path_params["case_id"], payload["question"]))
+
+
+async def network(request: Request):
+    return result(service(request).get_network(actor(request)))
+
+
+async def network_company(request: Request):
+    return result(service(request).get_network(actor(request), company_id=request.path_params["company_id"]))
+
+
+async def network_case(request: Request):
+    return result(service(request).get_network(actor(request), case_id=request.path_params["case_id"]))
+
+
+async def notifications(request: Request):
+    return result(service(request).get_notifications(actor(request), request.path_params["case_id"]))
+
+
+async def mark_notification_read(request: Request):
+    return result(service(request).mark_notification_read(
+        actor(request), request.path_params["case_id"], request.path_params["notification_id"]))
+
+
 async def upload(request: Request):
     a = actor(request)
     k = key(request)
     # Bound the request body before the PDF parser runs.
     if int(request.headers.get("content-length", "0") or "0") > 11 * 1024 * 1024:
         raise BousslaError(ErrorCode.LIMIT_EXCEEDED, "Fichier trop volumineux (10 Mo max.)")
-    form = await request.form(max_files=1, max_fields=2)
+    form = await request.form(max_files=1, max_fields=3)
     file = form.get("file")
     if file is None or not hasattr(file, "read"):
         raise HTTPException(400, "Fichier PDF requis")
     expected = form.get("expected_version")
     if not isinstance(expected, str) or not expected.isdigit():
         raise HTTPException(400, "expected_version requis")
+    response_id = form.get("response_id")
+    if response_id is not None and (not isinstance(response_id, str) or not response_id.strip()):
+        raise HTTPException(400, "response_id invalide")
     content = await file.read(10 * 1024 * 1024 + 1)
     if len(content) > 10 * 1024 * 1024:
         raise BousslaError(ErrorCode.LIMIT_EXCEEDED, "Fichier trop volumineux (10 Mo max.)")
     value = service(request).upload_document(a, request.path_params["case_id"], content,
-                                             file.filename or "", file.content_type or "", int(expected), k)
+                                             file.filename or "", file.content_type or "", int(expected), k,
+                                             response_id=response_id)
     return result(value)
+
+
+async def confirm_transcription(request: Request):
+    a, k, data = actor(request), key(request), await body(request)
+    return result(service(request).confirm_transcription(
+        a, request.path_params["case_id"], request.path_params["proposal_id"],
+        object_field(data, "fields"), version(data), k))
 
 
 async def context(request: Request):
@@ -179,14 +222,34 @@ async def respond(request: Request):
                                                    object_field(data, "response"), version(data), k))
 
 
+async def attach_document(request: Request):
+    a, k, data = actor(request), key(request), await body(request)
+    if set(data) != {"expected_version", "document_id"} or not isinstance(data["document_id"], str):
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Identifiant de pièce attendu")
+    return result(service(request).attach_document_to_response(
+        a, request.path_params["case_id"], request.path_params["response_id"],
+        data["document_id"], version(data), k))
+
+
 async def decide(request: Request):
     a, k, data = actor(request), key(request), await body(request)
     cid, pid, v = request.path_params["case_id"], request.path_params["proposal_id"], version(data)
+    reason = data.get("reason")
+    if not isinstance(reason, str) or not 10 <= len(reason.strip()) <= 500:
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Motif attendu (10 à 500 caractères)")
     if request.url.path.endswith("/accept"):
-        value = service(request).accept_evidence(a, cid, pid, v, k)
+        value = service(request).accept_evidence(a, cid, pid, v, k, reason.strip())
     else:
-        value = service(request).reject_evidence(a, cid, pid, v, str(data.get("reason", ""))[:500], k)
+        value = service(request).reject_evidence(a, cid, pid, v, reason.strip(), k)
     return result(value)
+
+
+async def case_decision(request: Request):
+    a, k, data = actor(request), key(request), await body(request)
+    if set(data) != {"expected_version", "kind", "reason"} or not isinstance(data["kind"], str) or not isinstance(data["reason"], str):
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Décision et motif attendus")
+    return result(service(request).record_case_decision(a, request.path_params["case_id"],
+                                                        data["kind"], data["reason"], version(data), k))
 
 
 async def admin_enterprises(request: Request):
@@ -248,11 +311,21 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/health", health), Route("/api/demo/bootstrap", bootstrap),
         Route("/api/cases/{case_id}", case), Route("/api/officer/queue", queue),
         Route("/api/cases/{case_id}/history", history),
+        Route("/api/cases/{case_id}/audit", audit),
+        Route("/api/cases/{case_id}/notifications", notifications),
+        Route("/api/cases/{case_id}/notifications/{notification_id}/read", mark_notification_read, methods=["POST"]),
+        Route("/api/cases/{case_id}/investigate", investigate, methods=["POST"]),
+        Route("/api/network", network),
+        Route("/api/network/company/{company_id}", network_company),
+        Route("/api/network/case/{case_id}", network_case),
         Route("/api/cases/{case_id}/documents", upload, methods=["POST"]),
         Route("/api/cases/{case_id}/context", context, methods=["POST"]),
+        Route("/api/cases/{case_id}/transcriptions/{proposal_id}/confirm", confirm_transcription, methods=["POST"]),
         Route("/api/cases/{case_id}/clarifications/prepare", prepare, methods=["POST"]),
         Route("/api/cases/{case_id}/clarifications/{draft_id}/publish", publish, methods=["POST"]),
         Route("/api/cases/{case_id}/responses/{request_id}", respond, methods=["POST"]),
+        Route("/api/cases/{case_id}/responses/by-id/{response_id}/documents", attach_document, methods=["POST"]),
+        Route("/api/cases/{case_id}/decisions", case_decision, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/accept", decide, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/reject", decide, methods=["POST"]),
         Route("/api/admin/enterprises", admin_enterprises, methods=["GET", "POST"]),

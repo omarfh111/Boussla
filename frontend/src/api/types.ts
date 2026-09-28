@@ -42,6 +42,8 @@ export interface MonthlyActivityEntry {
   invoice_observation_count: number;
   settled_outflow_millimes: number;
   source_label: string;
+  coverage_status: "COVERED" | "UNKNOWN";
+  coverage_source_id: string | null;
 }
 /** Lane B synthetic authorized snapshot: context only, no bank access, no proof. */
 export interface FinancialSnapshot {
@@ -73,6 +75,23 @@ export interface HistorySignal {
   method: string;
   mode: Mode;
   affects_review_index: false;
+}
+export interface HistoricalFactor {
+  reason_code: string;
+  contribution: number;
+  source_signal_ids: string[];
+  explanation_fr: string;
+}
+export interface OperationalConfidenceFactor {
+  code: string;
+  numerator: number;
+  denominator: number;
+  nominal_weight: number;
+  effective_weight: string;
+  weighted_contribution: string;
+  reason_codes: string[];
+  source_ids: string[];
+  explanation_fr: string;
 }
 /** Server-computed queue urgency; React never derives it. */
 export interface TriageAssessment {
@@ -111,6 +130,31 @@ export interface AdminResult {
   notice_fr: string;
 }
 export interface DocumentView {
+  processing_status?: string;
+  analysis?: {
+    calculated_at: string;
+    rule_version: string;
+    classification: string;
+    authenticity_statement: string;
+    confidence?: {
+      value: number | null;
+      level: string;
+      measured_dimensions: number;
+      rule_version: string;
+      explanation_fr: string;
+      factors: { code: string; value: number | null; explanation_fr: string }[];
+    } | null;
+    linked_cause_ids: string[];
+    proposed_action: string;
+    stages: { code: string; status: string; explanation_fr: string }[];
+    checks: {
+      code: string;
+      status: string;
+      explanation_fr: string;
+      source_ids: string[];
+    }[];
+    limitations: string[];
+  } | null;
   document: {
     document_id: string;
     original_filename: string;
@@ -123,13 +167,24 @@ export interface DocumentView {
     processing_limitations: string[];
   };
   routing: { candidate_class: string; mode: Mode } | null;
-  extraction: { mode: Mode; status: string } | null;
+  extraction: {
+    proposal_id?: string;
+    mode: Mode;
+    status: string;
+    candidates?: {
+      field_name: string;
+      raw_value: string | null;
+      normalized_value: string | null;
+      ambiguities: string[];
+    }[];
+  } | null;
   integrity: { signature_status: string; limitations: string[] } | null;
   mode: Mode;
 }
 export interface TransactionSummary {
   transaction_id: string;
   counterparty_display_name: string | null;
+  counterparty_company_id?: string | null;
   invoice_number: string | null;
   issued_on: string | null;
   invoiced_gross_millimes: number | null;
@@ -179,6 +234,8 @@ export interface ContextAssessmentView {
   horizon_convention_fr: string;
 }
 export interface Question {
+  scope_note_fr?: string | null;
+  related_fact_ids?: string[];
   question_id: string;
   text_fr: string;
   answer_kind: string;
@@ -322,18 +379,53 @@ export interface InvoiceComparison {
   transaction_id: string;
   buyer_observation_id: string | null;
   seller_observation_id: string | null;
-  status: "CONCORDANT" | "DIFFERENCES" | "SINGLE_OBSERVATION";
+  status: "CONCORDANT" | "DIFFERENCES" | "SINGLE_OBSERVATION" | "AMBIGUOUS";
+  reconciliation_status?: string;
+  candidate_observation_ids?: string[];
+  payment_ids?: string[];
+  delivery_ids?: string[];
+  project_ids?: string[];
+  rule_version?: string;
+  calculated_at?: string | null;
   label_fr: string;
   difference_fields: string[];
   counterparty_reason_code: string | null;
 }
 export interface ScoreSnapshot {
+  calculated_at?: string | null;
+  engine_version?: string;
+  cause_ids?: string[];
   review_index: number | null;
+  raw_review_index: number | null;
+  decisive_transaction_id: string | null;
+  cause_progress: CauseProgress[];
   evidence_coverage: string | null;
   clarification_status: string;
   scope_note: string;
   rules_version: string;
   coverage_complete: boolean;
+}
+export interface CauseProgress {
+  cause_id?: string;
+  initial_weight?: string | null;
+  evidence_ids?: string[];
+  explanation_ids?: string[];
+  resolved_by?: string | null;
+  resolved_at?: string | null;
+  rule_version?: string;
+  transaction_id: string;
+  family: "COUNTERPARTY" | "SETTLEMENT" | "QUANTITY";
+  raw_contribution: string;
+  current_contribution: string;
+  stage:
+    | "UNRESOLVED"
+    | "EXPLANATION_RECEIVED"
+    | "EVIDENCE_RECEIVED"
+    | "EVIDENCE_COHERENT"
+    | "RESOLVED";
+  provisional: boolean;
+  reason_code: string | null;
+  source_ids: string[];
 }
 export interface EvidenceProposal {
   proposal_id: string;
@@ -368,7 +460,99 @@ export interface GroundedNoteView {
   generation_mode: Mode;
   disclaimer_fr: string;
 }
+export interface CaseIndicator {
+  value: string | null;
+  status: string;
+  factors: {
+    code: string;
+    value: string | null;
+    contribution: string | null;
+    source_ids: string[];
+    explanation: string;
+  }[];
+  explanation: string;
+  calculated_at: string;
+  rule_version: string;
+  sample_size: number;
+}
+export interface BehaviorProfile {
+  as_of: string;
+  observed_period: string;
+  baseline_periods: string[];
+  rule_version: string;
+  signals?: {
+    code: "RESPONSE_DELAY_DEVIATION" | "MONTHLY_AMOUNT_DEVIATION";
+    metric_code: string;
+    currency: string | null;
+    observed_value: string;
+    baseline_value: string;
+    ratio: string;
+    data_quality: "AVAILABLE" | "LIMITED_DATA";
+    baseline_months: number;
+    current_sample_size: number;
+    source_ids: string[];
+    explanation_fr: string;
+    rule_version: string;
+  }[];
+  metrics: {
+    code: string;
+    label_fr: string;
+    current_value: string | null;
+    baseline_value: string | null;
+    change_percent: string | null;
+    status: string;
+    unit: string;
+    currency: string | null;
+    sample_size: number;
+    source_ids: string[];
+    explanation_fr: string;
+  }[];
+}
+export interface CaseReviewDecision {
+  decision_id: string;
+  case_id: string;
+  case_version: number;
+  kind: "ACCEPT" | "REJECT" | "ESCALATE" | "RESOLVE";
+  actor_id: string;
+  reason: string;
+  decided_at: string;
+  review_index: number | null;
+  source_cause_ids: string[];
+  rule_version: string;
+  scope_note: string;
+}
+
+export interface RecommendedAction {
+  action_id: string;
+  kind: string;
+  title_fr: string;
+  priority: number;
+  reason: string;
+  source_causes: string[];
+  required_documents: string[];
+  status: "OPEN" | "WAITING" | "COMPLETED";
+  source_ids: string[];
+  rule_version: string;
+}
+export interface ResolutionImpact {
+  step: number;
+  cause_id: string;
+  family: "COUNTERPARTY" | "SETTLEMENT" | "QUANTITY";
+  transaction_id: string;
+  before_index: number;
+  after_index: number;
+  source_ids: string[];
+  case_version: number;
+  calculated_at: string | null;
+  rule_version: string;
+  hypothetical: true;
+}
 export interface OfficerCaseView extends BaseCase {
+  case_decisions?: CaseReviewDecision[];
+  impact_if_resolved?: ResolutionImpact[];
+  recommended_actions?: RecommendedAction[];
+  behavior_profile?: BehaviorProfile | null;
+  indicators?: Record<string, CaseIndicator>;
   audience: "OFFICER";
   score: ScoreSnapshot | null;
   findings: Finding[];
@@ -386,6 +570,20 @@ export interface OfficerCaseView extends BaseCase {
   triage: TriageAssessment | null;
   clarification_deadlines: ClarificationDeadline[];
   history_signals: HistorySignal[];
+  history_signal_index: number | null;
+  history_signal_status: "INSUFFICIENT_DATA" | "AVAILABLE";
+  history_signal_factors: HistoricalFactor[];
+  history_signal_method: string | null;
+  operational_confidence_index: number | null;
+  operational_confidence_status: "INSUFFICIENT_DATA" | "AVAILABLE";
+  operational_confidence_as_of: string | null;
+  operational_confidence_factors: OperationalConfidenceFactor[];
+  operational_confidence_eligible_observations: number;
+  operational_confidence_method: string;
+  operational_confidence_sample_size?: number;
+  operational_confidence_data_quality?: string;
+  operational_confidence_sample_note_fr?: string;
+  operational_confidence_window_start?: string | null;
   enterprise_profile: EnterpriseProfile | null;
   monthly_activity: MonthlyActivityEntry[];
   payment_timeline: PaymentTimelineEntry[];
@@ -441,12 +639,111 @@ export interface RevisionResult {
   score_after: ScoreSnapshot | null;
   replayed: boolean;
 }
+export interface InvestigationAnswer {
+  case_id: string;
+  case_version: number;
+  question: string;
+  answer_fr: string;
+  citations: {
+    source_id: string;
+    kind: string;
+    label_fr: string;
+    source_url: string | null;
+  }[];
+  calculated_at: string;
+  rule_version: string;
+  mode: "TEMPLATE";
+  authoritative: false;
+  limitations: string[];
+}
+export interface NetworkView {
+  scope: "ALL" | "COMPANY" | "CASE";
+  scope_id: string | null;
+  calculated_at: string;
+  rule_version: string;
+  note_fr: string;
+  signals: {
+    signal_id: string;
+    kind: string;
+    company_ids: string[];
+    source_ids: string[];
+    sample_size: number;
+    explanation_fr: string;
+    status: "OBSERVED_REVIEW_SIGNAL";
+  }[];
+  nodes: {
+    node_id: string;
+    kind: string;
+    label: string;
+    case_ids: string[];
+    attributes: Record<string, string>;
+  }[];
+  edges: {
+    edge_id: string;
+    source: string;
+    target: string;
+    kind: string;
+    case_id: string;
+    source_ids: string[];
+    provenance_status: string;
+  }[];
+}
+export interface NotificationFeedView {
+  case_id: string;
+  audience: "COMPANY" | "OFFICER";
+  items: {
+    notification_id: string;
+    kind: string;
+    title_fr: string;
+    message_fr: string;
+    occurred_at: string;
+    case_version: number;
+    source_event_id: string | null;
+    status: "RECORDED" | "CURRENT_SIGNAL";
+    read_at: string | null;
+    source_ids?: string[];
+  }[];
+}
+export interface AuditView {
+  case_id: string;
+  legacy_events_without_audit: number;
+  records: {
+    audit_id: string;
+    event_id: string;
+    actor_id: string;
+    at: string;
+    case_version: number;
+    action: string;
+    reason: string;
+    before: {
+      review_index?: number | null;
+      cause_contributions?: Record<string, string>;
+      calculated_at?: string | null;
+    } | null;
+    after: {
+      review_index?: number | null;
+      cause_contributions?: Record<string, string>;
+      calculated_at?: string | null;
+    } | null;
+    evidence_ids: string[];
+    fact_changes: {
+      kind: string;
+      fact_id: string;
+      before: Record<string, unknown> | null;
+      after: Record<string, unknown> | null;
+    }[];
+    rules_version: string | null;
+    engine_version: string | null;
+  }[];
+}
+
 export interface HistoryView {
   revisions: {
     version: number;
     parent_version: number | null;
     reason: string;
     created_at: string;
+    score_snapshot?: ScoreSnapshot | null;
   }[];
   events: {
     event_id: string;
@@ -454,6 +751,26 @@ export interface HistoryView {
     summary: string;
     case_version: number;
     at: string;
+    actor_id?: string;
+    fact_ids?: string[];
+  }[];
+  operational_confidence_changes?: {
+    from_version: number;
+    to_version: number;
+    as_of: string;
+    before_index: number | null;
+    after_index: number | null;
+    factor_deltas: {
+      code: string;
+      before_contribution: string | null;
+      after_contribution: string | null;
+      before_numerator: number | null;
+      before_denominator: number | null;
+      after_numerator: number | null;
+      after_denominator: number | null;
+      source_ids: string[];
+      reason_codes: string[];
+    }[];
   }[];
 }
 export interface ApiErrorBody {

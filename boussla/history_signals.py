@@ -9,6 +9,7 @@ from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from statistics import median
 from typing import Iterable, Mapping
 
 from boussla.checks import ChecksEngineV4
@@ -30,6 +31,7 @@ class HistorySignal:
     explanation: str
     method: str = SIGNAL_VERSION
     affects_review_index: bool = False
+    affected_transaction_ids: tuple[str, ...] = ()
 
 
 def _month_number(period: str) -> int:
@@ -57,10 +59,11 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
     compared = False
     seen = set()
     engine = ChecksEngineV4()
-    def emit(code, period, observed, baseline, metric, base_periods, ids, explanation):
+    def emit(code, period, observed, baseline, metric, base_periods, ids, explanation,
+             affected_transaction_ids=()):
         signals.append(HistorySignal(code, company_id, period, str(observed),
             None if baseline is None else str(baseline), metric, tuple(base_periods),
-            tuple(sorted(set(ids))), explanation))
+            tuple(sorted(set(ids))), explanation, affected_transaction_ids=tuple(sorted(set(affected_transaction_ids)))))
     for original in inputs:
         i = original.model_copy(update={"as_of": as_of})
         t = i.transaction
@@ -89,7 +92,7 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
         findings = engine.evaluate_transaction(i)
         conflicts = [f for f in findings if f.family is FindingFamily.COUNTERPARTY and f.status is FindingStatus.UNRESOLVED]
         refs += [ref.document_id for f in conflicts for ref in f.evidence_refs if ref.document_id]
-        rows[t.economic_period].append({"seller": t.seller_company_id, "gross": invoice.gross_millimes,
+        rows[t.economic_period].append({"transaction": t.transaction_id, "seller": t.seller_company_id, "gross": invoice.gross_millimes,
             "settled": settled, "conflict": bool(conflicts), "refs": refs, "currency": invoice.currency})
         sources[t.economic_period] += refs
         delay = (invoice.available_at.date()-invoice.issued_on).days
@@ -150,7 +153,8 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
             if len(conflicted) >= 2:
                 emit("REPEATED_INVOICE_CONFLICT", f"{latest_periods[0]}/{latest_periods[-1]}", len(conflicted),
                      sum(r["conflict"] for r in old), "distinct_transactions_with_invoice_conflicts", previous_periods,
-                     ids(previous_periods+latest_periods), "Des observations indépendantes divergent sur plusieurs transactions distinctes ; revue humaine des pièces nécessaire.")
+                     ids(previous_periods+latest_periods), "Des observations indépendantes divergent sur plusieurs transactions distinctes ; revue humaine des pièces nécessaire.",
+                     affected_transaction_ids=tuple(r["transaction"] for r in conflicted))
     if not signals:
         insufficient = not compared or not any(rows.values())
         emit("INSUFFICIENT_HISTORY" if insufficient else "NO_SIGNIFICANT_CHANGE",
@@ -159,3 +163,92 @@ closed. Invoice/payment views unavailable at cutoff do not enter metrics.
              "Historique couvert insuffisant pour les comparaisons." if insufficient else
              "Aucun seuil descriptif déclenché sur les périodes couvertes ; cela ne valide aucune déclaration.")
     return tuple(sorted(signals, key=lambda s: (s.period, s.reason_code, s.evidence_source_ids)))
+
+
+def analyze_self_history(inputs: Iterable[TransactionInputs], *, company_id: str,
+                         as_of: datetime, coverage: Mapping[str, str]) -> tuple[HistorySignal, ...]:
+    """V2: neutral deviations from this company's own covered baseline.
+
+    The V1 oracle stays stable. New observations require three consecutive covered
+    prior months and attributable source IDs; no missing month is treated as zero.
+    """
+    items = tuple(inputs)
+    legacy = analyze_history(items, company_id=company_id, as_of=as_of, coverage=coverage)
+    current_month = as_of.year * 12 + as_of.month - 1
+    periods = sorted(p for p, source in coverage.items() if source and _month_number(p) < current_month)
+    rows: dict[str, list[dict]] = {p: [] for p in periods}
+    for item in items:
+        tx = item.transaction
+        if tx.economic_period not in rows:
+            continue
+        buyers = [o for o in item.invoice_observations
+                  if o.perspective is Perspective.BUYER_RECEIVED
+                  and o.available_at <= as_of and o.issued_on <= as_of.date()]
+        if len(buyers) != 1:
+            continue
+        buyer = buyers[0]
+        settled_ids = {p.payment_id for p in item.payments if p.status.value == "SETTLED"
+                       and p.available_at <= as_of and p.occurred_at <= as_of}
+        payment_ids = {a.payment_id for a in item.payment_allocations
+                       if a.payment_id in settled_ids and a.transaction_id == tx.transaction_id
+                       and a.accepted_at <= as_of}
+        rows[tx.economic_period].append({
+            "transaction": tx.transaction_id, "document": buyer.document_id,
+            "seller": tx.seller_company_id, "gross": buyer.gross_millimes,
+            "currency": buyer.currency, "delay": max(0, (buyer.available_at.date()-buyer.issued_on).days),
+            "payments": len(payment_ids), "payment_ids": payment_ids,
+        })
+
+    added: list[HistorySignal] = []
+
+    def emit(code: str, period: str, observed: object, baseline: object, metric: str,
+             baseline_periods: list[str], ids: list[str], explanation: str) -> None:
+        added.append(HistorySignal(
+            reason_code=code, company_id=company_id, period=period,
+            observed_value=str(observed), baseline_value=str(baseline), metric=metric,
+            baseline_periods=tuple(baseline_periods), evidence_source_ids=tuple(sorted(set(ids))),
+            explanation=explanation, method="SYNTHETIC_SELF_HISTORY_V2"))
+
+    for n, period in enumerate(periods):
+        baseline_periods = periods[max(0, n-3):n]
+        if (len(baseline_periods) != 3
+                or _month_number(period)-_month_number(baseline_periods[0]) != 3):
+            continue
+        previous = [row for p in baseline_periods for row in rows[p]]
+        if len(previous) < 3:
+            continue
+        base_refs = [coverage[p] for p in baseline_periods] + [r["transaction"] for r in previous]
+        delay_base = median(r["delay"] for r in previous)
+        payment_base = median(r["payments"] for r in previous)
+        known_sellers = {r["seller"] for r in previous if r["seller"]}
+        for current in rows[period]:
+            refs = [*base_refs, coverage[period], current["transaction"], current["document"]]
+            if current["delay"] >= delay_base + 10:
+                emit("UNUSUAL_DEPOSIT_DELAY", period, current["delay"], delay_base,
+                     "days_until_buyer_document_available", baseline_periods, refs,
+                     "Délai de mise à disposition supérieur d'au moins 10 jours à l'habitude couverte de l'entreprise ; contexte à demander.")
+            same_currency = [r["gross"] for r in previous if r["currency"] == current["currency"]]
+            if len(same_currency) >= 3:
+                amount_base = median(same_currency)
+                if amount_base > 0 and current["gross"] >= amount_base * 2:
+                    emit("UNUSUAL_AMOUNT_INCREASE", period, current["gross"], amount_base,
+                         "buyer_invoice_gross_millimes", baseline_periods, refs,
+                         "Montant au moins doublé par rapport à la médiane des pièces comparables ; explication commerciale à recueillir.")
+                elif amount_base > 0 and current["gross"] <= amount_base / 2:
+                    emit("UNUSUAL_AMOUNT_DECREASE", period, current["gross"], amount_base,
+                         "buyer_invoice_gross_millimes", baseline_periods, refs,
+                         "Montant inférieur à la moitié de la médiane des pièces comparables ; variation descriptive.")
+            if current["seller"] and current["seller"] not in known_sellers:
+                emit("NEW_SUPPLIER", period, current["seller"], len(known_sellers),
+                     "seller_company_id", baseline_periods, refs,
+                     "Fournisseur absent des trois mois couverts de référence ; vérifier le contexte, sans présumer d'une anomalie.")
+            if current["payments"] >= 3 and current["payments"] >= payment_base + 2:
+                emit("UNUSUAL_SPLIT_PAYMENT", period, current["payments"], payment_base,
+                     "settled_payment_count_for_transaction", baseline_periods,
+                     [*refs, *current["payment_ids"]],
+                     "Plusieurs règlements observés pour une transaction, contrairement au schéma habituel couvert ; échéancier à vérifier.")
+    if not added:
+        return legacy
+    return tuple(sorted((s for s in legacy if s.reason_code != "NO_SIGNIFICANT_CHANGE"),
+                        key=lambda s: (s.period, s.reason_code, s.evidence_source_ids))) + tuple(
+        sorted(added, key=lambda s: (s.period, s.reason_code, s.evidence_source_ids)))
