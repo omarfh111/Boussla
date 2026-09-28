@@ -1149,6 +1149,28 @@ class BousslaAppService(_DemoAdministration):
                           "message_fr": event.summary, "occurred_at": event.at.isoformat(),
                           "case_version": event.case_version, "source_event_id": event.event_id,
                           "status": "RECORDED"})
+        if company:
+            decision_versions = {fact_id: event.case_version
+                                 for event in self.store.events(case_id)
+                                 if event.kind in {"EVIDENCE_ACCEPTED", "EVIDENCE_REJECTED"}
+                                 for fact_id in event.fact_ids}
+            for proposal in self.store.facts(case_id, "proposal", EvidenceProposal):
+                if (proposal.status not in (ProposalStatus.ACCEPTED, ProposalStatus.REJECTED)
+                        or proposal.decided_at is None or proposal.source_document_id not in company_document_ids):
+                    continue
+                accepted = proposal.status is ProposalStatus.ACCEPTED
+                items.append({"notification_id": f"COMPANY-PROPOSAL-{case_id}-{proposal.proposal_id}",
+                              "kind": "DOCUMENT_DECISION_RECORDED",
+                              "title_fr": "Pièce examinée" if accepted else "Justificatif non retenu",
+                              "message_fr": ("La pièce liée à votre réponse a été prise en compte dans le dossier."
+                                             if accepted else
+                                             "La pièce liée à votre réponse n’a pas été retenue dans cet examen ; "
+                                             "un complément peut être demandé."),
+                              "occurred_at": proposal.decided_at.isoformat(),
+                              "case_version": decision_versions.get(proposal.proposal_id, case_view.case_version),
+                              "source_event_id": None,
+                              "source_ids": [proposal.proposal_id, proposal.source_document_id],
+                              "status": "RECORDED"})
         now = self.clock()
         request_views = case_view.inbox if company else case_view.requests
         for request_view in request_views:

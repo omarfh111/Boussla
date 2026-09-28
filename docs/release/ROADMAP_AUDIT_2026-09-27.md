@@ -224,3 +224,7 @@ Recorded internal notifications now have an optional per-actor `read_at` receipt
 ## Internal clarification target reminders
 
 Pending published requests now project a CURRENT_SIGNAL for each role when the demo response target is within two calendar days or overdue. The company sees a neutral response/complement reminder; the officer sees a follow-up cue that asks them to check availability and accommodations. The signal cites the request, cannot be marked read as a durable event, disappears after response, and neither changes the case revision nor penalizes the documentary index. It explicitly says the target is not a legal deadline. This is read-time internal triage; there is no background scheduler, email or SMS delivery. Validation: focused published-request/response/time test, complete suites recorded with commit.
+
+## Company-visible evidence decision notices
+
+A recorded officer acceptance or rejection of a proposal tied to a document visible to the company now produces a company-scoped internal notification. The notice names the proposal and document, uses neutral wording, and never exposes the officer-only rejection event or its internal reason. A rejected item says the piece was not retained for this examination and that a complement may be requested; it does not call the document false. The notification is derived from the persisted decision fact and can have a per-actor read receipt. Other-company access remains forbidden. Validation: targeted rejection, scope and read-receipt tests; complete backend suite result is recorded with commit.

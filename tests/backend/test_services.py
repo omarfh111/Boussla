@@ -589,3 +589,21 @@ def test_pending_request_reminders_are_current_scoped_and_disappear_after_respon
                         ver(svc), "reminder-response")
     assert not any(item["kind"].startswith("REQUEST_FOLLOW_UP")
                    for item in svc.get_notifications(company, CASE)["items"])
+
+
+def test_company_receives_neutral_scoped_document_decision_notice(svc, actors):
+    company, officer, other = actors
+    response = to_proposal(svc, actors)
+    proposal_id = response.proposal_ids[0]
+    svc.reject_evidence(officer, CASE, proposal_id, ver(svc), "Pièce insuffisante", "company-notice")
+    company_items = svc.get_notifications(company, CASE)["items"]
+    notice = next(item for item in company_items if item["kind"] == "DOCUMENT_DECISION_RECORDED")
+    assert notice["status"] == "RECORDED" and proposal_id in notice["source_ids"]
+    decision_event = next(event for event in svc.store.events(CASE)
+                          if event.kind == "EVIDENCE_REJECTED" and proposal_id in event.fact_ids)
+    assert notice["case_version"] == decision_event.case_version
+    assert "retenue" in notice["message_fr"]
+    assert "Pièce insuffisante" not in notice["message_fr"]
+    assert all(item["kind"] != "EVIDENCE_REJECTED" for item in company_items)
+    assert code(lambda: svc.get_notifications(other, CASE)) is ErrorCode.CROSS_COMPANY
+    assert svc.mark_notification_read(company, CASE, notice["notification_id"])["read_at"]
