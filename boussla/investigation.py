@@ -132,7 +132,7 @@ def answer_investigation(question: str, view: OfficerCaseView, history: OfficerH
             cite(passage.rule_id, "REFERENCE", passage.document_title, passage.source_url)
     elif any(word in query for word in ("décision", "decision", "valid", "rejet")):
         for event in reversed(history.events):
-            if event.kind not in {"EVIDENCE_ACCEPTED", "EVIDENCE_REJECTED", "RESPONSE"}:
+            if event.kind not in {"EVIDENCE_ACCEPTED", "EVIDENCE_REJECTED", "RESPONSE"} and not event.kind.startswith("CASE_REVIEW_"):
                 continue
             lines.append(f"{event.at.isoformat()} : {event.summary}")
             cite(event.event_id, "EVENT", f"Événement {event.kind}")

@@ -175,3 +175,18 @@ def test_investigation_http_answer_is_grounded_and_role_scoped(client):
     assert answer["mode"] == "TEMPLATE" and answer["citations"]
     assert answer["authoritative"] is False and "local_path" not in response.text
     assert client.post(url, headers=headers("OFFICER"), json={"question": "x"}).json()["error"]["code"] == "INVALID_INPUT"
+
+
+def test_case_review_decision_http_role_reason_and_replay(client):
+    path = f"/api/cases/{CASE}/decisions"
+    version = view(client, "OFFICER")["case_version"]
+    payload = {"expected_version": version, "kind": "ESCALATE", "reason": "Vérification renforcée demandée"}
+    assert client.post(path, headers=headers(key="company-decision"), json=payload).status_code == 403
+    assert client.post(path, headers=headers("OFFICER", "short-reason"), json={**payload, "reason": "court"}).status_code == 400
+    first = client.post(path, headers=headers("OFFICER", "escalate-http"), json=payload)
+    assert first.status_code == 200, first.text
+    assert first.json()["kind"] == "ESCALATE" and first.json()["case_version"] == version + 1
+    replay = client.post(path, headers=headers("OFFICER", "escalate-http"), json=payload)
+    assert replay.status_code == 200 and replay.json()["decision_id"] == first.json()["decision_id"]
+    assert view(client, "OFFICER")["case_version"] == version + 1
+    assert "case_decisions" not in view(client, "COMPANY")

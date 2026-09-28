@@ -508,6 +508,20 @@ export interface BehaviorProfile {
     explanation_fr: string;
   }[];
 }
+export interface CaseReviewDecision {
+  decision_id: string;
+  case_id: string;
+  case_version: number;
+  kind: "ACCEPT" | "REJECT" | "ESCALATE" | "RESOLVE";
+  actor_id: string;
+  reason: string;
+  decided_at: string;
+  review_index: number | null;
+  source_cause_ids: string[];
+  rule_version: string;
+  scope_note: string;
+}
+
 export interface RecommendedAction {
   action_id: string;
   kind: string;
@@ -534,6 +548,7 @@ export interface ResolutionImpact {
   hypothetical: true;
 }
 export interface OfficerCaseView extends BaseCase {
+  case_decisions?: CaseReviewDecision[];
   impact_if_resolved?: ResolutionImpact[];
   recommended_actions?: RecommendedAction[];
   behavior_profile?: BehaviorProfile | null;

@@ -10,6 +10,7 @@ import type {
   NotificationFeedView,
   NetworkView,
   InvestigationAnswer,
+  CaseReviewDecision,
   ClarificationDraft,
   RequestView,
   RevisionResult,
@@ -166,6 +167,21 @@ export const api = {
       expected_version: version,
       response,
     }),
+  caseDecision: (
+    id: string,
+    version: number,
+    kind: CaseReviewDecision["kind"],
+    reason: string,
+  ) =>
+    api.post<CaseReviewDecision>(
+      "OFFICER",
+      `/cases/${encodeURIComponent(id)}/decisions`,
+      {
+        expected_version: version,
+        kind,
+        reason,
+      },
+    ),
   decide: (
     id: string,
     proposal: string,

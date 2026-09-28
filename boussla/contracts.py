@@ -1055,6 +1055,20 @@ class BehaviorProfile(Contract):
     signals: tuple[BehaviorSignal, ...] = ()
 
 
+class CaseReviewDecision(Contract):
+    decision_id: str
+    case_id: str
+    case_version: int
+    kind: Literal["ACCEPT", "REJECT", "ESCALATE", "RESOLVE"]
+    actor_id: str
+    reason: str
+    decided_at: AwareDatetime
+    review_index: int | None = None
+    source_cause_ids: tuple[str, ...] = ()
+    rule_version: str
+    scope_note: str = "Décision de revue interne ; aucun effet juridique automatique ni modification du score."
+
+
 class RecommendedAction(Contract):
     action_id: str
     kind: Literal["REVIEW_EVIDENCE", "REVIEW_DOCUMENT", "REQUEST_EXPLANATION", "REQUEST_DOCUMENT",
@@ -1084,6 +1098,7 @@ class ResolutionImpact(Contract):
 
 
 class OfficerCaseView(Contract):
+    case_decisions: tuple[CaseReviewDecision, ...] = ()
     impact_if_resolved: tuple[ResolutionImpact, ...] = ()
     recommended_actions: tuple[RecommendedAction, ...] = ()
     behavior_profile: BehaviorProfile | None = None

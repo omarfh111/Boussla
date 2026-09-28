@@ -211,6 +211,27 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
     .click();
   await expect(audit).toContainText('"status": "AWAITING_HUMAN_REVIEW"');
   await expect(audit).toContainText('"status": "ACCEPTED"');
+  await page.getByRole("button", { name: "Dossiers", exact: true }).click();
+  await page
+    .getByLabel("Motif de la décision")
+    .fill("Toutes les causes documentaires sont résolues.");
+  await page.getByRole("button", { name: "Résoudre le dossier" }).click();
+  await expect(
+    page.getByText("Décision de revue interne enregistrée."),
+  ).toBeVisible();
+  await expect(page.locator(".priority-ring strong")).toHaveText("0");
+  const decisionView = await (
+    await page.request.get("/api/cases/CASE-BRICKS-001", {
+      headers: officerHeaders,
+    })
+  ).json();
+  expect(decisionView.case_decisions.at(-1)?.kind).toBe("RESOLVE");
+  const companyAfterDecision = await (
+    await page.request.get("/api/cases/CASE-BRICKS-001", {
+      headers: { "X-Boussla-Demo-Role": "COMPANY" },
+    })
+  ).json();
+  expect(companyAfterDecision.case_decisions).toBeUndefined();
   await page.getByRole("button", { name: "Avancé" }).click();
   await page.getByText("Diagnostics", { exact: true }).click();
   await expect(page.getByText("Analyse assistée BOUSSLA")).toBeVisible();

@@ -35,7 +35,7 @@ from boussla.contracts import (
     TransactionSummary, ActionReceipt, ExtractionProposal, DocumentClass, DocumentText, RouterResult,
     CompanyHistorySignal, SettlementAdjustment, InvestigatorBriefView, BriefObservationView, BriefHypothesisView,
     EnterpriseProfileView, MonthlyActivityView, PaymentTimelineEntry, InvoiceComparisonView, HorizonBucket,
-    AdminEnterpriseView, AdminPortfolioResult, Enterprise, ResolutionImpact,
+    AdminEnterpriseView, AdminPortfolioResult, Enterprise, ResolutionImpact, CaseReviewDecision,
 )
 from boussla.interim_checks import InterimChecks, get_checks_engine
 from boussla.playbook import (
@@ -358,6 +358,7 @@ class BousslaAppService(_DemoAdministration):
             "integrity": s.facts(case_id, "integrity", IntegrityReport, v),
             "routing": s.facts(case_id, "routing", RouterResult, v),
             "document_analysis": s.facts(case_id, "document_analysis", DocumentAnalysisReport, v),
+            "case_decision": s.facts(case_id, "case_decision", CaseReviewDecision, v),
         }
 
     def _clarification_status(self, requests: list[RequestView]) -> ClarificationStatus:
@@ -531,7 +532,7 @@ class BousslaAppService(_DemoAdministration):
         scenarios = ev.scenarios + self._reallocation_scenarios(case_id, company, v, facts, ev)
         view = OfficerCaseView(
             case_id=case_id, company_id=company, company_display_name=self._company_name(company), case_version=v,
-            documents=self._doc_views(facts, v), transactions=self._summaries(facts),
+            case_decisions=tuple(facts["case_decision"]), documents=self._doc_views(facts, v), transactions=self._summaries(facts),
             invoice_observations=tuple(facts["invoice_observation"]), payments=tuple(facts["payment"]),
             projects=tuple(facts["project"]), context_claims=tuple(facts["context_claim"]),
             quantity_references=tuple(facts["quantity_reference"]), allocations=tuple(facts["allocation"]),
@@ -1042,7 +1043,8 @@ class BousslaAppService(_DemoAdministration):
         actor, meta = self._open(actor, case_id, "get_history")
         company = actor.role is Role.COMPANY
         internal = {"ANALYSIS_OFFICER", "EVIDENCE_REJECTED", "EXPORT"}
-        events = tuple(e for e in self.store.events(case_id) if not (company and e.kind in internal))
+        events = tuple(e for e in self.store.events(case_id)
+                       if not (company and (e.kind in internal or e.kind.startswith("CASE_REVIEW_"))))
         revisions = tuple(r.model_copy(update={"score_snapshot": None}) if company else r
                           for r in self.store.revisions(case_id))
         if company:
@@ -1126,6 +1128,8 @@ class BousslaAppService(_DemoAdministration):
             "TRANSCRIPTION_CORRECTED": "Champs corrigés", "EVIDENCE_REJECTED": "Pièce rejetée",
             "EVIDENCE_ACCEPTED": "Pièce acceptée", "AUTO_CLARIFICATION_PUBLISHED": "Demande publiée",
             "REQUEST_PUBLISHED": "Demande publiée",
+            "CASE_REVIEW_ACCEPT": "Revue acceptée", "CASE_REVIEW_REJECT": "Revue rejetée",
+            "CASE_REVIEW_ESCALATE": "Dossier escaladé", "CASE_REVIEW_RESOLVE": "Dossier résolu",
         }
         titles = company_titles if company else officer_titles
         items = []
@@ -1944,6 +1948,48 @@ class BousslaAppService(_DemoAdministration):
                 findings_after=after.findings, score_before=before.score, score_after=after.score, mode=Mode.LIVE)
             tx.save_receipt(receipt, result)
         return result
+
+    def record_case_decision(self, actor: Actor, case_id: str, kind: str, reason: str,
+                             expected_version: int, idempotency_key: str) -> CaseReviewDecision:
+        """An internal officer review disposition; no documentary score or legal outcome is inferred."""
+        actor, meta = self._open(actor, case_id, "record_case_decision")
+        if kind not in {"ACCEPT", "REJECT", "ESCALATE", "RESOLVE"}:
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Décision de revue inconnue")
+        clean_reason = reason.strip() if isinstance(reason, str) else ""
+        if not 10 <= len(clean_reason) <= 500:
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Motif attendu (10 à 500 caractères)")
+        input_hash = self._input_hash(actor, "record_case_decision", [kind, clean_reason, expected_version])
+        with self.store.write(case_id) as tx:
+            if (prior := tx.find_receipt("record_case_decision", idempotency_key, input_hash)) is not None:
+                return CaseReviewDecision.model_validate_json(prior)
+            tx.require_version(expected_version)
+            facts = self._facts(case_id, expected_version)
+            before = self._evaluate(case_id, meta["company_id"], expected_version, facts)
+            active = tuple(c.cause_id for c in before.score.cause_progress
+                           if c.current_contribution != "0")
+            pending = any(p.status is ProposalStatus.AWAITING_HUMAN_REVIEW for p in facts["proposal"])
+            pending_request = any(r.request.status in PENDING_STATUSES for r in facts["request"])
+            if kind in {"ACCEPT", "RESOLVE"} and (before.score.review_index != 0 or active or pending or pending_request):
+                raise BousslaError(ErrorCode.INVALID_STATE,
+                                   "Les causes et propositions en attente empêchent de clore la revue")
+            decision_id = "DEC-" + stable_hash([case_id, expected_version, kind, clean_reason])[:12].upper()
+            decision = CaseReviewDecision(
+                decision_id=decision_id, case_id=case_id, case_version=expected_version + 1,
+                kind=kind, actor_id=actor.actor_id, reason=clean_reason, decided_at=self.clock(),
+                review_index=before.score.review_index, source_cause_ids=active,
+                rule_version=before.score.rules_version)
+            tx.put("case_decision", decision_id, decision)
+            next_facts = {**facts, "case_decision": [*facts["case_decision"], decision]}
+            snapshot = self._evaluate(case_id, meta["company_id"], expected_version + 1,
+                                      next_facts, before.score).score
+            tx.commit_version("Décision de revue interne enregistrée", score=snapshot)
+            tx.event(f"CASE_REVIEW_{kind}", actor.actor_id, clean_reason, (decision_id, *active),
+                     before_score=before.score, after_score=snapshot)
+            tx.save_receipt(ActionReceipt(
+                idempotency_key=idempotency_key, action="record_case_decision", case_id=case_id,
+                actor_id=actor.actor_id, input_hash=input_hash, resulting_version=expected_version + 1,
+                result_hash=stable_hash(decision.model_dump(mode="json"))), decision)
+        return decision
 
     @staticmethod
     def _require_supporting_document(proposal: EvidenceProposal, facts: dict[str, list], company_id: str) -> None:

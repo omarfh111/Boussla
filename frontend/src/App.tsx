@@ -2181,6 +2181,7 @@ function Officer({
         <div className="two-col">
           <Clarification c={c} act={act} />
           <Proposals c={c} act={act} />
+          <CaseReviewPanel c={c} act={act} />
         </div>
         <p className="footnote">
           Accepter ou rejeter une proposition exige une pièce liée. La décision
@@ -2645,6 +2646,108 @@ function Clarification({
     </Panel>
   );
 }
+function CaseReviewPanel({
+  c,
+  act,
+}: {
+  c: OfficerCaseView;
+  act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+}) {
+  const [reason, setReason] = useState("");
+  const [pending, setPending] = useState(false);
+  const canClose =
+    c.score?.review_index === 0 &&
+    !c.proposals.some(
+      (proposal) => proposal.status === "AWAITING_HUMAN_REVIEW",
+    ) &&
+    !c.requests.some(
+      (request) =>
+        request.request.status === "PUBLISHED_IN_DEMO" ||
+        request.request.status === "EXTENDED",
+    );
+  const send = async (kind: "ACCEPT" | "REJECT" | "ESCALATE" | "RESOLVE") => {
+    if (pending || reason.trim().length < 10) return;
+    setPending(true);
+    try {
+      await act(
+        () => api.caseDecision(c.case_id, c.case_version, kind, reason.trim()),
+        "Décision de revue interne enregistrée.",
+      );
+      setReason("");
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <Panel eyebrow="DÉCISION DU DOSSIER" title="Décision de revue interne">
+      <p>
+        Motif obligatoire. Cette décision ne modifie pas l’indice documentaire
+        et n’a aucun effet juridique automatique.
+      </p>
+      <label htmlFor="case-review-reason">Motif de la décision</label>
+      <textarea
+        id="case-review-reason"
+        value={reason}
+        maxLength={500}
+        onChange={(event) => setReason(event.target.value)}
+      />
+      <div className="button-row">
+        <button
+          className="secondary"
+          disabled={pending || reason.trim().length < 10}
+          onClick={() => send("ESCALATE")}
+        >
+          Escalader le dossier
+        </button>
+        <button
+          className="secondary"
+          disabled={pending || reason.trim().length < 10}
+          onClick={() => send("REJECT")}
+        >
+          Rejeter la revue
+        </button>
+        <button
+          className="secondary"
+          disabled={pending || reason.trim().length < 10 || !canClose}
+          onClick={() => send("ACCEPT")}
+        >
+          Accepter la revue
+        </button>
+        <button
+          className="primary"
+          disabled={pending || reason.trim().length < 10 || !canClose}
+          onClick={() => send("RESOLVE")}
+        >
+          Résoudre le dossier
+        </button>
+      </div>
+      {!canClose && (
+        <p className="footnote">
+          Pour accepter ou résoudre, toutes les causes et propositions doivent
+          être closes et aucune demande ne doit attendre une réponse.
+        </p>
+      )}
+      {!!c.case_decisions?.length && (
+        <ol className="timeline">
+          {[...c.case_decisions].reverse().map((decision) => (
+            <li key={decision.decision_id}>
+              <span className="timeline-version">v{decision.case_version}</span>
+              <div>
+                <strong>{decision.kind}</strong>
+                <p>{decision.reason}</p>
+                <small>
+                  {decision.actor_id} · {decision.decided_at} · indice{" "}
+                  {decision.review_index ?? "inconnu"}
+                </small>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+    </Panel>
+  );
+}
+
 function Proposals({
   c,
   act,

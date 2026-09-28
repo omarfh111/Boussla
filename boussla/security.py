@@ -28,6 +28,7 @@ POLICY: dict[str, frozenset[Role]] = {
     "submit_response": frozenset({Role.COMPANY}),
     "accept_evidence": frozenset({Role.OFFICER}),
     "reject_evidence": frozenset({Role.OFFICER}),
+    "record_case_decision": frozenset({Role.OFFICER}),
     "get_history": frozenset({Role.COMPANY, Role.OFFICER}),
     "get_audit": frozenset({Role.OFFICER}),
     "get_network": frozenset({Role.OFFICER}),

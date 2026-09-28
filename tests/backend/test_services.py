@@ -448,3 +448,27 @@ def test_investigation_reads_scoped_document_report_without_authenticity_verdict
     assert "faux document" not in answer.answer_fr.lower()
     assert answer.case_version == before and ver(svc) == before
     assert code(lambda: svc.ask_investigation(company, CASE, f"Analyse du document {doc_id} ?")) is ErrorCode.FORBIDDEN
+
+
+def test_case_review_decision_is_internal_versioned_and_requires_resolved_causes(svc, actors):
+    company, officer, _ = actors
+    initial = ver(svc)
+    assert code(lambda: svc.record_case_decision(company, CASE, "ESCALATE", "Examen renforcé requis", initial, "company")) is ErrorCode.FORBIDDEN
+    assert code(lambda: svc.record_case_decision(officer, CASE, "RESOLVE", "Revue terminée sans réserve", initial, "premature")) is ErrorCode.INVALID_STATE
+    assert ver(svc) == initial
+    escalated = svc.record_case_decision(officer, CASE, "ESCALATE", "Examen renforcé requis", initial, "escalate")
+    assert escalated.review_index == 40 and ver(svc) == initial + 1
+    assert svc.record_case_decision(officer, CASE, "ESCALATE", "Examen renforcé requis", initial, "escalate") == escalated
+    assert svc.get_case(officer, CASE).case_decisions == (escalated,)
+    assert "case_decisions" not in svc.get_case(company, CASE).model_dump()
+    assert not any(event.kind.startswith("CASE_REVIEW_") for event in svc.get_history(company, CASE).events)
+    assert any(item["kind"] == "CASE_REVIEW_ESCALATE" for item in svc.get_notifications(officer, CASE)["items"])
+    assert "Examen renforcé requis" in svc.ask_investigation(officer, CASE, "Quelle décision récente ?").answer_fr
+    audit = svc.get_audit(officer, CASE)["records"][-1]
+    assert audit["action"] == "CASE_REVIEW_ESCALATE" and audit["actor_id"] == officer.actor_id
+    assert audit["fact_changes"][0]["after"]["kind"] == "ESCALATE"
+    response = to_proposal(svc, actors)
+    svc.accept_evidence(officer, CASE, response.proposal_ids[0], ver(svc), "accept-after-escalate")
+    resolved = svc.record_case_decision(officer, CASE, "RESOLVE", "Toutes les causes sont résolues", ver(svc), "resolve")
+    assert resolved.review_index == 0 and resolved.source_cause_ids == ()
+    assert svc.get_case(officer, CASE).score.review_index == 0

@@ -1212,3 +1212,32 @@ it("shows sourced investigation answers only in the officer dossier", async () =
   ).not.toBeInTheDocument();
   expect(screen.queryByText("Cause documentée +40.")).not.toBeInTheDocument();
 });
+
+it("requires a reason and resolved causes for dossier closure while allowing an escalation", async () => {
+  const fetchMock = mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  expect(
+    screen.getByRole("button", { name: "Résoudre le dossier" }),
+  ).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "Escalader le dossier" }),
+  ).toBeDisabled();
+  fireEvent.change(screen.getByLabelText("Motif de la décision"), {
+    target: { value: "Revue renforcée demandée par l’agent" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Escalader le dossier" }));
+  await waitFor(() =>
+    expect(postBodies(fetchMock, "/decisions")).toHaveLength(1),
+  );
+  expect(postBodies(fetchMock, "/decisions")[0]).toMatchObject({
+    kind: "ESCALATE",
+    expected_version: 1,
+    reason: "Revue renforcée demandée par l’agent",
+  });
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  expect(
+    screen.queryByText("Décision de revue interne"),
+  ).not.toBeInTheDocument();
+});

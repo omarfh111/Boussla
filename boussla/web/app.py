@@ -227,6 +227,14 @@ async def decide(request: Request):
     return result(value)
 
 
+async def case_decision(request: Request):
+    a, k, data = actor(request), key(request), await body(request)
+    if set(data) != {"expected_version", "kind", "reason"} or not isinstance(data["kind"], str) or not isinstance(data["reason"], str):
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Décision et motif attendus")
+    return result(service(request).record_case_decision(a, request.path_params["case_id"],
+                                                        data["kind"], data["reason"], version(data), k))
+
+
 async def admin_enterprises(request: Request):
     a = actor(request)
     if request.method == "GET":
@@ -298,6 +306,7 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}/clarifications/prepare", prepare, methods=["POST"]),
         Route("/api/cases/{case_id}/clarifications/{draft_id}/publish", publish, methods=["POST"]),
         Route("/api/cases/{case_id}/responses/{request_id}", respond, methods=["POST"]),
+        Route("/api/cases/{case_id}/decisions", case_decision, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/accept", decide, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/reject", decide, methods=["POST"]),
         Route("/api/admin/enterprises", admin_enterprises, methods=["GET", "POST"]),
