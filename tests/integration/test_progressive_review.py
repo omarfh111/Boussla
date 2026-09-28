@@ -147,6 +147,61 @@ def test_existing_company_upload_can_be_linked_to_answered_request(service):
     assert exc.value.code is ErrorCode.INVALID_STATE
 
 
+def test_wrong_company_document_can_be_replaced_before_review(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    wrong_pdf = (FIXTURE_ROOT / "documents" / "08_untrusted_instruction.pdf").read_bytes()
+    wrong = service.upload_document(company, CASE, wrong_pdf, "unrelated.pdf", "application/pdf",
+                                    version(service), "upload-wrong")
+    first = service.attach_document_to_response(company, CASE, response.response.response_id,
+                                                wrong.document.document_id, version(service), "link-wrong")
+    assert first.case_version == version(service)
+    assert service.get_case(officer, CASE).score.review_index == 30
+    correct = service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                                      version(service), "upload-correct")
+    before = version(service)
+    replaced = service.attach_document_to_response(company, CASE, response.response.response_id,
+                                                   correct.document.document_id, before, "replace-wrong")
+    assert replaced.case_version == before + 1
+    assert set(replaced.response.document_ids) == {wrong.document.document_id, correct.document.document_id}
+    proposal = next(p for p in service._facts(CASE)["proposal"]
+                    if p.proposal_id == response.proposal_ids[0])
+    assert proposal.source_document_id == correct.document.document_id
+    assert service.get_case(officer, CASE).score.review_index == 20
+    event = service.store.events(CASE)[-1]
+    assert event.kind == "EVIDENCE_LINKED"
+    assert wrong.document.document_id in event.fact_ids
+    assert correct.document.document_id in event.fact_ids
+    assert service.store.revisions(CASE)[-1].score_snapshot.review_index == 20
+    replay = service.attach_document_to_response(company, CASE, response.response.response_id,
+                                                 correct.document.document_id, before, "replace-wrong")
+    assert replay == replaced and version(service) == before + 1
+    accepted = service.accept_evidence(officer, CASE, proposal.proposal_id, version(service), "accept-replaced")
+    assert accepted.score_after.review_index == 0
+    with pytest.raises(BousslaError) as exc:
+        service.attach_document_to_response(company, CASE, response.response.response_id,
+                                            wrong.document.document_id, version(service), "after-review")
+    assert exc.value.code is ErrorCode.INVALID_STATE
+
+
+def test_previously_linked_document_can_be_selected_for_pending_proposal(service):
+    company, response = request_and_answer(service)
+    wrong_pdf = (FIXTURE_ROOT / "documents" / "08_untrusted_instruction.pdf").read_bytes()
+    wrong = service.upload_document(company, CASE, wrong_pdf, "unrelated.pdf", "application/pdf",
+                                    version(service), "upload-wrong-initial", response_id=response.response.response_id)
+    correct = service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                                      version(service), "upload-correct-prelinked",
+                                      response_id=response.response.response_id)
+    proposal = next(p for p in service._facts(CASE)["proposal"]
+                    if p.proposal_id == response.proposal_ids[0])
+    assert proposal.source_document_id == wrong.document.document_id
+    assert service.get_case(service.registry.actors["DEMO-OFFICER"], CASE).score.review_index == 30
+    result = service.attach_document_to_response(company, CASE, response.response.response_id,
+                                                 correct.document.document_id, version(service), "select-prelinked")
+    assert result.response.document_ids.count(correct.document.document_id) == 1
+    assert service.get_case(service.registry.actors["DEMO-OFFICER"], CASE).score.review_index == 20
+
+
 def test_unrelated_answer_does_not_reduce_quantity_cause(service):
     officer = service.registry.actors["DEMO-OFFICER"]
     company = service.registry.actors["DEMO-COMPANY-BAT"]

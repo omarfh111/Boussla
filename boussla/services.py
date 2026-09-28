@@ -1437,15 +1437,18 @@ class BousslaAppService(_DemoAdministration):
                     or document.uploader_actor_id != actor.actor_id):
                 raise BousslaError(ErrorCode.INVALID_EVIDENCE_REFERENCE,
                                    "Pièce non déposée par cette entreprise dans ce dossier")
-            if document_id in response.document_ids:
-                raise BousslaError(ErrorCode.INVALID_STATE, "Pièce déjà liée à cette réponse")
             proposals = [p for p in self.store.facts(case_id, "proposal", EvidenceProposal)
                          if p.source_response_id == response_id]
-            if any(p.status is not ProposalStatus.AWAITING_HUMAN_REVIEW
-                   or p.source_document_id is not None for p in proposals):
+            if any(p.status is not ProposalStatus.AWAITING_HUMAN_REVIEW for p in proposals):
                 raise BousslaError(ErrorCode.INVALID_STATE,
-                                   "La proposition possède déjà une pièce ou a été traitée")
-            updated = response.model_copy(update={"document_ids": (*response.document_ids, document_id)})
+                                   "La proposition a déjà été traitée")
+            if document_id in response.document_ids and (
+                    not proposals or all(p.source_document_id == document_id for p in proposals)):
+                raise BousslaError(ErrorCode.INVALID_STATE, "Pièce déjà utilisée pour cette réponse")
+            previous_sources = tuple(p.source_document_id for p in proposals if p.source_document_id)
+            document_ids = (response.document_ids if document_id in response.document_ids else
+                            (*response.document_ids, document_id))
+            updated = response.model_copy(update={"document_ids": document_ids})
             tx.put("response", response_id, updated)
             facts_after = self._prospective_facts(case_id, expected_version, response=[updated])
             for proposal in proposals:
@@ -1454,9 +1457,10 @@ class BousslaAppService(_DemoAdministration):
                 facts_after["proposal"] = [linked if p.proposal_id == proposal.proposal_id else p
                                            for p in facts_after["proposal"]]
             score = self._evaluate(case_id, meta["company_id"], expected_version + 1, facts_after).score
-            v = tx.commit_version("Pièce existante liée à la réponse", score=score)
+            v = tx.commit_version("Pièce justificative choisie pour la réponse", score=score)
             tx.event("EVIDENCE_LINKED", actor.actor_id,
-                     "Pièce déjà déposée liée à la réponse", (response_id, document_id),
+                     "Pièce justificative liée ou remplacée pour la réponse",
+                     (response_id, *previous_sources, document_id),
                      before_score=self._evaluate(case_id, meta["company_id"], expected_version,
                                                  self._facts(case_id, expected_version)).score,
                      after_score=score)

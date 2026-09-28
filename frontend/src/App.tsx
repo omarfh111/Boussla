@@ -1607,15 +1607,13 @@ function LateDocumentLink({
 }) {
   const [documentId, setDocumentId] = useState("");
   const available = c.documents.filter(
-    (entry) =>
-      entry.document.acquisition_channel === "COMPANY_UPLOAD" &&
-      !response.document_ids.includes(entry.document.document_id),
+    (entry) => entry.document.acquisition_channel === "COMPANY_UPLOAD",
   );
   if (!available.length) return null;
   return (
     <div className="response-form">
       <label>
-        Pièce déjà déposée pour cette réponse
+        Choisir ou remplacer la pièce de cette réponse
         <select
           value={documentId}
           onChange={(e) => setDocumentId(e.target.value)}
@@ -1644,11 +1642,11 @@ function LateDocumentLink({
                 c.case_version,
                 documentId,
               ),
-            "Pièce liée à la réponse. Analyse du dossier actualisée.",
+            "Pièce choisie pour la réponse. Analyse du dossier actualisée.",
           )
         }
       >
-        Lier cette pièce
+        Utiliser cette pièce
       </button>
     </div>
   );
