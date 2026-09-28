@@ -1124,7 +1124,7 @@ it("compares company habit to the current period without treating uncovered mont
         as_of: "2026-09-27T00:00:00Z",
         observed_period: "2026-09",
         baseline_periods: ["2026-06", "2026-07", "2026-08"],
-        rule_version: "self-baseline-3",
+        rule_version: "self-baseline-4",
         signals: [
           {
             code: "MONTHLY_AMOUNT_DEVIATION",
@@ -1139,7 +1139,7 @@ it("compares company habit to the current period without treating uncovered mont
             source_ids: ["INV-1"],
             explanation_fr:
               "Montant mensuel observé : 800 contre 300 (×2.67). Signal de revue descriptif.",
-            rule_version: "self-baseline-3",
+            rule_version: "self-baseline-4",
           },
         ],
         metrics: [

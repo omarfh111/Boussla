@@ -5,7 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 from boussla.contracts import BehaviorMetric, BehaviorProfile, BehaviorSignal, Perspective
 
-RULE_VERSION = "self-baseline-3"
+RULE_VERSION = "self-baseline-4"
 
 
 def month(index):
@@ -17,7 +17,7 @@ def mean(values):
     return sum(values, Decimal(0)) / len(values) if values else None
 
 
-def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings=None) -> BehaviorProfile:
+def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings=None, revisions=()) -> BehaviorProfile:
     if as_of.tzinfo is None:
         raise ValueError("timezone-aware cutoff required")
     current_index = as_of.year * 12 + as_of.month - 2
@@ -156,6 +156,43 @@ def build_behavior_profile(facts, coverage, as_of: datetime, events=(), findings
         for p, v in anomaly_groups.items()}, "causes",
         sources=tuple(f.finding_id for v in anomaly_groups.values() for f in v),
         note="État des causes évaluées au calcul courant, regroupées par période de transaction ; ce n’est pas une reconstruction de leur état passé.")
+    # Reconstruct the state known at each month end from frozen case revisions.
+    # A revision without a snapshot makes that month unknown; never reuse today's
+    # findings as if they were the state of a past month.
+    ordered_revisions = sorted((r for r in revisions if r.created_at <= as_of),
+                               key=lambda r: (r.created_at, r.version))
+    recorded_values = {}
+    recorded_sources = {}
+    for period in (*prior, current):
+        month_end = (as_of if period == current else
+                     datetime(int(period[:4]) + (int(period[5:]) == 12),
+                              int(period[5:]) % 12 + 1, 1, tzinfo=as_of.tzinfo))
+        eligible = [r for r in ordered_revisions if r.created_at < month_end or
+                    (period == current and r.created_at <= month_end)]
+        if not eligible:
+            continue
+        latest = eligible[-1]
+        snapshot = latest.score_snapshot
+        if snapshot is None or snapshot.case_version != latest.version:
+            continue
+        recorded_values[period] = Decimal(len({cause.cause_id for cause in snapshot.cause_progress
+                                               if Decimal(cause.current_contribution) > 0}))
+        recorded_sources[period] = f"{latest.case_id}:CASE_VERSION:{latest.version}"
+    recorded_history = [recorded_values[p] for p in prior if p in recorded_values]
+    recorded_base = mean(recorded_history) if len(recorded_history) >= 3 else None
+    recorded_current = recorded_values.get(current)
+    metrics.append(BehaviorMetric(
+        code="RECORDED_ACTIVE_CAUSES", label_fr="Causes actives à la fin du mois",
+        current_value=str(recorded_current) if recorded_current is not None else None,
+        baseline_value=str(recorded_base) if recorded_base is not None else None,
+        change_percent=(str((recorded_current - recorded_base) / recorded_base * 100)
+                        if recorded_current is not None and recorded_base not in (None, Decimal(0)) else None),
+        status="AVAILABLE" if recorded_current is not None and recorded_base is not None else "INSUFFICIENT_DATA",
+        unit="causes", baseline_periods=tuple(p for p in prior if p in recorded_values),
+        sample_size=len(recorded_history), current_sample_size=1 if recorded_current is not None else 0,
+        source_ids=tuple(recorded_sources[p] for p in (*prior, current) if p in recorded_sources),
+        explanation_fr="États figés des révisions du dossier, sans recomposer les mois passés avec les causes actuelles. "
+                       "Une révision sans calcul figé rend sa période inconnue."))
     signals = []
     for metric in metrics:
         if metric.code not in ("RESPONSE_DELAY", "MONTHLY_AMOUNT") or metric.status != "AVAILABLE":

@@ -585,7 +585,8 @@ class BousslaAppService(_DemoAdministration):
         profile_findings = (ev.findings if ev.score.cutoff == profile_cutoff else
                             self._evaluate(case_id, company, v, facts, as_of=profile_cutoff).findings)
         view = view.model_copy(update={"behavior_profile": build_behavior_profile(
-            facts, coverage, profile_cutoff, self.store.events(case_id), profile_findings)})
+            facts, coverage, profile_cutoff, self.store.events(case_id), profile_findings,
+            self.store.revisions(case_id))})
         from boussla.indicators import case_indicators
         view = view.model_copy(update={"indicators": case_indicators(view, self.clock())})
         view = self._enrich_with_references(view, as_of=ev.score.cutoff.date())

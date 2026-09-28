@@ -34,7 +34,7 @@ def test_monthly_baseline_uses_same_currency_and_sourced_values():
     txs = {t.transaction_id for t in data["transaction"] if t.economic_period == "2025-12"}
     expected = sum(o.gross_millimes for o in data["invoice_observation"] if o.transaction_id in txs and o.perspective is Perspective.BUYER_RECEIVED)
     assert Decimal(amount.current_value) == expected
-    assert profile.observed_period == "2025-12" and profile.rule_version == "self-baseline-3"
+    assert profile.observed_period == "2025-12" and profile.rule_version == "self-baseline-4"
 
 def test_ambiguous_buyer_copies_invalidate_period_without_choosing_first():
     data = facts()
@@ -119,3 +119,26 @@ def test_large_monthly_amount_deviation_is_scoped_and_flags_small_current_sample
     assert signal.baseline_months >= 3 and signal.current_sample_size >= 1
     assert signal.source_ids and "sans effet sur le score documentaire" in signal.explanation_fr
     assert build_behavior_profile(data, {}, AS_OF).signals == ()
+
+
+def test_recorded_cause_series_uses_month_end_snapshots_not_current_findings():
+    from types import SimpleNamespace
+    def revision(version, month_number, contributions, *, frozen=True):
+        causes = tuple(SimpleNamespace(cause_id=f"CAUSE-{n}", current_contribution=str(value))
+                       for n, value in enumerate(contributions))
+        snapshot = SimpleNamespace(case_version=version, company_id=COMPANY, cause_progress=causes)
+        return SimpleNamespace(version=version, case_id="CASE-HISTORY",
+            created_at=datetime(2025, month_number, 10, tzinfo=timezone.utc),
+            score_snapshot=snapshot if frozen else None)
+    revisions = [revision(i, m, (40,)) for i, m in enumerate(range(6, 12), start=1)]
+    revisions.append(revision(7, 12, (40, 20)))
+    result = metric(build_behavior_profile(facts(), coverage(), AS_OF, revisions=revisions),
+                    "RECORDED_ACTIVE_CAUSES")
+    assert result.current_value == "2" and result.baseline_value == "1"
+    assert result.sample_size == 6 and result.source_ids[-1] == "CASE-HISTORY:CASE_VERSION:7"
+    unknown = metric(build_behavior_profile(facts(), coverage(), AS_OF,
+                     revisions=[*revisions, revision(8, 12, (), frozen=False)]),
+                     "RECORDED_ACTIVE_CAUSES")
+    assert unknown.current_value is None and unknown.status == "INSUFFICIENT_DATA"
+    assert metric(build_behavior_profile(facts(), coverage(), AS_OF),
+                  "RECORDED_ACTIVE_CAUSES").current_value is None

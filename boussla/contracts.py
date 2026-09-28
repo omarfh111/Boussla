@@ -1043,7 +1043,7 @@ class BehaviorSignal(Contract):
     current_sample_size: int = Field(ge=1)
     source_ids: tuple[str, ...]
     explanation_fr: str
-    rule_version: str = "self-baseline-3"
+    rule_version: str = "self-baseline-4"
 
 
 class BehaviorProfile(Contract):
