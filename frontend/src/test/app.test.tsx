@@ -963,3 +963,78 @@ it("links an undeclared company context to its message form", async () => {
   ).toBeInTheDocument();
   expect(screen.queryByText("Justification requise")).not.toBeInTheDocument();
 });
+
+it("tells the recorded cause and event story without inventing a score transition", async () => {
+  const baseCause = {
+    cause_id: "CAUSE-1",
+    transaction_id: "TX-1",
+    family: "QUANTITY",
+    raw_contribution: "40",
+    current_contribution: "40",
+    stage: "UNRESOLVED",
+    provisional: false,
+    reason_code: "GAP",
+    source_ids: ["INV-1"],
+  };
+  mockApi(officer, company, {
+    revisions: [
+      {
+        version: 1,
+        parent_version: null,
+        reason: "Facture reçue",
+        created_at: "2026-09-27T10:32:00Z",
+        score_snapshot: {
+          ...officer.score,
+          review_index: 40,
+          cause_progress: [baseCause],
+        },
+      },
+      {
+        version: 2,
+        parent_version: 1,
+        reason: "Réponse entreprise reçue",
+        created_at: "2026-09-27T13:02:00Z",
+        score_snapshot: {
+          ...officer.score,
+          review_index: 30,
+          cause_progress: [
+            {
+              ...baseCause,
+              current_contribution: "30",
+              stage: "EXPLANATION_RECEIVED",
+              provisional: true,
+            },
+          ],
+        },
+      },
+      {
+        version: 3,
+        parent_version: 2,
+        reason: "Demande publiée",
+        created_at: "2026-09-27T13:08:00Z",
+        score_snapshot: null,
+      },
+    ],
+    events: [
+      {
+        event_id: "EV-2",
+        kind: "RESPONSE",
+        summary: "Réponse reçue",
+        case_version: 2,
+        at: "2026-09-27T13:02:00Z",
+        actor_id: "company-demo",
+        fact_ids: ["RESP-1"],
+      },
+    ],
+  });
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  expect(
+    await screen.findByText("Indice de revue : 40 → 30"),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/40 → 30 · provisoire/)).toBeInTheDocument();
+  expect(screen.getByText("Réponse reçue")).toBeInTheDocument();
+  expect(screen.getByText(/RESP-1/)).toBeInTheDocument();
+  expect(screen.getAllByText(/Indice de revue :/)).toHaveLength(1);
+});

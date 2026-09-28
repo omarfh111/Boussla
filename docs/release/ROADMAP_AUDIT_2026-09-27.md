@@ -113,3 +113,7 @@ The officer dossier now orders synthesis, cause contributions, evidence counts a
 ## Company action cards
 
 The company overview now shows currently published requests as justification tasks with a direct route to the response form. When no context has been declared, it offers a direct link to the declaration form. A document awaiting review is described as automatically analyzed and awaiting agent validation; a company with no open response request is told so. The cards derive from the company-scoped inbox, context and document processing states rather than fixed instructions. This does not add messaging delivery outside the local demo. Validation: 27 React tests, TypeScript/production build and fresh synthetic Playwright main journey (1 passed).
+
+## Source-backed dossier timeline
+
+The officer timeline now renders every stored revision with its timestamp and associated events in time order, including event actor and fact IDs when present. Adjacent frozen score snapshots show review-index and per-cause contribution transitions; absent snapshots produce no invented transition. The main browser journey verifies the recorded 10 → 0 after agent acceptance. Older and some non-scoring revisions lack snapshots, so the timeline cannot yet show every intermediate index transition. Validation: 28 React tests (including 40 → 30 and a missing-snapshot case), TypeScript/production build and fresh synthetic Playwright main journey (1 passed).

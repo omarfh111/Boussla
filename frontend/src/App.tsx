@@ -2725,32 +2725,105 @@ function HistoryPanel({ c }: { c: OfficerCaseView }) {
   );
 }
 function Timeline({ value }: { value: HistoryView }) {
+  const revisions = [...(value.revisions ?? [])].reverse();
+  const byVersion = new Map(
+    (value.revisions ?? []).map((revision) => [revision.version, revision]),
+  );
   return (
     <Panel eyebrow="RÉVISIONS IMMUABLES" title="Chronologie">
       <ol className="timeline">
-        {[...(value.revisions ?? [])].reverse().map((r) => (
-          <li key={r.version}>
-            <span className="timeline-version">v{r.version}</span>
-            <div>
-              <strong>{r.reason}</strong>
-              <p>
-                {date(r.created_at)} ·{" "}
-                {(value.events ?? [])
-                  .filter((e) => e.case_version === r.version)
-                  .map((e) => e.summary)
-                  .join(" · ")}
-              </p>
-              <small>
-                Version précédente :{" "}
-                {r.parent_version === null ? "origine" : `v${r.parent_version}`}
-              </small>
-            </div>
-          </li>
-        ))}
+        {revisions.map((revision) => {
+          const previous =
+            revision.parent_version === null
+              ? null
+              : byVersion.get(revision.parent_version);
+          const before = previous?.score_snapshot;
+          const after = revision.score_snapshot;
+          const changedCauses =
+            before && after
+              ? after.cause_progress.flatMap((cause) => {
+                  const prior = before.cause_progress.find(
+                    (item) =>
+                      item.cause_id === cause.cause_id ||
+                      (item.transaction_id === cause.transaction_id &&
+                        item.family === cause.family),
+                  );
+                  return prior &&
+                    prior.current_contribution !== cause.current_contribution
+                    ? [{ cause, prior }]
+                    : [];
+                })
+              : [];
+          const events = (value.events ?? [])
+            .filter((event) => event.case_version === revision.version)
+            .sort((left, right) => left.at.localeCompare(right.at));
+          return (
+            <li key={revision.version}>
+              <span className="timeline-version">v{revision.version}</span>
+              <div>
+                <strong>{revision.reason}</strong>
+                <p>
+                  {new Date(revision.created_at).toLocaleString("fr-FR", {
+                    dateStyle: "short",
+                    timeStyle: "short",
+                  })}
+                </p>
+                {before &&
+                  after &&
+                  before.review_index !== after.review_index && (
+                    <p className="timeline-score">
+                      Indice de revue : {format(before.review_index)} →{" "}
+                      {format(after.review_index)}
+                    </p>
+                  )}
+                {changedCauses.map(({ cause, prior }) => (
+                  <p
+                    className="timeline-cause"
+                    key={`${cause.transaction_id}:${cause.family}`}
+                  >
+                    {familyLabel[cause.family] || cause.family} ·{" "}
+                    {cause.transaction_id} : {prior.current_contribution} →{" "}
+                    {cause.current_contribution}
+                    {cause.provisional
+                      ? " · provisoire"
+                      : cause.resolved_by
+                        ? " · validée par l’agent"
+                        : ""}
+                    {cause.evidence_ids?.length
+                      ? ` · preuves ${cause.evidence_ids?.join(", ")}`
+                      : ""}
+                  </p>
+                ))}
+                {events.map((event) => (
+                  <div className="timeline-event" key={event.event_id}>
+                    <time dateTime={event.at}>
+                      {new Date(event.at).toLocaleTimeString("fr-FR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                    <span>{event.summary}</span>
+                    {event.actor_id && <small> · {event.actor_id}</small>}
+                    {!!event.fact_ids?.length && (
+                      <small> · {event.fact_ids.join(", ")}</small>
+                    )}
+                  </div>
+                ))}
+                <small>
+                  Version précédente :{" "}
+                  {revision.parent_version === null
+                    ? "origine"
+                    : `v${revision.parent_version}`}
+                </small>
+              </div>
+            </li>
+          );
+        })}
       </ol>
     </Panel>
   );
 }
+
 function Diagnostics({ c }: { c: OfficerCaseView }) {
   const modes = c.mode_by_node;
   return (

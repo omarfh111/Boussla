@@ -180,6 +180,7 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(page.locator(".timeline li").first()).toContainText(
     "Version précédente",
   );
+  await expect(page.getByText("Indice de revue : 10 → 0")).toBeVisible();
   await capture(page, "11_history.png");
   await page.getByRole("button", { name: "Avancé" }).click();
   await page.getByText("Diagnostics", { exact: true }).click();

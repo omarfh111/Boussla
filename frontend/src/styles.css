@@ -2449,3 +2449,25 @@ button.danger {
 .dossier-secondary[open] > summary {
   margin-bottom: 16px;
 }
+
+.timeline-score {
+  color: #c7f4df !important;
+  font-weight: 750;
+}
+.timeline-cause {
+  border-left: 2px solid #52c8d0;
+  padding-left: 10px;
+}
+.timeline-event {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: baseline;
+  padding: 6px 0;
+  color: #b9d4e0;
+}
+.timeline-event time {
+  color: #62d7e5;
+  font-weight: 750;
+  min-width: 45px;
+}

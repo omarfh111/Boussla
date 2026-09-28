@@ -602,6 +602,7 @@ export interface HistoryView {
     parent_version: number | null;
     reason: string;
     created_at: string;
+    score_snapshot?: ScoreSnapshot | null;
   }[];
   events: {
     event_id: string;
@@ -609,6 +610,8 @@ export interface HistoryView {
     summary: string;
     case_version: number;
     at: string;
+    actor_id?: string;
+    fact_ids?: string[];
   }[];
   operational_confidence_changes?: {
     from_version: number;
