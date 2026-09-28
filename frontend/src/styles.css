@@ -2648,3 +2648,35 @@ button.danger {
 .audit-facts > div {
   margin: 0.75rem 0;
 }
+
+@media (max-width: 980px) {
+  .topbar {
+    height: auto;
+    min-height: 72px;
+    flex-wrap: wrap;
+    padding-block: 12px;
+  }
+  .breadcrumbs,
+  .top-actions {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 700px) {
+  .top-actions {
+    max-width: 100%;
+  }
+  .cause-row {
+    flex-wrap: wrap;
+  }
+  .cause-row > div {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .document-grid,
+  .history-comparisons,
+  .network-edge-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
