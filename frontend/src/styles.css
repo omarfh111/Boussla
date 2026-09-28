@@ -1759,133 +1759,84 @@ input[type="number"] {
   flex: none;
 }
 
-/* About 3 s cold-load splash (CSS + inline SVG only, once per session). */
+/* Brief first-load identity cue; the application loads behind it. */
 .boot-splash {
   position: fixed;
   inset: 0;
   z-index: 100;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 50% 42%, #0e2a44 0%, #07111f 62%);
-  animation: boot-bg 0.5s ease-out both;
-  transition: opacity 0.3s ease;
+  background: var(--surface-base);
+  transition: opacity 180ms var(--ease-standard);
 }
 .boot-splash.leaving {
   opacity: 0;
+  pointer-events: none;
 }
 .boot-center {
   display: grid;
   justify-items: center;
-  gap: 18px;
+  gap: 8px;
 }
 .boot-wordmark {
+  margin-top: 10px;
+  padding-left: 0.2em;
+  color: var(--text-primary);
   font:
-    800 30px Manrope,
+    800 27px Manrope,
     sans-serif;
-  letter-spacing: 0.34em;
-  padding-left: 0.34em;
-  color: #eaf6ff;
-  opacity: 0;
-  animation: boot-fade-up 0.6s 1.6s ease-out forwards;
+  letter-spacing: 0.2em;
+  animation: boot-fade-up 220ms 300ms both;
 }
-.boot-lines {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-  width: 280px;
+.boot-subtitle {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  animation: boot-fade-up 220ms 380ms both;
 }
-.boot-lines li {
-  position: relative;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: #8fb0c6;
-  padding-bottom: 5px;
-  opacity: 0;
-  animation: boot-fade-up 0.35s ease-out forwards;
-}
-.boot-lines li::after {
-  content: "";
+.boot-skip {
   position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 1px;
-  width: 100%;
-  background: linear-gradient(90deg, #126bdb, #16c6e3, #20d6b5);
-  transform: scaleX(0);
-  transform-origin: left;
-  animation: boot-line 0.45s ease-out forwards;
-}
-.boot-lines li:nth-child(1),
-.boot-lines li:nth-child(1)::after {
-  animation-delay: 2s;
-}
-.boot-lines li:nth-child(2),
-.boot-lines li:nth-child(2)::after {
-  animation-delay: 2.2s;
-}
-.boot-lines li:nth-child(3),
-.boot-lines li:nth-child(3)::after {
-  animation-delay: 2.4s;
+  bottom: var(--space-8);
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 .mark-arc {
   stroke-dashoffset: 595;
-  animation: mark-draw-arc 0.55s ease-out forwards;
+  animation: mark-draw-arc 480ms var(--ease-standard) forwards;
 }
 .mark-inner {
   opacity: 0;
-  animation: mark-inner 0.5s 0.4s ease-out forwards;
+  animation: mark-inner 220ms 220ms forwards;
 }
 .mark-north {
   opacity: 0;
-  transform: translateY(-14px);
-  animation: mark-north 0.5s 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation: mark-inner-full 220ms 300ms forwards;
 }
 .mark-south {
   opacity: 0;
-  animation: mark-inner-full 0.4s 0.8s ease-out forwards;
+  animation: mark-inner-full 220ms 360ms forwards;
 }
 .mark-check {
   stroke-dasharray: 190;
   stroke-dashoffset: 190;
-  animation: mark-draw-check 0.6s 1s ease-in-out forwards;
+  animation: mark-draw-check 380ms 250ms var(--ease-standard) forwards;
 }
 .mark-node {
   opacity: 0;
-  transform-box: fill-box;
-  transform-origin: center;
-  transform: scale(0.2);
-  animation: mark-node 0.3s cubic-bezier(0.3, 1.6, 0.5, 1) forwards;
-}
-.mark-node:nth-of-type(1) {
-  animation-delay: 1.4s;
-}
-.mark-node:nth-of-type(2) {
-  animation-delay: 1.52s;
-}
-.mark-node:nth-of-type(3) {
-  animation-delay: 1.64s;
-}
-@keyframes boot-bg {
-  from {
-    background-color: #03070d;
-    opacity: 0.6;
-  }
+  animation: mark-inner-full 180ms 520ms forwards;
 }
 @keyframes boot-fade-up {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(4px);
   }
   to {
     opacity: 1;
     transform: none;
-  }
-}
-@keyframes boot-line {
-  to {
-    transform: scaleX(1);
   }
 }
 @keyframes mark-draw-arc {
@@ -1903,37 +1854,11 @@ input[type="number"] {
     opacity: 1;
   }
 }
-@keyframes mark-north {
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
 @keyframes mark-draw-check {
   to {
     stroke-dashoffset: 0;
   }
 }
-@keyframes mark-node {
-  60% {
-    opacity: 1;
-    transform: scale(1.25);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-.boot-splash.reduced .boot-wordmark,
-.boot-splash.reduced .boot-lines li {
-  opacity: 1;
-  animation: none;
-}
-.boot-splash.reduced .boot-lines li::after {
-  transform: scaleX(1);
-  animation: none;
-}
-
 /* One-time entrances after data arrives (no loops). */
 .enter-once {
   animation: enter-once 0.28s ease-out both;
