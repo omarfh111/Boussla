@@ -33,7 +33,9 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(
     page.getByRole("heading", { name: "Votre dossier, en un regard" }),
   ).toBeVisible();
-  await expect(page.getByText("Priorité de revue", { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText("Priorité de revue", { exact: true }),
+  ).toHaveCount(0);
   await page.getByRole("button", { name: "Messages" }).click();
   await page.locator("summary").filter({ hasText: "Contexte déclaré" }).click();
   await page
@@ -57,6 +59,9 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
       .getByText("Demande automatique BOUSSLA")
       .first(),
   ).toBeVisible();
+  await page
+    .getByText("Enquête détaillée et simulations", { exact: true })
+    .click();
   const scenarios = page.locator(".scenario-panel");
   await expect(
     scenarios.getByText("Réaffectation hypothétique P1=1000 / P2=1000"),
@@ -113,7 +118,9 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(page.locator(".priority-ring strong")).toHaveText("20");
   await expect(page.getByText("Contributions au score")).toBeVisible();
   await expect(page.locator(".cause-value")).toHaveText("40 → 20");
-  await expect(page.getByText("Réduction provisoire", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Réduction provisoire", { exact: true }),
+  ).toBeVisible();
   // Company confirms source-backed fields; the service records the provisional 10 stage.
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await page.getByRole("button", { name: "Documents", exact: true }).click();

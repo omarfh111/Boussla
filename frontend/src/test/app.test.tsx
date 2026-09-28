@@ -889,21 +889,64 @@ it("renders backend indicator explanations without inventing missing values", as
   expect(screen.getByText(/confidence-test-rule/)).toBeInTheDocument();
 });
 
-
 it("keeps five primary officer spaces and four company spaces role scoped", async () => {
   mockApi();
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
-  for (const name of ["Dashboard", "Dossiers", "Réseau", "Historique", "Notifications", "Avancé"])
+  for (const name of [
+    "Dashboard",
+    "Dossiers",
+    "Réseau",
+    "Historique",
+    "Notifications",
+    "Avancé",
+  ])
     expect(screen.getByRole("button", { name })).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Réseau" }));
-  expect(await screen.findByText("Réseau", { selector: "h1" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("Réseau", { selector: "h1" }),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Notifications" }));
-  expect(await screen.findByText("Notifications", { selector: "h1" })).toBeInTheDocument();
+  expect(
+    await screen.findByText("Notifications", { selector: "h1" }),
+  ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
-  for (const name of ["Mes dossiers", "Actions requises", "Documents", "Messages"])
+  for (const name of [
+    "Mes dossiers",
+    "Actions requises",
+    "Documents",
+    "Messages",
+  ])
     expect(screen.getByRole("button", { name })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Réseau" })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Réseau" }),
+  ).not.toBeInTheDocument();
   expect(screen.queryByText("Priorité de revue")).not.toBeInTheDocument();
+});
+
+it("orders the dossier around review, proof and a human decision", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
+  const navigation = screen.getByRole("navigation", {
+    name: "Sections du dossier",
+  });
+  expect(
+    Array.from(navigation.querySelectorAll("a"), (link) => link.textContent),
+  ).toEqual([
+    "Synthèse",
+    "Pourquoi ?",
+    "Preuves",
+    "Actions",
+    "Timeline",
+    "Décision",
+  ]);
+  expect(screen.getByText("Contributions au score")).toBeInTheDocument();
+  expect(screen.getByText(/pièces disponibles/)).toBeInTheDocument();
+  expect(screen.getByText("Actions recommandées")).toBeInTheDocument();
+  expect(await screen.findByText("Chronologie")).toBeInTheDocument();
+  expect(screen.getByText("Décision de l’agent")).toBeInTheDocument();
+  expect(screen.getByText("Analyses complémentaires")).toBeInTheDocument();
 });

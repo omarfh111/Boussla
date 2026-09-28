@@ -2382,3 +2382,70 @@ button.danger {
     transform: none;
   }
 }
+
+.dossier-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+.dossier-jump a {
+  color: #c7e8ee;
+  text-decoration: none;
+  border: 1px solid #31546a;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.dossier-jump a:hover,
+.dossier-jump a:focus-visible {
+  border-color: #52c8d0;
+  color: #fff;
+}
+.dossier-zone {
+  scroll-margin-top: 24px;
+  margin: 28px 0;
+}
+.dossier-zone > h2 {
+  font:
+    750 21px Manrope,
+    sans-serif;
+  margin: 0 0 14px;
+}
+.dossier-zone > p {
+  color: #a7c3d5;
+}
+.dossier-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+}
+.dossier-counts span {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid #31546a;
+  border-radius: 12px;
+  background: #10263b;
+}
+.dossier-counts strong {
+  font:
+    800 22px Manrope,
+    sans-serif;
+}
+.dossier-secondary {
+  border: 1px solid #31546a;
+  border-radius: 12px;
+  padding: 14px 18px;
+  margin: 18px 0;
+}
+.dossier-secondary > summary {
+  cursor: pointer;
+  color: #c7e8ee;
+  font-weight: 700;
+}
+.dossier-secondary[open] > summary {
+  margin-bottom: 16px;
+}

@@ -1,4 +1,4 @@
-﻿import {
+import {
   Component,
   useCallback,
   useRef,
@@ -1744,7 +1744,15 @@ function Officer({
         title={c.case_id}
         detail={`${c.company_display_name} · Version ${c.case_version} · Calcul déterministe`}
       />
-      <div className="dossier-hero">
+      <nav className="dossier-jump" aria-label="Sections du dossier">
+        <a href="#dossier-synthese">Synthèse</a>
+        <a href="#dossier-causes">Pourquoi ?</a>
+        <a href="#dossier-preuves">Preuves</a>
+        <a href="#dossier-actions">Actions</a>
+        <a href="#dossier-timeline">Timeline</a>
+        <a href="#dossier-decision">Décision</a>
+      </nav>
+      <div className="dossier-hero" id="dossier-synthese">
         <div className="priority-ring">
           <div>
             <span>Priorité de revue</span>
@@ -1859,255 +1867,333 @@ function Officer({
           ))}
         </details>
       )}
-      <Panel title="Contributions au score" eyebrow="EXPLICATION PAR CAUSE">
-        {c.score?.cause_progress.length ? (
-          <div className="cause-list">
-            {c.score.cause_progress.map((cause) => (
-              <article
-                className="cause-row"
-                key={`${cause.transaction_id}:${cause.family}`}
-              >
-                <div>
-                  <strong>{familyLabel[cause.family] || cause.family}</strong>
-                  <small>{cause.transaction_id}</small>
-                  <small>{cause.reason_code || "Cause documentée"}</small>
-                  <span>{progressLabel[cause.stage] || cause.stage}</span>
-                  {cause.provisional && (
-                    <>
-                      <em>Réduction provisoire</em>
-                      <small>Validation agent requise</small>
-                    </>
-                  )}
-                  <small>
-                    Cause initiale : +
-                    {cause.initial_weight ?? cause.raw_contribution} ·
-                    Contribution actuelle : +{cause.current_contribution}
-                  </small>
-                  {cause.resolved_by && (
+      <section id="dossier-causes" className="dossier-zone">
+        <h2>Pourquoi ce dossier ?</h2>
+        <Panel title="Contributions au score" eyebrow="EXPLICATION PAR CAUSE">
+          {c.score?.cause_progress.length ? (
+            <div className="cause-list">
+              {c.score.cause_progress.map((cause) => (
+                <article
+                  className="cause-row"
+                  key={`${cause.transaction_id}:${cause.family}`}
+                >
+                  <div>
+                    <strong>{familyLabel[cause.family] || cause.family}</strong>
+                    <small>{cause.transaction_id}</small>
+                    <small>{cause.reason_code || "Cause documentée"}</small>
+                    <span>{progressLabel[cause.stage] || cause.stage}</span>
+                    {cause.provisional && (
+                      <>
+                        <em>Réduction provisoire</em>
+                        <small>Validation agent requise</small>
+                      </>
+                    )}
                     <small>
-                      Résolue par {cause.resolved_by} · {cause.resolved_at}
+                      Cause initiale : +
+                      {cause.initial_weight ?? cause.raw_contribution} ·
+                      Contribution actuelle : +{cause.current_contribution}
                     </small>
-                  )}
-                  {cause.rule_version && (
-                    <small>Règle : {cause.rule_version}</small>
-                  )}
-                </div>
-                <strong className="cause-value">
-                  {cause.raw_contribution} → {cause.current_contribution}
-                </strong>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p>Aucune contribution chiffrée pour ce dossier.</p>
-        )}
-      </Panel>
-      <div className="two-col indicator-explanations">
+                    {cause.resolved_by && (
+                      <small>
+                        Résolue par {cause.resolved_by} · {cause.resolved_at}
+                      </small>
+                    )}
+                    {cause.rule_version && (
+                      <small>Règle : {cause.rule_version}</small>
+                    )}
+                  </div>
+                  <strong className="cause-value">
+                    {cause.raw_contribution} → {cause.current_contribution}
+                  </strong>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>Aucune contribution chiffrée pour ce dossier.</p>
+          )}
+        </Panel>
+      </section>
+      <section id="dossier-preuves" className="dossier-zone">
+        <h2>Preuves</h2>
+        <div className="dossier-counts">
+          <span>
+            <strong>{c.documents.length}</strong> pièces disponibles
+          </span>
+          <span>
+            <strong>
+              {
+                c.documents.filter(
+                  (document) =>
+                    document.processing_status === "ANALYZED_AWAITING_REVIEW",
+                ).length
+              }
+            </strong>{" "}
+            à vérifier
+          </span>
+          <span>
+            <strong>
+              {
+                new Set(
+                  c.recommended_actions?.flatMap(
+                    (action) => action.required_documents,
+                  ) ?? [],
+                ).size
+              }
+            </strong>{" "}
+            types de pièces demandés
+          </span>
+        </div>
+        <details className="dossier-secondary">
+          <summary>Examiner les pièces et leurs analyses</summary>
+          <Documents c={c} />
+        </details>
+      </section>
+      <section id="dossier-actions" className="dossier-zone">
+        <h2>Actions</h2>
+        <p>
+          {
+            c.requests.filter(
+              (item) => item.request.status === "PUBLISHED_IN_DEMO",
+            ).length
+          }{" "}
+          demandes en attente ·{" "}
+          {
+            c.proposals.filter(
+              (item) => item.status === "AWAITING_HUMAN_REVIEW",
+            ).length
+          }{" "}
+          propositions à décider
+        </p>
         <Panel
-          title="Facteurs historiques"
-          eyebrow="CONTEXTE · SÉPARÉ DU SCORE"
+          title="Actions recommandées"
+          eyebrow="PROCHAINE ÉTAPE · DÉCISION AGENT"
         >
-          {c.history_signal_status === "AVAILABLE" ? (
-            <>
+          {c.recommended_actions?.length ? (
+            c.recommended_actions.map((action) => (
+              <article key={action.action_id} className="document">
+                <strong>
+                  Priorité {action.priority} · {action.title_fr}
+                </strong>
+                <span>
+                  {action.status === "WAITING" ? "En attente" : "À traiter"}
+                </span>
+                <p>{action.reason}</p>
+                <small>
+                  Causes :{" "}
+                  {action.source_causes.join(", ") || "Aucune cause liée"}
+                </small>
+                {action.required_documents.length > 0 && (
+                  <small>
+                    Pièces requises : {action.required_documents.join(", ")}
+                  </small>
+                )}
+              </article>
+            ))
+          ) : (
+            <p>Aucune action recommandée avec les données actuelles.</p>
+          )}
+        </Panel>
+      </section>
+      <section id="dossier-timeline" className="dossier-zone">
+        <h2>Timeline</h2>
+        <HistoryPanel c={c} />
+      </section>
+      <section id="dossier-decision" className="dossier-zone">
+        <h2>Décision de l’agent</h2>
+        <div className="two-col">
+          <Clarification c={c} act={act} />
+          <Proposals c={c} act={act} />
+        </div>
+        <p className="footnote">
+          Accepter ou rejeter une proposition exige une pièce liée. La décision
+          crée une nouvelle version du dossier.
+        </p>
+      </section>
+      <details className="dossier-secondary">
+        <summary>Analyses complémentaires</summary>
+        <div className="two-col indicator-explanations">
+          <Panel
+            title="Facteurs historiques"
+            eyebrow="CONTEXTE · SÉPARÉ DU SCORE"
+          >
+            {c.history_signal_status === "AVAILABLE" ? (
+              <>
+                <p>
+                  Indice historique : {format(c.history_signal_index)}/100 ·{" "}
+                  {c.history_signal_method}
+                </p>
+                {c.history_signal_factors.length ? (
+                  <div className="indicator-factor-list">
+                    {c.history_signal_factors.map((factor) => (
+                      <article
+                        className="indicator-factor"
+                        key={factor.reason_code}
+                      >
+                        <strong>
+                          {factor.reason_code} · +{factor.contribution}
+                        </strong>
+                        <span>{factor.explanation_fr}</span>
+                        <small>{factor.source_signal_ids.join(", ")}</small>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <p>
+                    Aucune variation significative sur les périodes couvertes.
+                  </p>
+                )}
+              </>
+            ) : (
               <p>
-                Indice historique : {format(c.history_signal_index)}/100 ·{" "}
-                {c.history_signal_method}
+                Données insuffisantes pour comparer l’entreprise à son
+                historique.
               </p>
-              {c.history_signal_factors.length ? (
+            )}
+          </Panel>
+          <Panel
+            title="Facteurs de confiance"
+            eyebrow="INTERACTIONS · SÉPARÉE DU SCORE"
+          >
+            {c.operational_confidence_status === "AVAILABLE" ? (
+              <>
+                <p>
+                  Indice : {format(c.operational_confidence_index)}/100 ·{" "}
+                  {c.operational_confidence_eligible_observations} observations
+                  admissibles
+                </p>
+                <p>
+                  Calcul au {c.operational_confidence_as_of} ·{" "}
+                  {c.operational_confidence_method}
+                </p>
                 <div className="indicator-factor-list">
-                  {c.history_signal_factors.map((factor) => (
+                  {c.operational_confidence_factors.map((factor, index) => (
                     <article
                       className="indicator-factor"
-                      key={factor.reason_code}
+                      key={`${factor.code}:${index}`}
                     >
                       <strong>
-                        {factor.reason_code} · +{factor.contribution}
+                        {factor.code} · {factor.weighted_contribution} points
                       </strong>
+                      <span>
+                        {factor.numerator}/{factor.denominator}{" "}
+                        {confidenceUnit[factor.code] ||
+                          "observations favorables"}
+                      </span>
+                      <span>
+                        Poids : {factor.effective_weight} % (nominal{" "}
+                        {factor.nominal_weight} %)
+                      </span>
                       <span>{factor.explanation_fr}</span>
-                      <small>{factor.source_signal_ids.join(", ")}</small>
+                      <small>{factor.reason_codes.join(", ")}</small>
+                      <small>{factor.source_ids.join(", ")}</small>
                     </article>
                   ))}
                 </div>
-              ) : (
-                <p>
-                  Aucune variation significative sur les périodes couvertes.
-                </p>
-              )}
-            </>
-          ) : (
-            <p>
-              Données insuffisantes pour comparer l’entreprise à son historique.
-            </p>
-          )}
-        </Panel>
-        <Panel
-          title="Facteurs de confiance"
-          eyebrow="INTERACTIONS · SÉPARÉE DU SCORE"
-        >
-          {c.operational_confidence_status === "AVAILABLE" ? (
-            <>
+              </>
+            ) : (
               <p>
-                Indice : {format(c.operational_confidence_index)}/100 ·{" "}
-                {c.operational_confidence_eligible_observations} observations
-                admissibles
+                Données insuffisantes :{" "}
+                {c.operational_confidence_eligible_observations}/3 observations
+                admissibles.
               </p>
-              <p>
-                Calcul au {c.operational_confidence_as_of} ·{" "}
-                {c.operational_confidence_method}
-              </p>
-              <div className="indicator-factor-list">
-                {c.operational_confidence_factors.map((factor, index) => (
-                  <article
-                    className="indicator-factor"
-                    key={`${factor.code}:${index}`}
-                  >
-                    <strong>
-                      {factor.code} · {factor.weighted_contribution} points
-                    </strong>
-                    <span>
-                      {factor.numerator}/{factor.denominator}{" "}
-                      {confidenceUnit[factor.code] || "observations favorables"}
-                    </span>
-                    <span>
-                      Poids : {factor.effective_weight} % (nominal{" "}
-                      {factor.nominal_weight} %)
-                    </span>
-                    <span>{factor.explanation_fr}</span>
-                    <small>{factor.reason_codes.join(", ")}</small>
-                    <small>{factor.source_ids.join(", ")}</small>
-                  </article>
-                ))}
-              </div>
-            </>
-          ) : (
+            )}
+          </Panel>
+        </div>
+        {c.behavior_profile && (
+          <Panel
+            title="Habitude et période observée"
+            eyebrow="BASELINE PROPRE À L’ENTREPRISE"
+          >
             <p>
-              Données insuffisantes :{" "}
-              {c.operational_confidence_eligible_observations}/3 observations
-              admissibles.
+              Période : {c.behavior_profile.observed_period} · Données arrêtées
+              au {c.behavior_profile.as_of} · Règle{" "}
+              {c.behavior_profile.rule_version}
             </p>
-          )}
-        </Panel>
-      </div>
-      {c.behavior_profile && (
-        <Panel
-          title="Habitude et période observée"
-          eyebrow="BASELINE PROPRE À L’ENTREPRISE"
-        >
-          <p>
-            Période : {c.behavior_profile.observed_period} · Données arrêtées au{" "}
-            {c.behavior_profile.as_of} · Règle {c.behavior_profile.rule_version}
-          </p>
-          <div className="monthly-context">
-            {c.behavior_profile.metrics.map((metric) => (
-              <article key={`${metric.code}-${metric.currency ?? "all"}`}>
-                <strong>{metric.label_fr}</strong>
-                <span>
-                  Observé : {metric.current_value ?? "inconnu"} {metric.unit}{" "}
-                  {metric.currency}
-                </span>
-                <span>
-                  Habitude : {metric.baseline_value ?? "données insuffisantes"}{" "}
-                  {metric.unit}
-                </span>
-                {metric.change_percent !== null && (
-                  <span>Écart : {metric.change_percent} %</span>
-                )}
-                <small>
-                  {metric.sample_size} mois de référence exploitables
-                </small>
-                <details>
-                  <summary>Méthode et sources</summary>
-                  <p>{metric.explanation_fr}</p>
+            <div className="monthly-context">
+              {c.behavior_profile.metrics.map((metric) => (
+                <article key={`${metric.code}-${metric.currency ?? "all"}`}>
+                  <strong>{metric.label_fr}</strong>
+                  <span>
+                    Observé : {metric.current_value ?? "inconnu"} {metric.unit}{" "}
+                    {metric.currency}
+                  </span>
+                  <span>
+                    Habitude :{" "}
+                    {metric.baseline_value ?? "données insuffisantes"}{" "}
+                    {metric.unit}
+                  </span>
+                  {metric.change_percent !== null && (
+                    <span>Écart : {metric.change_percent} %</span>
+                  )}
                   <small>
-                    {metric.source_ids.join(", ") || "Sources insuffisantes"}
+                    {metric.sample_size} mois de référence exploitables
                   </small>
-                </details>
-              </article>
-            ))}
-          </div>
+                  <details>
+                    <summary>Méthode et sources</summary>
+                    <p>{metric.explanation_fr}</p>
+                    <small>
+                      {metric.source_ids.join(", ") || "Sources insuffisantes"}
+                    </small>
+                  </details>
+                </article>
+              ))}
+            </div>
+          </Panel>
+        )}
+        <Panel
+          title="Comportement sur 12 mois"
+          eyebrow="FENÊTRE CALENDAIRE · COUVERTURE EXPLICITE"
+        >
+          {c.monthly_activity.length ? (
+            <div className="monthly-context">
+              {c.monthly_activity.slice(-12).map((month) => (
+                <article key={month.month}>
+                  <strong>{month.month}</strong>
+                  <span>
+                    {month.transaction_count} transactions ·{" "}
+                    {month.invoice_observation_count} observations de factures
+                  </span>
+                  <small>{month.source_label}</small>
+                  <small>
+                    {month.coverage_status === "COVERED"
+                      ? "Période couverte"
+                      : "Couverture inconnue"}
+                  </small>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p>Données insuffisantes pour la vue sur 12 mois.</p>
+          )}
         </Panel>
-      )}
-      <Panel
-        title="Comportement sur 12 mois"
-        eyebrow="FENÊTRE CALENDAIRE · COUVERTURE EXPLICITE"
-      >
-        {c.monthly_activity.length ? (
-          <div className="monthly-context">
-            {c.monthly_activity.slice(-12).map((month) => (
-              <article key={month.month}>
-                <strong>{month.month}</strong>
-                <span>
-                  {month.transaction_count} transactions ·{" "}
-                  {month.invoice_observation_count} observations de factures
-                </span>
-                <small>{month.source_label}</small>
-                <small>
-                  {month.coverage_status === "COVERED"
-                    ? "Période couverte"
-                    : "Couverture inconnue"}
-                </small>
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p>Données insuffisantes pour la vue sur 12 mois.</p>
-        )}
-      </Panel>
-      <Panel
-        title="Actions recommandées"
-        eyebrow="PROCHAINE ÉTAPE · DÉCISION AGENT"
-      >
-        {c.recommended_actions?.length ? (
-          c.recommended_actions.map((action) => (
-            <article key={action.action_id} className="document">
-              <strong>
-                Priorité {action.priority} · {action.title_fr}
-              </strong>
-              <span>
-                {action.status === "WAITING" ? "En attente" : "À traiter"}
-              </span>
-              <p>{action.reason}</p>
-              <small>
-                Causes :{" "}
-                {action.source_causes.join(", ") || "Aucune cause liée"}
-              </small>
-              {action.required_documents.length > 0 && (
-                <small>
-                  Pièces requises : {action.required_documents.join(", ")}
-                </small>
-              )}
-            </article>
-          ))
-        ) : (
-          <p>Aucune action recommandée avec les données actuelles.</p>
-        )}
-      </Panel>
-      <InvestigatorPanel
-        brief={c.investigator_brief}
-        passages={c.candidate_passages}
-      />
-      <div className="two-col">
-        <QuantityStory c={c} />
-        <Clarification c={c} act={act} />
-      </div>
-      <div className="two-col">
-        <Findings findings={c.findings} />
-        <Proposals c={c} act={act} />
-      </div>
-      <div className="two-col">
-        <InvoiceCompare
-          observations={c.invoice_observations}
-          comparisons={c.invoice_comparisons}
+      </details>
+      <details className="dossier-secondary">
+        <summary>Enquête détaillée et simulations</summary>
+        <InvestigatorPanel
+          brief={c.investigator_brief}
+          passages={c.candidate_passages}
         />
-        <HypothesisCards
-          hypotheses={c.investigator_brief?.top_hypotheses ?? []}
+        <div className="two-col">
+          <QuantityStory c={c} />
+        </div>
+        <div className="two-col">
+          <Findings findings={c.findings} />
+        </div>
+        <div className="two-col">
+          <InvoiceCompare
+            observations={c.invoice_observations}
+            comparisons={c.invoice_comparisons}
+          />
+          <HypothesisCards
+            hypotheses={c.investigator_brief?.top_hypotheses ?? []}
+          />
+        </div>
+        <ContextAssessment ctx={c.context_assessment} />
+        <ScenarioCards
+          reviewIndex={c.score?.review_index}
+          scenarios={c.scenarios}
         />
-      </div>
-      <ContextAssessment ctx={c.context_assessment} />
-      <ScenarioCards
-        reviewIndex={c.score?.review_index}
-        scenarios={c.scenarios}
-      />
+      </details>
     </>
   );
 }
@@ -2609,14 +2695,14 @@ function Timeline({ value }: { value: HistoryView }) {
   return (
     <Panel eyebrow="RÉVISIONS IMMUABLES" title="Chronologie">
       <ol className="timeline">
-        {[...value.revisions].reverse().map((r) => (
+        {[...(value.revisions ?? [])].reverse().map((r) => (
           <li key={r.version}>
             <span className="timeline-version">v{r.version}</span>
             <div>
               <strong>{r.reason}</strong>
               <p>
                 {date(r.created_at)} ·{" "}
-                {value.events
+                {(value.events ?? [])
                   .filter((e) => e.case_version === r.version)
                   .map((e) => e.summary)
                   .join(" · ")}
