@@ -126,7 +126,11 @@ def test_audit_event_is_atomic_and_preserves_unknown_scores(store):
     assert record["actor_id"] == "COMPANY-1"
     assert record["reason"] == "Question answered"
     assert record["evidence_ids"] == ["Q1"]
-    assert record["before"] is None and record["after"] is None
+    assert record["before"] is None and record["after"].get("review_index") is None
+    assert record["fact_changes"] == [{
+        "kind": "question", "fact_id": "Q1",
+        "before": q("Q1", "v1").model_dump(mode="json"),
+        "after": q("Q1", "new").model_dump(mode="json") }]
     assert record["rules_version"] is None
 
 
@@ -151,3 +155,15 @@ def test_existing_database_adds_audit_table_without_rewriting_events(tmp_path):
     assert len(migrated.audit_records(CASE)) == 1
     with sqlite3.connect(db) as conn:
         assert conn.execute("SELECT value FROM schema_meta WHERE key='schema_version'").fetchone()[0] == "2"
+
+
+def test_audit_fact_diff_redacts_internal_paths(store):
+    with store.write(CASE) as tx:
+        tx.put("document", "D1", {"document_id": "D1", "local_path": "private.pdf",
+                                  "nested": {"_secrets": "token", "status": "RECEIVED"}})
+        tx.commit_version("document added")
+        tx.event("UPLOAD", "A", "Document received", ("D1",))
+    change = store.audit_records(CASE)[0]["fact_changes"][0]
+    assert change["before"] is None
+    assert change["after"] == {"document_id": "D1", "nested": {"status": "RECEIVED"}}
+    assert "private.pdf" not in str(store.audit_records(CASE))

@@ -2960,20 +2960,43 @@ function AuditPanel({
                 })
                   .filter(
                     (causeId) =>
-                      record.before?.cause_contributions[causeId] !==
-                      record.after?.cause_contributions[causeId],
+                      record.before?.cause_contributions?.[causeId] !==
+                      record.after?.cause_contributions?.[causeId],
                   )
                   .map((causeId) => (
                     <p className="timeline-cause" key={causeId}>
                       Cause {causeId} :{" "}
-                      {record.before?.cause_contributions[causeId] ??
+                      {record.before?.cause_contributions?.[causeId] ??
                         "inconnue"}{" "}
                       →{" "}
-                      {record.after?.cause_contributions[causeId] ?? "inconnue"}
+                      {record.after?.cause_contributions?.[causeId] ??
+                        "inconnue"}
                     </p>
                   ))}
                 {!!record.evidence_ids.length && (
                   <p>Sources : {record.evidence_ids.join(", ")}</p>
+                )}
+                {!!record.fact_changes?.length && (
+                  <details className="audit-facts">
+                    <summary>
+                      Valeurs modifiées ({record.fact_changes.length})
+                    </summary>
+                    {record.fact_changes.map((change) => (
+                      <div key={`${change.kind}:${change.fact_id}`}>
+                        <strong>
+                          {change.kind} · {change.fact_id}
+                        </strong>
+                        <pre>
+                          Avant :{" "}
+                          {JSON.stringify(change.before ?? "absent", null, 2)}
+                        </pre>
+                        <pre>
+                          Après :{" "}
+                          {JSON.stringify(change.after ?? "retiré", null, 2)}
+                        </pre>
+                      </div>
+                    ))}
+                  </details>
                 )}
                 <small>
                   Règle : {record.rules_version ?? "inconnue"} · Moteur :{" "}

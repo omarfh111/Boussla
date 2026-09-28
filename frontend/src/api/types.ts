@@ -690,16 +690,22 @@ export interface AuditView {
     action: string;
     reason: string;
     before: {
-      review_index: number | null;
-      cause_contributions: Record<string, string>;
-      calculated_at: string | null;
+      review_index?: number | null;
+      cause_contributions?: Record<string, string>;
+      calculated_at?: string | null;
     } | null;
     after: {
-      review_index: number | null;
-      cause_contributions: Record<string, string>;
-      calculated_at: string | null;
+      review_index?: number | null;
+      cause_contributions?: Record<string, string>;
+      calculated_at?: string | null;
     } | null;
     evidence_ids: string[];
+    fact_changes: {
+      kind: string;
+      fact_id: string;
+      before: Record<string, unknown> | null;
+      after: Record<string, unknown> | null;
+    }[];
     rules_version: string | null;
     engine_version: string | null;
   }[];

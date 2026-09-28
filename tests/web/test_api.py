@@ -103,6 +103,10 @@ def test_mutation_flow_stale_idempotent_and_history(client):
     assert decision["before"]["review_index"] == 20
     assert decision["after"]["review_index"] == 0
     assert decision["evidence_ids"] == [proposal]
+    proposal_change = next(change for change in decision["fact_changes"] if change["kind"] == "proposal")
+    assert proposal_change["before"]["status"] == "AWAITING_HUMAN_REVIEW"
+    assert proposal_change["after"]["status"] == "ACCEPTED"
+    assert "local_path" not in str(decision)
     assert decision["rules_version"] and decision["engine_version"]
     assert sum(record["action"] == "EVIDENCE_ACCEPTED" for record in audit["records"]) == 1
 

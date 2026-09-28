@@ -204,6 +204,13 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(audit).toContainText("Indice de revue : 10 → 0");
   await expect(audit).toContainText("Cause ");
   await expect(audit).toContainText("Règle :");
+  await audit
+    .locator("summary")
+    .filter({ hasText: "Valeurs modifiées" })
+    .first()
+    .click();
+  await expect(audit).toContainText('"status": "AWAITING_HUMAN_REVIEW"');
+  await expect(audit).toContainText('"status": "ACCEPTED"');
   await page.getByRole("button", { name: "Avancé" }).click();
   await page.getByText("Diagnostics", { exact: true }).click();
   await expect(page.getByText("Analyse assistée BOUSSLA")).toBeVisible();

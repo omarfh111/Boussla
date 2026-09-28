@@ -2638,3 +2638,13 @@ button.danger {
 .investigation-answer li {
   margin: 8px 0;
 }
+
+.audit-facts pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 14rem;
+  overflow: auto;
+}
+.audit-facts > div {
+  margin: 0.75rem 0;
+}

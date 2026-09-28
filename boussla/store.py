@@ -257,7 +257,8 @@ class CaseStore:
                  "before": json.loads(r[7]) if r[7] else None,
                  "after": json.loads(r[8]) if r[8] else None,
                  "evidence_ids": json.loads(r[9]), "rules_version": r[10],
-                 "engine_version": r[11]} for r in rows]
+                 "engine_version": r[11],
+                 "fact_changes": (json.loads(r[8]).get("fact_changes", []) if r[8] else [])} for r in rows]
 
     def delete_case(self, case_id: str) -> None:
         """Remove one case entirely (synthetic demo administration only; callers enforce
@@ -307,6 +308,7 @@ class WriteTx:
         self.conn = conn
         self.case_id = case_id
         self._new_version: int | None = None
+        self._written_facts: set[tuple[str, str]] = set()
 
     # -------------------------------------------------------------- case row
     def create_case(self, company_id: str, reason: str, at: datetime | None = None) -> int:
@@ -347,10 +349,12 @@ class WriteTx:
     def put(self, kind: str, fact_id: str, model: BaseModel | dict) -> None:
         self.conn.execute("INSERT INTO facts VALUES (?, ?, ?, ?, 0, ?)",
                           (self.case_id, kind, fact_id, self.begin_version(), _body(model)))
+        self._written_facts.add((kind, fact_id))
 
     def retire(self, kind: str, fact_id: str) -> None:
         self.conn.execute("INSERT INTO facts VALUES (?, ?, ?, ?, 1, NULL)",
                           (self.case_id, kind, fact_id, self.begin_version()))
+        self._written_facts.add((kind, fact_id))
 
     def _current_fact_hash(self, version: int) -> str:
         rows = self.conn.execute("""
@@ -389,6 +393,24 @@ class WriteTx:
                                         for c in score.get("cause_progress", []) if c.get("cause_id")},
                 "calculated_at": score.get("calculated_at")}
 
+    @staticmethod
+    def _audit_safe(value):
+        if isinstance(value, dict):
+            return {key: WriteTx._audit_safe(item) for key, item in value.items()
+                    if key not in {"local_path", "_secrets"}}
+        if isinstance(value, list):
+            return [WriteTx._audit_safe(item) for item in value]
+        return value
+
+    def _fact_at(self, kind: str, fact_id: str, version: int) -> dict | None:
+        if version < 1:
+            return None
+        row = self.conn.execute(
+            "SELECT retired, body FROM facts WHERE case_id=? AND kind=? AND fact_id=? "
+            "AND valid_from<=? ORDER BY valid_from DESC LIMIT 1",
+            (self.case_id, kind, fact_id, version)).fetchone()
+        return self._audit_safe(json.loads(row[1])) if row and not row[0] and row[1] else None
+
     def event(self, kind: str, actor_id: str, summary: str, fact_ids: tuple[str, ...] = (),
               version: int | None = None, at: datetime | None = None,
               before_score: ScoreSnapshot | None = None,
@@ -411,6 +433,12 @@ class WriteTx:
             parent_json = parent[0] if parent else None
         before = self._score_audit(before_score.model_dump_json() if before_score else parent_json)
         after = self._score_audit(after_score.model_dump_json() if after_score else (revision[1] if revision else None))
+        if revision and self._new_version == v and self._written_facts:
+            changes = [{"kind": fact_kind, "fact_id": fact_id,
+                        "before": self._fact_at(fact_kind, fact_id, v - 1),
+                        "after": self._fact_at(fact_kind, fact_id, v)}
+                       for fact_kind, fact_id in sorted(self._written_facts)]
+            after = {**(after or {}), "fact_changes": changes}
         source = after_score or before_score
         if source is None and revision and revision[1]:
             source = ScoreSnapshot.model_validate_json(revision[1])
