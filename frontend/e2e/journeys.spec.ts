@@ -40,7 +40,9 @@ test.describe("release journeys", () => {
     await page.goto("/");
     const cards = page.locator(".portfolio-card-item");
     await expect(cards).toHaveCount(13);
-    await expect(page.locator(".portfolio-count")).toHaveText("13 dossiers");
+    await expect(page.locator(".portfolio-count")).toHaveText(
+      "13 dossiers assignés",
+    );
     const triage = (
       await page.locator(".portfolio-triage").allTextContents()
     ).map(Number);
@@ -97,12 +99,16 @@ test.describe("release journeys", () => {
     const card = page
       .locator(".portfolio-card-item")
       .filter({ hasText: "SYNTHÉTIQUE — Fournitures Dune" });
+    await expect(card).toBeVisible({ timeout: 15000 });
     await expect(card.locator(".portfolio-index")).toHaveText("0");
     expect(
       Number(await card.locator(".portfolio-triage").textContent()),
     ).toBeGreaterThan(0);
+    await card.locator(".portfolio-row-reasons summary").click();
     await expect(
-      card.getByText("Période sans activité à examiner"),
+      card
+        .locator(".portfolio-row-reasons li")
+        .getByText("Période sans activité à examiner"),
     ).toBeVisible();
     await openEnterprise(page, "SYNTHÉTIQUE — Fournitures Dune");
     await expect(
