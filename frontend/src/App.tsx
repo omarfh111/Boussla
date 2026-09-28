@@ -216,7 +216,7 @@ const firstSeen = (id: string) => {
 };
 const badge = (value: string) => (
   <span
-    className={`badge ${["EXPLAINED", "LIVE", "ACCEPTED"].includes(value) ? "good" : ["UNRESOLVED", "PENDING", "PUBLISHED_IN_DEMO", "AWAITING_HUMAN_REVIEW"].includes(value) ? "warn" : ""}`}
+    className={`badge ${["EXPLAINED", "ACCEPTED"].includes(value) ? "good" : ["UNRESOLVED", "PENDING", "PUBLISHED_IN_DEMO", "AWAITING_HUMAN_REVIEW"].includes(value) ? "warn" : ""}`}
   >
     {status[value] || value.replaceAll("_", " ")}
   </span>
