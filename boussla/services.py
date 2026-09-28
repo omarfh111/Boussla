@@ -1032,6 +1032,12 @@ class BousslaAppService(_DemoAdministration):
         return QueuePage(items=tuple(page), next_cursor=nxt,
                          cutoff=cutoff if isinstance(cutoff, datetime) else utcnow(), mode=Mode.LIVE)
 
+    def get_audit(self, actor: Actor, case_id: str) -> dict:
+        self._open(actor, case_id, "get_audit")
+        return {"case_id": case_id, "records": self.store.audit_records(case_id),
+                "legacy_events_without_audit": max(0, len(self.store.events(case_id)) -
+                                                   len(self.store.audit_records(case_id)))}
+
     def get_history(self, actor: Actor, case_id: str) -> HistoryView:
         actor, meta = self._open(actor, case_id, "get_history")
         company = actor.role is Role.COMPANY
@@ -1913,7 +1919,7 @@ class BousslaAppService(_DemoAdministration):
                                   + (reason or proposal_id), (proposal_id,) if accept else (), score=after.score)
             tx.event("EVIDENCE_ACCEPTED" if accept else "EVIDENCE_REJECTED", actor.actor_id,
                      "Acceptée dans ce dossier par l'agent (pas une authentification)" if accept
-                     else f"Rejetée par l'agent : {reason or '—'}", (proposal_id,))
+                     else f"Rejetée par l'agent : {reason or '—'}", (proposal_id,), before_score=before.score, after_score=after.score)
             result_body = {"after": [a.model_dump(mode="json") for a in new_allocations], "index": after.score.review_index}
             receipt = ActionReceipt(idempotency_key=key, action=action, case_id=case_id, actor_id=actor.actor_id,
                                     input_hash=ihash, resulting_version=v, result_hash=stable_hash(result_body))

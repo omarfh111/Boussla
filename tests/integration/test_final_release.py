@@ -128,7 +128,7 @@ def test_buyer_seller_comparison_is_field_level_and_neutral(svc):
     diff = [c for c in view.invoice_comparisons if c.status == "DIFFERENCES"]
     assert len(diff) == 1 and diff[0].difference_fields == ("line.quantity", "line.unit_price_millimes")
     same = next(c for c in view.invoice_comparisons if c.status == "CONCORDANT")
-    assert same.label_fr == "Observations concordantes"
+    assert same.label_fr == "Observations rapprochées"
     perspectives = {o.observation_id: o.perspective for o in view.invoice_observations}
     assert perspectives[same.buyer_observation_id] is Perspective.BUYER_RECEIVED
     assert perspectives[same.seller_observation_id] is Perspective.SELLER_ISSUED

@@ -96,6 +96,15 @@ def test_mutation_flow_stale_idempotent_and_history(client):
     assert accepted.json()["score_after"]["review_index"] == 0
     assert client.post(url, headers=headers("OFFICER", "accept-1"), json={"expected_version": v}).json()["replayed"]
     assert len(client.get(f"/api/cases/{CASE}/history", headers=headers("OFFICER")).json()["revisions"]) > 1
+    assert client.get(f"/api/cases/{CASE}/audit", headers=headers()).status_code == 403
+    audit = client.get(f"/api/cases/{CASE}/audit", headers=headers("OFFICER")).json()
+    decision = next(record for record in audit["records"] if record["action"] == "EVIDENCE_ACCEPTED")
+    assert decision["actor_id"] == "DEMO-OFFICER"
+    assert decision["before"]["review_index"] == 20
+    assert decision["after"]["review_index"] == 0
+    assert decision["evidence_ids"] == [proposal]
+    assert decision["rules_version"] and decision["engine_version"]
+    assert sum(record["action"] == "EVIDENCE_ACCEPTED" for record in audit["records"]) == 1
 
 
 def test_upload_can_attach_to_existing_response(client):

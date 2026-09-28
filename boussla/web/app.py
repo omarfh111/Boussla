@@ -134,6 +134,10 @@ async def history(request: Request):
     return result(service(request).get_history(actor(request), request.path_params["case_id"]))
 
 
+async def audit(request: Request):
+    return result(service(request).get_audit(actor(request), request.path_params["case_id"]))
+
+
 async def investigate(request: Request):
     payload = await body(request)
     if set(payload) != {"question"} or not isinstance(payload.get("question"), str):
@@ -282,6 +286,7 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/health", health), Route("/api/demo/bootstrap", bootstrap),
         Route("/api/cases/{case_id}", case), Route("/api/officer/queue", queue),
         Route("/api/cases/{case_id}/history", history),
+        Route("/api/cases/{case_id}/audit", audit),
         Route("/api/cases/{case_id}/notifications", notifications),
         Route("/api/cases/{case_id}/investigate", investigate, methods=["POST"]),
         Route("/api/network", network),

@@ -20,9 +20,9 @@ CAUSE_QUESTIONS = {
 def derive_progress_evidence(findings: tuple[Finding, ...], facts: dict[str, list],
                              previous_snapshot: object | None) -> tuple[ProgressEvidence, ...]:
     requests = {v.request.request_id: v.request for v in facts.get("request", ())}
-    question_scopes = {v.request.request_id: {q.question_id: set(q.related_fact_ids) for q in v.questions}
+    question_scopes = {v.request.request_id: {q.question_id: set(q.related_fact_ids) for q in getattr(v, "questions", ())}
                        for v in facts.get("request", ())}
-    file_questions = {v.request.request_id: {q.question_id for q in v.questions
+    file_questions = {v.request.request_id: {q.question_id for q in getattr(v, "questions", ())
                       if q.answer_kind in ("DOCUMENT", "TEXT_WITH_FILE")} for v in facts.get("request", ())}
     proposals = {p.source_response_id: p for p in facts.get("proposal", ()) if p.source_response_id}
     documents = {d.document_id for d in facts.get("document", ())}
