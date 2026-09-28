@@ -44,7 +44,11 @@ const companyTabs: NavItem[] = [
   { id: "messages", label: "Messages", icon: <ClipboardList size={18} /> },
 ];
 const officerTabs: NavItem[] = [
-  { id: "queue", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+  {
+    id: "queue",
+    label: "Tableau de bord",
+    icon: <LayoutDashboard size={18} />,
+  },
   { id: "dossier", label: "Dossiers", icon: <Search size={18} /> },
   { id: "network", label: "Réseau", icon: <Building2 size={18} /> },
   { id: "company360", label: "Historique", icon: <History size={18} /> },

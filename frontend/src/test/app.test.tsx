@@ -1107,7 +1107,7 @@ it("keeps five primary officer spaces and four company spaces role scoped", asyn
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Agent$/ }));
   for (const name of [
-    "Dashboard",
+    "Tableau de bord",
     "Dossiers",
     "Réseau",
     "Historique",
@@ -1496,7 +1496,7 @@ it("exposes the current section, role state, and a main-content skip link", asyn
     name: "Navigation principale",
   });
   expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent(
-    "Dashboard",
+    "Tableau de bord",
   );
   expect(
     screen.getByRole("link", { name: "Aller au contenu principal" }),
