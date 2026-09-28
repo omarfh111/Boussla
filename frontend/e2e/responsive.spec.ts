@@ -13,10 +13,30 @@ for (const width of [320, 390, 768]) {
     ).toBeVisible();
 
     for (const tab of ["Dossiers", "Réseau", "Historique", "Notifications"]) {
+      const loaded =
+        tab === "Réseau" || tab === "Notifications"
+          ? page.waitForResponse((response) =>
+              response
+                .url()
+                .includes(
+                  tab === "Réseau" ? "/network/case/" : "/notifications",
+                ),
+            )
+          : null;
       await page
         .getByRole("button", { name: tab, exact: true })
         .first()
         .click();
+      if (loaded) await loaded;
+      await expect(page.locator(".skeletons")).toHaveCount(0);
+      if (tab === "Notifications") {
+        await expect(
+          page.getByText("Chargement des mises à jour…"),
+        ).toHaveCount(0);
+        await expect(
+          page.getByRole("heading", { name: "Mises à jour internes" }),
+        ).toBeVisible();
+      }
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
         .toBeLessThanOrEqual(width);
@@ -31,7 +51,22 @@ for (const width of [320, 390, 768]) {
       const button = page
         .getByRole("button", { name: tab, exact: true })
         .first();
+      const loaded =
+        tab === "Messages"
+          ? page.waitForResponse((response) =>
+              response.url().includes("/notifications"),
+            )
+          : null;
       await button.click();
+      if (loaded) await loaded;
+      if (tab === "Messages") {
+        await expect(
+          page.getByText("Chargement des mises à jour…"),
+        ).toHaveCount(0);
+        await expect(
+          page.getByRole("heading", { name: "Mises à jour internes" }),
+        ).toBeVisible();
+      }
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
         .toBeLessThanOrEqual(width);

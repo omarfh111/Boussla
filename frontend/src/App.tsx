@@ -1424,7 +1424,10 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
       {c.documents.length ? (
         <div className="document-grid">
           {c.documents.map((d) => (
-            <article className="document" key={d.document.document_id}>
+            <article
+              className="document with-icon"
+              key={d.document.document_id}
+            >
               <div className="document-icon">
                 <FileText size={22} />
               </div>
