@@ -1335,7 +1335,7 @@ input[type="number"] {
   display: grid;
   place-items: center;
   background: var(--surface-base);
-  transition: opacity 180ms var(--ease-standard);
+  transition: opacity 300ms var(--ease-standard);
 }
 .boot-splash.leaving {
   opacity: 0;
@@ -1346,6 +1346,9 @@ input[type="number"] {
   justify-items: center;
   gap: 8px;
 }
+.boot-center .boussla-mark {
+  animation: boot-mark-enter 260ms var(--ease-standard) both;
+}
 .boot-wordmark {
   margin-top: 10px;
   padding-left: 0.2em;
@@ -1354,13 +1357,13 @@ input[type="number"] {
     800 27px Manrope,
     sans-serif;
   letter-spacing: 0.2em;
-  animation: boot-fade-up 220ms 300ms both;
+  animation: boot-fade-up 360ms 440ms var(--ease-standard) both;
 }
 .boot-subtitle {
   margin: 0;
   color: var(--text-secondary);
   font-size: 12px;
-  animation: boot-fade-up 220ms 380ms both;
+  animation: boot-fade-up 320ms 570ms var(--ease-standard) both;
 }
 .boot-skip {
   position: absolute;
@@ -1371,36 +1374,55 @@ input[type="number"] {
   font-size: 12px;
   text-decoration: underline;
   text-underline-offset: 3px;
+  transition: color var(--motion-fast) var(--ease-standard);
+}
+.boot-skip:hover,
+.boot-skip:focus-visible {
+  color: var(--text-primary);
+}
+.boot-skip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 .mark-arc {
   stroke-dashoffset: 595;
-  animation: mark-draw-arc 480ms var(--ease-standard) forwards;
+  animation: mark-draw-arc 700ms var(--ease-standard) forwards;
 }
 .mark-inner {
   opacity: 0;
-  animation: mark-inner 220ms 220ms forwards;
+  animation: mark-inner 280ms 280ms var(--ease-standard) forwards;
 }
 .mark-north {
   opacity: 0;
-  animation: mark-inner-full 220ms 300ms forwards;
+  animation: mark-inner-full 280ms 360ms var(--ease-standard) forwards;
 }
 .mark-south {
   opacity: 0;
-  animation: mark-inner-full 220ms 360ms forwards;
+  animation: mark-inner-full 280ms 460ms var(--ease-standard) forwards;
 }
 .mark-check {
   stroke-dasharray: 190;
   stroke-dashoffset: 190;
-  animation: mark-draw-check 380ms 250ms var(--ease-standard) forwards;
+  animation: mark-draw-check 600ms 260ms var(--ease-standard) forwards;
 }
 .mark-node {
   opacity: 0;
-  animation: mark-inner-full 180ms 520ms forwards;
+  animation: mark-inner-full 220ms 700ms var(--ease-standard) forwards;
+}
+@keyframes boot-mark-enter {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 @keyframes boot-fade-up {
   from {
     opacity: 0;
-    transform: translateY(4px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -1618,6 +1640,9 @@ button.danger:hover {
 
 @media (prefers-reduced-motion: reduce) {
   .boot-splash,
+  .boot-center .boussla-mark,
+  .boot-wordmark,
+  .boot-subtitle,
   .mark-arc,
   .mark-inner,
   .mark-north,
@@ -1637,6 +1662,9 @@ button.danger:hover {
   .mark-north,
   .mark-south,
   .mark-node,
+  .boot-center .boussla-mark,
+  .boot-wordmark,
+  .boot-subtitle,
   .auto-request-enter .question-list.staggered li {
     opacity: 1 !important;
   }

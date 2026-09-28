@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { BousslaMark } from "./BousslaMark";
 
 const SEEN_KEY = "boussla.boot.v1";
-const FULL_MS = 1000;
-const REDUCED_MS = 80;
-const FADE_MS = 180;
+const INTRO_MS = 1050;
+const FADE_MS = 300;
 
 const reducedMotion = () =>
   typeof window !== "undefined" &&
@@ -30,17 +29,17 @@ export function BootSplash({ onDone }: { onDone: () => void }) {
     } catch {
       /* storage unavailable: the splash simply shows again next load */
     }
-    const total = reduced ? REDUCED_MS : FULL_MS;
-    const fade = window.setTimeout(
+    const intro = window.setTimeout(
       () => setLeaving(true),
-      Math.max(0, total - FADE_MS),
+      reduced ? 0 : INTRO_MS,
     );
-    const done = window.setTimeout(onDone, total);
-    return () => {
-      window.clearTimeout(fade);
-      window.clearTimeout(done);
-    };
-  }, [onDone, reduced]);
+    return () => window.clearTimeout(intro);
+  }, [reduced]);
+  useEffect(() => {
+    if (!leaving) return;
+    const done = window.setTimeout(onDone, reduced ? 0 : FADE_MS);
+    return () => window.clearTimeout(done);
+  }, [leaving, onDone, reduced]);
   return (
     <div
       className={`boot-splash ${reduced ? "reduced" : ""} ${leaving ? "leaving" : ""}`}
@@ -53,7 +52,11 @@ export function BootSplash({ onDone }: { onDone: () => void }) {
         <div className="boot-wordmark">BOUSSLA</div>
         <p className="boot-subtitle">Espace de revue</p>
       </div>
-      <button className="boot-skip" type="button" onClick={onDone}>
+      <button
+        className="boot-skip"
+        type="button"
+        onClick={() => setLeaving(true)}
+      >
         Passer l’introduction
       </button>
     </div>
