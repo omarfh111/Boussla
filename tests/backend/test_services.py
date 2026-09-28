@@ -633,3 +633,16 @@ def test_scan_without_native_text_gets_neutral_scoped_review_signal(svc, actors)
     assert "copie lisible" in company_signal["message_fr"]
     assert code(lambda: svc.mark_notification_read(company, CASE, company_signal["notification_id"])) is ErrorCode.INVALID_INPUT
     assert code(lambda: svc.get_notifications(other, CASE)) is ErrorCode.CROSS_COMPANY
+
+
+def test_investigation_cites_audit_before_after_for_human_decision(svc, actors):
+    company, officer, _ = actors
+    response = to_proposal(svc, actors)
+    svc.accept_evidence(officer, CASE, response.proposal_ids[0], ver(svc), "audit-answer")
+    before = ver(svc)
+    answer = svc.ask_investigation(officer, CASE, "Quel effet la décision a-t-elle eu sur l'indice ?")
+    assert "20" in answer.answer_fr and "0" in answer.answer_fr
+    assert any(c.kind == "AUDIT" and c.source_id.startswith("AUD-") for c in answer.citations)
+    assert any(c.kind == "FACT" and c.source_id == response.proposal_ids[0] for c in answer.citations)
+    assert answer.case_version == before and ver(svc) == before
+    assert code(lambda: svc.ask_investigation(company, CASE, "Effet de la décision sur le score ?")) is ErrorCode.FORBIDDEN

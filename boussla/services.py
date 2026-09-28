@@ -1085,7 +1085,8 @@ class BousslaAppService(_DemoAdministration):
         history = self.get_history(trusted, case_id)
         network = self.get_network(trusted, case_id=case_id)
         return answer_investigation(clean_question, view, history, network,
-                                    tuple(self.store.facts(case_id, "document_text", DocumentText)))
+                                    tuple(self.store.facts(case_id, "document_text", DocumentText)),
+                                    tuple(self.store.audit_records(case_id)))
 
     def get_network(self, actor: Actor, *, company_id: str | None = None,
                     case_id: str | None = None) -> NetworkView:

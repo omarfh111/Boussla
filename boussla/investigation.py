@@ -8,7 +8,7 @@ from pydantic import Field
 from boussla.contracts import Contract, OfficerCaseView, OfficerHistoryView, DocumentText
 from boussla.network import NetworkView
 
-RULE_VERSION = "investigation-answer-3"
+RULE_VERSION = "investigation-answer-4"
 FAMILIES = {"QUANTITY": "écart de quantités", "SETTLEMENT": "écart de règlement",
             "COUNTERPARTY": "écart de contrepartie"}
 
@@ -34,7 +34,8 @@ class InvestigationAnswer(Contract):
 
 
 def answer_investigation(question: str, view: OfficerCaseView, history: OfficerHistoryView,
-                         network: NetworkView, document_texts: tuple[DocumentText, ...] = ()) -> InvestigationAnswer:
+                         network: NetworkView, document_texts: tuple[DocumentText, ...] = (),
+                         audit_records: tuple[dict, ...] = ()) -> InvestigationAnswer:
     query = question.casefold()
     citations: list[InvestigationCitation] = []
     lines: list[str] = []
@@ -63,7 +64,27 @@ def answer_investigation(question: str, view: OfficerCaseView, history: OfficerH
             for code in view.triage.reason_codes[:3]:
                 cite(code, "TRIAGE_RULE", f"Motif de triage {code}")
 
-    if any(word in query for word in ("priorit", "urgent", "pourquoi", "score", "indice")):
+    decision_terms = ("décision", "decision", "valid", "rejet", "accept", "preuve")
+    score_terms = ("score", "indice", "contribution", "effet", "changé", "changement")
+    if any(word in query for word in decision_terms) and any(word in query for word in score_terms):
+        relevant = [record for record in audit_records
+                    if record["action"] in {"EVIDENCE_ACCEPTED", "EVIDENCE_REJECTED"}
+                    or record["action"].startswith("CASE_REVIEW_")]
+        for record in reversed(relevant[-3:]):
+            before = (record.get("before") or {}).get("review_index")
+            after = (record.get("after") or {}).get("review_index")
+            transition = (f"{before} → {after}" if before is not None and after is not None
+                          else "variation inconnue faute de calcul figé")
+            lines.append(f"Décision {record['action']} (v{record['case_version']}) : indice documentaire {transition}.")
+            cite(record["audit_id"], "AUDIT", f"Journal de décision {record['action']}")
+            for source in record.get("evidence_ids", ())[:3]:
+                cite(source, "FACT", f"Fait lié à {record['audit_id']}")
+            if record.get("rules_version"):
+                cite(record["rules_version"], "RULE_VERSION", "Version des règles du calcul")
+        if not lines:
+            lines.append("Aucune décision comparable enregistrée dans le journal de ce dossier.")
+            cite(view.case_id, "CASE", f"Dossier {view.case_id} v{view.case_version}")
+    elif any(word in query for word in ("priorit", "urgent", "pourquoi", "score", "indice")):
         priority()
     elif any(word in query for word in ("histori", "habit", "délai", "evolution", "évolution")):
         profile = view.behavior_profile
