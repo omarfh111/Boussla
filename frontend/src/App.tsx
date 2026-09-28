@@ -960,8 +960,8 @@ function Company({
                 document.processing_status === "ANALYZED_AWAITING_REVIEW",
             ) && (
               <p className="footnote">
-                Analyse automatique terminée. En attente de validation par
-                l’agent.
+                Analyse automatique terminée. La pièce reste disponible dans le
+                dossier.
               </p>
             )}
             {c.inbox.every(
@@ -1461,7 +1461,10 @@ function Documents({ c }: { c: CompanyCaseView | OfficerCaseView }) {
                   </div>
                 </dl>
                 {d.processing_status === "ANALYZED_AWAITING_REVIEW" && (
-                  <p>Analyse automatique terminée. En attente de validation.</p>
+                  <p>
+                    Analyse automatique terminée. La pièce reste disponible dans
+                    le dossier.
+                  </p>
                 )}
                 {d.analysis && (
                   <details>
