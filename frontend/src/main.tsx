@@ -12,6 +12,7 @@ import App from "./App";
 import "./styles.css";
 import "./shell/shell.css";
 import "./portfolio/portfolio.css";
+import "./portfolio/company360.css";
 import "./dossier/dossier.css";
 import "./network/network.css";
 

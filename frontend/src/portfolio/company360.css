@@ -1,0 +1,239 @@
+.company360 {
+  gap: 14px;
+}
+.company360-header {
+  min-width: 0;
+  padding: 2px 0 16px;
+  border-bottom: 1px solid var(--border-default);
+}
+.company360-header h1 {
+  margin: 8px 0 3px;
+  color: var(--text-primary);
+  font:
+    800 clamp(28px, 3vw, 38px) Manrope,
+    sans-serif;
+  letter-spacing: -0.04em;
+  overflow-wrap: anywhere;
+}
+.company360-header > p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.company360-profile {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 30px;
+  margin: 17px 0 0;
+}
+.company360-profile > div {
+  min-width: 0;
+}
+.company360-profile dt {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.company360-profile dd {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.company360-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+.company360-metrics > div {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  padding: 14px 17px;
+}
+.company360-metrics > div + div {
+  border-left: 1px solid var(--border-default);
+}
+.company360-metrics dt {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.company360-metrics dd {
+  margin: 2px 0;
+  color: var(--text-primary);
+  font:
+    800 23px Manrope,
+    sans-serif;
+}
+.company360-metrics small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.company360 .month-bars {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(45px, 1fr));
+  align-items: end;
+  gap: 6px;
+  min-height: 174px;
+  overflow-x: auto;
+  padding: 8px 0 4px;
+}
+.company360 .month-bars > div {
+  display: grid;
+  grid-template-rows: 1fr auto auto;
+  justify-items: center;
+  align-items: end;
+  gap: 3px;
+  min-height: 155px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+.company360 .month-bar {
+  display: block;
+  width: min(100%, 27px);
+  min-height: 3px;
+  border-radius: 4px 4px 1px 1px;
+  background: var(--accent);
+  transform-origin: bottom;
+  animation: company-bar-in 0.18s ease-out both;
+}
+.company360 .month-unknown {
+  align-self: end;
+  display: grid;
+  place-items: center;
+  width: 27px;
+  min-height: 35px;
+  border: 1px dashed var(--border-default);
+  border-radius: 4px;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.company360 .month-bars strong {
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.company360 .month-bars small {
+  white-space: nowrap;
+  font-size: 10px;
+}
+@keyframes company-bar-in {
+  from {
+    transform: scaleY(0.65);
+    opacity: 0.6;
+  }
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+.company360-history .history-signals {
+  border-left: 3px solid var(--border-default);
+}
+.company360-history .history-signals h2 {
+  margin-bottom: 7px;
+}
+.company360-history .signal-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+}
+.company360-history .signal-list li {
+  border-left-color: var(--border-default);
+  background: var(--surface-elevated);
+}
+.company360 .comparison-card {
+  margin-top: 2px;
+}
+.company360 .comparison-status {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.company360 .comparison-pair {
+  margin-top: 12px;
+}
+.company360 .comparison-side {
+  background: var(--surface-elevated);
+}
+.company360 .comparison-side h3 {
+  color: var(--text-primary);
+}
+.company360 .comparison-difference {
+  border-left: 3px solid var(--warning, #ffcf7a);
+  background: #5e411c36;
+}
+.company360
+  .comparison-side
+  .portfolio-facts
+  > div:not(.comparison-difference) {
+  border-color: var(--border-subtle);
+}
+@media (max-width: 800px) {
+  .company360-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .company360-metrics > div:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--border-default);
+  }
+  .company360-metrics > div:nth-child(4) {
+    border-top: 1px solid var(--border-default);
+  }
+}
+@media (max-width: 480px) {
+  .company360-profile {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .company360-profile > div:last-child {
+    grid-column: 1/-1;
+  }
+  .company360-metrics > div {
+    padding: 12px;
+  }
+  .company360-metrics dt {
+    font-size: 10px;
+  }
+  .company360-metrics dd {
+    font-size: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .company360 .month-bar {
+    animation: none;
+  }
+}
+
+.company360-behavior-details {
+  margin-top: 12px;
+}
+.company360-behavior-details > .history-comparisons {
+  margin-top: 12px;
+}
+.company360 .history-comparisons article > div {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.company360 .history-comparisons article b {
+  overflow-wrap: anywhere;
+}
+.company360 .signal-list li,
+.company360 .portfolio-facts dd {
+  overflow-wrap: anywhere;
+}
+
+.company360-chart-hint {
+  display: none;
+}
+@media (max-width: 700px) {
+  .company360-chart-hint {
+    display: block;
+    margin: -5px 0 7px;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+}

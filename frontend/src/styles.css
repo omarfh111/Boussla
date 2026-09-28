@@ -1043,27 +1043,6 @@ input[type="number"] {
   color: #9ab0c1;
   margin: 0;
 }
-.portfolio-profile {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.portfolio-profile > div {
-  display: grid;
-  gap: 8px;
-  padding: 16px 19px;
-  border: 1px solid #29465e;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #102b42, #0d2032);
-}
-.portfolio-profile span {
-  color: #85abc0;
-  font-size: 12px;
-}
-.portfolio-profile strong {
-  color: #edfaff;
-  font-size: 15px;
-}
 .admin-actions button,
 .admin-list button {
   min-height: 35px;
@@ -1292,7 +1271,6 @@ input[type="number"] {
   font-weight: 800;
 }
 @media (max-width: 700px) {
-  .portfolio-profile,
   .portfolio-columns,
   .investigator-grid,
   .comparison-pair {
@@ -1577,39 +1555,6 @@ input[type="number"] {
   }
 }
 
-/* Enterprise 360. */
-.month-bars {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 8px;
-  align-items: end;
-  height: 150px;
-  padding-top: 8px;
-}
-.month-bars > div {
-  height: 100%;
-  display: grid;
-  grid-template-rows: 1fr auto auto;
-  justify-items: center;
-  align-items: end;
-  gap: 3px;
-  font-size: 11px;
-  color: #8fb0c6;
-}
-.month-bar {
-  display: block;
-  width: 100%;
-  min-height: 2px;
-  border-radius: 5px 5px 2px 2px;
-  background: linear-gradient(180deg, #16c6e3, #126bdb);
-  transform-origin: bottom;
-  animation: bar-grow 0.45s ease-out both;
-}
-@keyframes bar-grow {
-  from {
-    transform: scaleY(0);
-  }
-}
 .signal-list {
   list-style: none;
   padding: 0;
@@ -1820,12 +1765,6 @@ button.danger:hover {
   color: #e0f5f6;
   font-size: 16px;
 }
-.month-unknown {
-  align-self: end;
-  color: #a7c3d5;
-  font-weight: 800;
-}
-
 .investigation-form {
   display: flex;
   flex-wrap: wrap;

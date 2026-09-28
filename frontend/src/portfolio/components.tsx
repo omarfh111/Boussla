@@ -546,62 +546,56 @@ export function Company360({
   );
   return (
     <section className="company360">
-      <header className="portfolio-intro">
-        <div>
-          <span className="eyebrow">ENTREPRISE 360 · DONNÉES SYNTHÉTIQUES</span>
-          <h1>{c.company_display_name}</h1>
-          <p>
-            {c.case_id} · version {c.case_version}
-          </p>
-        </div>
+      <header className="company360-header">
+        <span className="eyebrow">ENTREPRISE 360 · DONNÉES SYNTHÉTIQUES</span>
+        <h1>{c.company_display_name}</h1>
+        <p>
+          Dossier {c.case_id} · version {c.case_version}
+        </p>
+        <dl className="company360-profile">
+          <div>
+            <dt>Secteur</dt>
+            <dd>{show(profile?.sector)}</dd>
+          </div>
+          <div>
+            <dt>Identifiant synthétique</dt>
+            <dd>{show(profile?.synthetic_identifier)}</dd>
+          </div>
+          <div>
+            <dt>Période d’activité</dt>
+            <dd>
+              {profile?.activity_start
+                ? `${profile.activity_start} — ${show(profile.activity_end)}`
+                : "Non communiquée"}
+            </dd>
+          </div>
+        </dl>
       </header>
-      <div className="portfolio-profile">
+      <dl className="company360-metrics" aria-label="Synthèse des observations">
         <div>
-          <span>Secteur</span>
-          <strong>{show(profile?.sector)}</strong>
-        </div>
-        <div>
-          <span>Identifiant synthétique</span>
-          <strong>{show(profile?.synthetic_identifier)}</strong>
-        </div>
-        <div>
-          <span>Période d’activité</span>
-          <strong>
-            {profile?.activity_start
-              ? `${profile.activity_start} — ${show(profile.activity_end)}`
-              : "Non communiquée"}
-          </strong>
-        </div>
-        <div>
-          <span>Nature des données</span>
-          <strong>Synthétiques</strong>
-        </div>
-      </div>
-      <div className="metric-grid four enter-once">
-        <div className="metric">
-          <span>Factures observées</span>
-          <strong>{c.invoice_observations.length}</strong>
+          <dt>Factures observées</dt>
+          <dd>{c.invoice_observations.length}</dd>
           <small>{c.transactions.length} transaction(s)</small>
         </div>
-        <div className="metric">
-          <span>Paires acheteur / vendeur</span>
-          <strong>{pairs.length}</strong>
+        <div>
+          <dt>Paires acheteur / vendeur</dt>
+          <dd>{pairs.length}</dd>
           <small>
             {pairs.filter((x) => x.status === "DIFFERENCES").length} avec
             différences
           </small>
         </div>
-        <div className="metric">
-          <span>Règlements observés</span>
-          <strong>{c.payment_timeline.length}</strong>
+        <div>
+          <dt>Règlements observés</dt>
+          <dd>{c.payment_timeline.length}</dd>
           <small>Chronologie synthétique</small>
         </div>
-        <div className="metric">
-          <span>Déclarations de contexte</span>
-          <strong>{c.context_claims.length}</strong>
+        <div>
+          <dt>Déclarations de contexte</dt>
+          <dd>{c.context_claims.length}</dd>
           <small>Affirmations attribuées</small>
         </div>
-      </div>
+      </dl>
       <Card title="Habitude vs période actuelle">
         {c.behavior_profile ? (
           <>
@@ -638,45 +632,52 @@ export function Company360({
                 ))}
               </div>
             )}
-            <div className="history-comparisons">
-              {c.behavior_profile.metrics.map((metric) => (
-                <article key={`${metric.code}:${metric.currency ?? "all"}`}>
-                  <strong>
-                    {metric.label_fr}
-                    {metric.currency ? ` · ${metric.currency}` : ""}
-                  </strong>
-                  <div>
-                    <span>
-                      Actuel{" "}
-                      <b>
-                        {metric.current_value ?? "inconnu"}{" "}
-                        {metric.current_value === null ? "" : metric.unit}
-                      </b>
-                    </span>
-                    <span>
-                      Habitude{" "}
-                      <b>
-                        {metric.baseline_value ?? "données insuffisantes"}{" "}
-                        {metric.baseline_value === null ? "" : metric.unit}
-                      </b>
-                    </span>
-                  </div>
-                  <small>
-                    {metric.change_percent !== null
-                      ? `Écart : ${metric.change_percent} %`
-                      : "Écart non calculable"}{" "}
-                    · {metric.sample_size} mois exploitables
-                  </small>
-                  <details>
-                    <summary>Méthode et sources</summary>
-                    <p>{metric.explanation_fr}</p>
+            <details className="company360-behavior-details">
+              <summary>
+                Voir les {c.behavior_profile.metrics.length} indicateurs
+                détaillés
+              </summary>
+              <div className="history-comparisons">
+                {c.behavior_profile.metrics.map((metric) => (
+                  <article key={`${metric.code}:${metric.currency ?? "all"}`}>
+                    <strong>
+                      {metric.label_fr}
+                      {metric.currency ? ` · ${metric.currency}` : ""}
+                    </strong>
+                    <div>
+                      <span>
+                        Actuel{" "}
+                        <b>
+                          {metric.current_value ?? "inconnu"}{" "}
+                          {metric.current_value === null ? "" : metric.unit}
+                        </b>
+                      </span>
+                      <span>
+                        Habitude{" "}
+                        <b>
+                          {metric.baseline_value ?? "données insuffisantes"}{" "}
+                          {metric.baseline_value === null ? "" : metric.unit}
+                        </b>
+                      </span>
+                    </div>
                     <small>
-                      {metric.source_ids.join(", ") || "Sources insuffisantes"}
+                      {metric.change_percent !== null
+                        ? `Écart : ${metric.change_percent} %`
+                        : "Écart non calculable"}{" "}
+                      · {metric.sample_size} mois exploitables
                     </small>
-                  </details>
-                </article>
-              ))}
-            </div>
+                    <details>
+                      <summary>Méthode et sources</summary>
+                      <p>{metric.explanation_fr}</p>
+                      <small>
+                        {metric.source_ids.join(", ") ||
+                          "Sources insuffisantes"}
+                      </small>
+                    </details>
+                  </article>
+                ))}
+              </div>
+            </details>
           </>
         ) : (
           <EmptyData>
@@ -686,6 +687,9 @@ export function Company360({
         )}
       </Card>
       <Card title="Activité sur 12 mois">
+        <p className="company360-chart-hint">
+          Faire défiler pour voir les 12 mois.
+        </p>
         {c.monthly_activity.length ? (
           <div
             className="month-bars"
@@ -699,6 +703,11 @@ export function Company360({
                 title={
                   m.coverage_status === "COVERED"
                     ? `${m.month} : ${m.transaction_count} transaction(s) · ${m.source_label}`
+                    : `${m.month} : couverture inconnue`
+                }
+                aria-label={
+                  m.coverage_status === "COVERED"
+                    ? `${m.month} : ${m.transaction_count} transaction(s), ${m.source_label}`
                     : `${m.month} : couverture inconnue`
                 }
               >
@@ -715,7 +724,9 @@ export function Company360({
                 <strong>
                   {m.coverage_status === "COVERED" ? m.transaction_count : "—"}
                 </strong>
-                <small>{m.month.slice(5)}</small>
+                <small>
+                  {m.month.slice(5)}/{m.month.slice(2, 4)}
+                </small>
               </div>
             ))}
           </div>
@@ -727,7 +738,9 @@ export function Company360({
           compté comme nul.
         </p>
       </Card>
-      <HistorySignals signals={c.history_signals} />
+      <div className="company360-history">
+        <HistorySignals signals={c.history_signals} />
+      </div>
       <div className="portfolio-columns">
         <Card title="Chronologie des factures">
           <details>
