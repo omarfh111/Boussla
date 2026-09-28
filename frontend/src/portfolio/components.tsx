@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Building2, CircleHelp, Search } from "lucide-react";
 import { api } from "../api/client";
+import { Empty } from "../ui/primitives";
 import type {
   AdminEnterprise,
   BriefHypothesis,
@@ -181,13 +182,19 @@ export function Portfolio({
     () => selectPortfolio(items, query, filter, sector, sort),
     [items, query, filter, sector, sort],
   );
+  const filtered = query.trim() !== "" || filter !== "all" || sector !== "";
+  const reset = () => {
+    setQuery("");
+    setFilter("all");
+    setSector("");
+  };
   const filters: { id: PortfolioFilter; label: string; available: boolean }[] =
     [
       { id: "all", label: "Tous", available: true },
       {
         id: "highest-triage",
-        label: "Urgence la plus élevée",
-        available: items.some((i) => i.triage_priority !== null),
+        label: "Urgence maximale",
+        available: items.some((item) => item.triage_priority !== null),
       },
       { id: "review-priority", label: "Constat de revue", available: true },
       {
@@ -203,184 +210,261 @@ export function Portfolio({
       {
         id: "history-anomaly",
         label: "Signal historique",
-        available: items.some((i) => i.history_anomaly !== null),
+        available: items.some((item) => item.history_anomaly !== null),
       },
     ];
+
   return (
-    <section className="portfolio-screen">
+    <section className="portfolio-screen" aria-labelledby="portfolio-title">
       <header className="portfolio-intro">
         <div>
           <span className="eyebrow">PORTEFEUILLE · DONNÉES SYNTHÉTIQUES</span>
-          <h1>Portefeuille des entreprises</h1>
-          <p>
-            Dossiers assignés, ordonnés par urgence de traitement calculée par
-            le service.
-          </p>
+          <h1 id="portfolio-title">Portefeuille des entreprises</h1>
+          <p>Votre file de dossiers, dans l’ordre de traitement du service.</p>
         </div>
         <span className="portfolio-count">
-          {items.length} dossier{items.length > 1 ? "s" : ""}
+          <strong>{items.length}</strong> dossier{items.length > 1 ? "s" : ""}{" "}
+          assigné{items.length > 1 ? "s" : ""}
         </span>
       </header>
-      <div className="portfolio-distinction">
-        <div>
-          <span>Urgence de traitement (triage)</span>
-          <strong>
-            Quoi examiner en premier — ni preuve, ni probabilité de fraude
-          </strong>
+
+      <details className="portfolio-guide">
+        <summary>
+          <CircleHelp size={16} /> Comprendre les indicateurs
+        </summary>
+        <p>
+          <strong>Urgence de traitement</strong> : ordre opérationnel du
+          service. <strong>Priorité de revue déterministe</strong> : constats
+          documentaires. Une clarification sans réponse peut accroître l’urgence
+          sans créer de constat. Aucun des deux n’est une probabilité de fraude.
+        </p>
+      </details>
+
+      <div className="portfolio-controls">
+        <div className="portfolio-toolbar">
+          <label className="portfolio-search">
+            <Search size={18} aria-hidden="true" />
+            <span className="visually-hidden">Rechercher une entreprise</span>
+            <input
+              type="search"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Rechercher une entreprise ou un dossier"
+            />
+          </label>
+          <label>
+            Trier par
+            <select
+              value={sort}
+              onChange={(event) => setSort(event.target.value as PortfolioSort)}
+            >
+              <option value="triage">Urgence (ordre du service)</option>
+              <option value="review">Priorité de revue</option>
+              <option value="activity">Dernière activité</option>
+              <option value="name">Entreprise</option>
+            </select>
+          </label>
+          <label>
+            Secteur
+            <select
+              value={sector}
+              onChange={(event) => setSector(event.target.value)}
+              disabled={!sectors.length}
+            >
+              <option value="">Tous les secteurs</option>
+              {sectors.map((value) => (
+                <option key={value}>{value}</option>
+              ))}
+            </select>
+          </label>
         </div>
-        <div>
-          <span>Priorité de revue déterministe</span>
-          <strong>Indice issu des contrôles documentaires</strong>
-        </div>
-      </div>
-      <div className="portfolio-toolbar">
-        <label className="portfolio-search">
-          <Search size={17} />
-          <span className="visually-hidden">Rechercher une entreprise</span>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Rechercher une entreprise ou un dossier"
-          />
-        </label>
-        <label>
-          Trier par
-          <select
-            value={sort}
-            onChange={(e) => setSort(e.target.value as PortfolioSort)}
+        <div className="portfolio-filter-line">
+          <div
+            className="portfolio-filters"
+            role="group"
+            aria-label="Filtres du portefeuille"
           >
-            <option value="triage">Urgence (ordre du service)</option>
-            <option value="review">Priorité de revue</option>
-            <option value="activity">Dernière activité</option>
-            <option value="name">Entreprise</option>
-          </select>
-        </label>
-        <label>
-          Secteur
-          <select
-            value={sector}
-            onChange={(e) => setSector(e.target.value)}
-            disabled={!sectors.length}
-          >
-            <option value="">Tous les secteurs</option>
-            {sectors.map((value) => (
-              <option key={value}>{value}</option>
+            {filters.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className={filter === item.id ? "active" : ""}
+                disabled={!item.available}
+                aria-pressed={filter === item.id}
+                onClick={() => setFilter(item.id)}
+              >
+                {item.label}
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+          {filtered && (
+            <button type="button" className="portfolio-reset" onClick={reset}>
+              Réinitialiser
+            </button>
+          )}
+        </div>
       </div>
-      <div
-        className="portfolio-filters"
-        role="group"
-        aria-label="Filtres du portefeuille"
-      >
-        {filters.map((item) => (
-          <button
-            key={item.id}
-            className={filter === item.id ? "active" : ""}
-            disabled={!item.available}
-            aria-pressed={filter === item.id}
-            onClick={() => setFilter(item.id)}
-          >
-            {item.label}
-          </button>
-        ))}
+
+      <div className="portfolio-queue-head">
+        <div>
+          <span className="eyebrow">FILE DE REVUE</span>
+          <h2>
+            {shown.length} dossier{shown.length > 1 ? "s" : ""} affiché
+            {shown.length > 1 ? "s" : ""}
+          </h2>
+        </div>
+        <span>Urgence · Revue · État documentaire</span>
       </div>
+
       {!shown.length ? (
         <div className="portfolio-empty">
-          Aucun dossier pour cette recherche ou ce filtre.
+          <Empty>
+            Aucun dossier ne correspond à cette recherche ou à ces filtres.
+          </Empty>
+          {filtered && (
+            <button type="button" className="portfolio-reset" onClick={reset}>
+              Réinitialiser les filtres
+            </button>
+          )}
         </div>
       ) : (
-        <div className="portfolio-results" role="list">
-          {shown.map((item) => (
-            <article
-              className="portfolio-card-item"
-              role="listitem"
-              key={item.case_id}
-            >
-              <div className="portfolio-card-top">
-                <div className="portfolio-enterprise">
-                  <Building2 size={22} />
-                  <span>
-                    <strong>{item.company_display_name}</strong>
-                    <small>
-                      {item.case_id} · v{item.case_version} ·{" "}
-                      {show(item.sector)}
-                    </small>
-                  </span>
+        <div
+          className="portfolio-results"
+          role="list"
+          aria-label="Dossiers à examiner"
+        >
+          {shown.map((item) => {
+            const coverage = item.evidence_coverage;
+            const coverageWidth =
+              coverage === null
+                ? 0
+                : Math.min(100, Math.max(0, Number(coverage) || 0));
+            const clarificationAttention = pendingStatuses.has(
+              item.clarification_status,
+            );
+            return (
+              <article
+                className="portfolio-card-item"
+                role="listitem"
+                key={item.case_id}
+              >
+                <div className="portfolio-row-main">
+                  <div className="portfolio-enterprise">
+                    <Building2 size={18} aria-hidden="true" />
+                    <div>
+                      <h3>{item.company_display_name}</h3>
+                      <p>
+                        {item.case_id} <span aria-hidden="true">·</span>{" "}
+                        {show(item.sector)} <span aria-hidden="true">·</span> v
+                        {item.case_version}
+                      </p>
+                    </div>
+                  </div>
+                  <div
+                    className="portfolio-metrics"
+                    aria-label="Indicateurs du dossier"
+                  >
+                    <div className="portfolio-metric portfolio-metric-triage">
+                      <span>Urgence de traitement</span>
+                      <strong className="portfolio-triage">
+                        {show(item.triage_priority)}
+                      </strong>
+                    </div>
+                    <div className="portfolio-metric portfolio-metric-review">
+                      <span>Priorité de revue</span>
+                      <strong className="portfolio-index">
+                        {show(item.review_index)}
+                      </strong>
+                    </div>
+                  </div>
+                  <button
+                    className="portfolio-open"
+                    type="button"
+                    onClick={() => onOpen(item.case_id)}
+                    aria-label={`Ouvrir ${item.company_display_name}`}
+                  >
+                    <span>Ouvrir le dossier</span>
+                    <ArrowRight size={17} aria-hidden="true" />
+                  </button>
                 </div>
-                <button
-                  className="portfolio-open"
-                  onClick={() => onOpen(item.case_id)}
-                  aria-label={`Ouvrir ${item.company_display_name}`}
-                >
-                  Ouvrir l’entreprise <ArrowRight size={17} />
-                </button>
-              </div>
-              <div className="portfolio-card-metrics">
-                <div>
-                  <span>Urgence (triage)</span>
-                  <strong className="portfolio-triage">
-                    {show(item.triage_priority)}
-                  </strong>
-                </div>
-                <div>
-                  <span>Priorité de revue déterministe</span>
-                  <strong className="portfolio-index">
-                    {show(item.review_index)}
-                  </strong>
-                </div>
-                <div>
-                  <span>Couverture des preuves</span>
-                  <strong>
-                    {item.evidence_coverage === null
-                      ? "Non communiqué"
-                      : `${item.evidence_coverage} %`}
-                  </strong>
-                </div>
-                <div>
-                  <span>Constats actifs</span>
-                  <strong>{item.active_finding_count}</strong>
-                </div>
-              </div>
-              {item.triage_reason_codes.length > 0 && (
-                <div className="tags triage-reasons">
-                  {item.triage_reason_codes.map((code) => (
-                    <span className="badge" key={code}>
-                      {triageLabel[code] || code}
+                <div className="portfolio-row-support">
+                  <div
+                    className="portfolio-coverage"
+                    aria-label={
+                      coverage === null
+                        ? "Couverture des preuves non communiquée"
+                        : `Couverture des preuves : ${coverage} %`
+                    }
+                  >
+                    <span>Couverture</span>
+                    <span
+                      className="portfolio-coverage-track"
+                      aria-hidden="true"
+                    >
+                      <span style={{ width: `${coverageWidth}%` }} />
                     </span>
-                  ))}
+                    <strong>
+                      {coverage === null ? "Non communiqué" : `${coverage} %`}
+                    </strong>
+                    {!item.coverage_complete && <em>Incomplète</em>}
+                  </div>
+                  <span className="portfolio-finding">
+                    {item.active_finding_count} constat
+                    {item.active_finding_count > 1 ? "s" : ""} actif
+                    {item.active_finding_count > 1 ? "s" : ""}
+                  </span>
+                  <span
+                    className={
+                      clarificationAttention
+                        ? "portfolio-clarification needs-attention"
+                        : "portfolio-clarification"
+                    }
+                  >
+                    {label(item.clarification_status)}
+                  </span>
+                  {item.history_signal_codes.length > 0 && (
+                    <details className="portfolio-history">
+                      <summary>
+                        Contexte historique · {item.history_signal_codes.length}{" "}
+                        {item.history_signal_codes.length > 1
+                          ? "signaux"
+                          : "signal"}
+                      </summary>
+                      <ul>
+                        {item.history_signal_codes.map((code) => (
+                          <li key={code}>{historyLabel[code] || code}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </div>
-              )}
-              <div className="portfolio-card-foot">
-                <div>
-                  <span>Clarification</span>
-                  <strong>{label(item.clarification_status)}</strong>
+                <div className="portfolio-row-reasons">
+                  {item.triage_reason_codes.length > 0 ? (
+                    <details>
+                      <summary>
+                        Motif ·{" "}
+                        {triageLabel[item.triage_reason_codes[0]] ||
+                          item.triage_reason_codes[0]}
+                        {item.triage_reason_codes.length > 1 && (
+                          <span> · +{item.triage_reason_codes.length - 1}</span>
+                        )}
+                      </summary>
+                      <ul>
+                        {item.triage_reason_codes.map((code) => (
+                          <li key={code}>{triageLabel[code] || code}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : (
+                    <span>Aucun motif de triage signalé</span>
+                  )}
+                  <span>Activité · {date(item.last_activity_at)}</span>
                 </div>
-                <div>
-                  <span>Dernière activité</span>
-                  <strong>{date(item.last_activity_at)}</strong>
-                </div>
-                <div>
-                  <span>Signaux historiques</span>
-                  <strong>
-                    {item.history_signal_codes.length
-                      ? item.history_signal_codes
-                          .map((c) => historyLabel[c] || c)
-                          .join(" · ")
-                      : "Aucun historique synthétique"}
-                  </strong>
-                </div>
-              </div>
-            </article>
-          ))}
+              </article>
+            );
+          })}
         </div>
       )}
-      <p className="portfolio-note">
-        <CircleHelp size={15} /> L’urgence (triage) et la priorité de revue sont
-        deux indicateurs distincts calculés par le service ; une absence de
-        réponse ne crée aucun constat.
-      </p>
     </section>
   );
 }

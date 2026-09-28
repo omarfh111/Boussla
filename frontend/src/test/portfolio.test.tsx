@@ -88,23 +88,36 @@ afterEach(cleanup);
 
 it("keeps the authoritative triage order and shows triage separately from the index", () => {
   render(<Portfolio items={queue} onOpen={() => {}} />);
-  const cards = screen.getAllByRole("listitem");
+  const cards = Array.from(document.querySelectorAll(".portfolio-card-item"));
   expect(
-    cards.map((c) => within(c).getByText(/SYNTHÉTIQUE|Bâtisseur/).textContent),
+    cards.map(
+      (c) =>
+        within(c as HTMLElement).getByText(/SYNTHÉTIQUE|Bâtisseur/).textContent,
+    ),
   ).toEqual([
     "SYNTHÉTIQUE — Travaux Opale",
     "Bâtisseur Démo",
     "SYNTHÉTIQUE — Fournitures Dune",
   ]);
   expect(
-    within(cards[0]).getByText("82", { selector: ".portfolio-triage" }),
+    within(cards[0] as HTMLElement).getByText("82", {
+      selector: ".portfolio-triage",
+    }),
   ).toBeInTheDocument();
   expect(
-    within(cards[0]).getByText("67", { selector: ".portfolio-index" }),
+    within(cards[0] as HTMLElement).getByText("67", {
+      selector: ".portfolio-index",
+    }),
   ).toBeInTheDocument();
+  fireEvent.click(
+    within(cards[2] as HTMLElement).getByText(/Motif · Période sans activité/),
+  );
   expect(
-    within(cards[2]).getByText("Période sans activité à examiner"),
-  ).toBeInTheDocument();
+    within(cards[2] as HTMLElement).getByText(
+      "Période sans activité à examiner",
+      { selector: "li" },
+    ),
+  ).toBeVisible();
   expect(document.body.textContent).not.toMatch(
     /fraude détectée|activité suspecte|entreprise frauduleuse/i,
   );
