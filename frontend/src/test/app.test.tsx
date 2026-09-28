@@ -1534,3 +1534,11 @@ it("bypasses the boot overlay for reduced motion", async () => {
     await screen.findByText("Portefeuille des entreprises", { selector: "h1" }),
   ).toBeInTheDocument();
 });
+
+it("keeps the service mode neutral rather than presenting it as a validated outcome", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  expect(document.querySelector(".topbar .badge")).toHaveTextContent("LIVE");
+  expect(document.querySelector(".topbar .badge")).not.toHaveClass("good");
+});
