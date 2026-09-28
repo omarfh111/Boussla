@@ -117,7 +117,7 @@ function layout(nodes: Node[]): { nodes: DisplayNode[]; height: number } {
   for (const node of [...nodes].sort(nodeOrder))
     groups[groupOf(node.kind)].push(node);
   const height = Math.max(
-    390,
+    280,
     Math.max(...groups.map((group) => group.length)) * 58 + 92,
   );
   return {
