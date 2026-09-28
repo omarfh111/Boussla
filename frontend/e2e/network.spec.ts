@@ -29,9 +29,15 @@ test("network relationships are source-backed and officer scoped", async ({
     (edge: { kind: string }) => edge.kind === "SELLS_TO",
   );
   expect(relation).toBeTruthy();
+  const caseGraphLoaded = page.waitForResponse(
+    (result) => result.url().includes("/api/network/case/") && result.ok(),
+  );
   await page.getByRole("button", { name: "Réseau", exact: true }).click();
+  await caseGraphLoaded;
   await expect(page.getByLabel("Périmètre du réseau")).toHaveValue("case");
-  await expect(page.locator(".network-3d canvas")).toBeVisible();
+  await expect(page.locator(".network-3d canvas")).toBeVisible({
+    timeout: 15000,
+  });
   const caseNodes = Number(
     (await page.locator(".network-3d > p").first().textContent())?.match(
       /\d+/,
