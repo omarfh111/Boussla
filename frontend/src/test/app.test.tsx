@@ -1055,7 +1055,7 @@ it("renders the brand mark and a time-bounded boot splash once per session", asy
       expect(
         screen.queryByRole("status", { name: "Chargement de BOUSSLA" }),
       ).not.toBeInTheDocument(),
-    { timeout: 4000 },
+    { timeout: 1600 },
   );
   expect(
     screen.getByText("Portefeuille des entreprises", { selector: "h1" }),
@@ -1518,4 +1518,19 @@ it("exposes the current section, role state, and a main-content skip link", asyn
   expect(navigation.querySelector('[aria-current="page"]')).toHaveTextContent(
     "Mes dossiers",
   );
+});
+
+it("bypasses the boot overlay for reduced motion", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: true })),
+  );
+  mockApi();
+  mount({ splash: true });
+  expect(
+    screen.queryByRole("status", { name: "Chargement de BOUSSLA" }),
+  ).not.toBeInTheDocument();
+  expect(
+    await screen.findByText("Portefeuille des entreprises", { selector: "h1" }),
+  ).toBeInTheDocument();
 });
