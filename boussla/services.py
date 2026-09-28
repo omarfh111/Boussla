@@ -1173,6 +1173,23 @@ class BousslaAppService(_DemoAdministration):
                               "source_ids": [proposal.proposal_id, proposal.source_document_id],
                               "status": "RECORDED"})
         now = self.clock()
+        for document_view in case_view.documents:
+            document_id = document_view.document.document_id
+            extracted_text = self.store.fact(case_id, "document_text", document_id, DocumentText)
+            if (extracted_text is None or extracted_text.status != "UNSUPPORTED"
+                    or "NO_NATIVE_TEXT_MANUAL_REVIEW" not in extracted_text.limitations):
+                continue
+            items.append({"notification_id": f"CURRENT-NATIVE-TEXT-{case_id}-{document_id}",
+                          "kind": "DOCUMENT_NEEDS_READABLE_COPY",
+                          "title_fr": "Pièce à examiner" if company else "Extraction indisponible",
+                          "message_fr": ("Le texte de cette pièce n’est pas extractible automatiquement. "
+                                         "Vous pouvez fournir une copie lisible si disponible ; l’agent doit vérifier la pièce."
+                                         if company else
+                                         "Aucun texte natif extractible ; examiner visuellement la pièce et demander "
+                                         "une copie lisible si nécessaire. Aucune anomalie documentaire n’est déduite."),
+                          "occurred_at": now.isoformat(),
+                          "case_version": case_view.case_version, "source_event_id": None,
+                          "source_ids": [document_id], "status": "CURRENT_SIGNAL"})
         request_views = case_view.inbox if company else case_view.requests
         for request_view in request_views:
             request = request_view.request

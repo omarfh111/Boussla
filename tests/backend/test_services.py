@@ -607,3 +607,29 @@ def test_company_receives_neutral_scoped_document_decision_notice(svc, actors):
     assert all(item["kind"] != "EVIDENCE_REJECTED" for item in company_items)
     assert code(lambda: svc.get_notifications(other, CASE)) is ErrorCode.CROSS_COMPANY
     assert svc.mark_notification_read(company, CASE, notice["notification_id"])["read_at"]
+
+
+def test_scan_without_native_text_gets_neutral_scoped_review_signal(svc, actors):
+    from io import BytesIO
+    from pypdf import PdfWriter
+    from boussla.contracts import DocumentText
+    from boussla.documents.native_text import NativePdfExtractor
+    company, officer, other = actors
+    writer = PdfWriter()
+    writer.add_blank_page(width=100, height=100)
+    data = BytesIO()
+    writer.write(data)
+    svc.text_extractor = NativePdfExtractor()
+    uploaded = svc.upload_document(company, CASE, data.getvalue(), "scan.pdf", "application/pdf", ver(svc), "blank-scan")
+    document_id = uploaded.document.document_id
+    extraction = svc.store.fact(CASE, "document_text", document_id, DocumentText)
+    assert extraction.status == "UNSUPPORTED"
+    company_signal = next(item for item in svc.get_notifications(company, CASE)["items"]
+                          if item["kind"] == "DOCUMENT_NEEDS_READABLE_COPY")
+    officer_signal = next(item for item in svc.get_notifications(officer, CASE)["items"]
+                          if item["kind"] == "DOCUMENT_NEEDS_READABLE_COPY")
+    assert company_signal["status"] == officer_signal["status"] == "CURRENT_SIGNAL"
+    assert company_signal["source_ids"] == officer_signal["source_ids"] == [document_id]
+    assert "copie lisible" in company_signal["message_fr"]
+    assert code(lambda: svc.mark_notification_read(company, CASE, company_signal["notification_id"])) is ErrorCode.INVALID_INPUT
+    assert code(lambda: svc.get_notifications(other, CASE)) is ErrorCode.CROSS_COMPANY

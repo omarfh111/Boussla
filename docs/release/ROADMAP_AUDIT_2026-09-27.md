@@ -178,9 +178,9 @@ The agent’s Dossier decision area now supports reasoned internal ACCEPT, REJEC
 
 New PDF uploads with a configured native-text extractor now persist their bounded, page-numbered extraction as a versioned case fact. An officer investigation question about a document can retrieve at most two lexically matching lines, each labeled as unverified native text and cited to `document_id:page`; document reports and deterministic checks remain separate. Unsupported scans or missing extractors yield no invented passage and keep the manual-review status. Company views never expose this text index. The audit records only page count, status, limitations and a text hash for this fact, not repeated full PDF text; the original case fact preserves the bounded text. This is lexical retrieval over native text, not semantic search, OCR or authenticity verification. Validation: focused upload/retrieval/page citation/read-only and audit-size test.
 
-## Acceptance status at 2026-09-28 (after 75815d6)
+## Acceptance status at 2026-09-28
 
-This table replaces the *starting-state* labels above. TERMINÉ means the requested prototype behavior is implemented and exercised; PARTIEL means a named acceptance remains; MANQUANT means no implementation; CASSÉ means a known failing acceptance. Current verification: 605 backend tests, 32 React tests, production build and all 11 Playwright journeys passed. No known test is CASSÉ. Synthetic fixtures are not proof about real companies or documents.
+This table replaces the *starting-state* labels above. TERMINÉ means the requested prototype behavior is implemented and exercised; PARTIEL means a named acceptance remains; MANQUANT means no implementation; CASSÉ means a known failing acceptance. Latest complete verification counts are recorded in the increments below. No known test is CASSÉ. Synthetic fixtures are not proof about real companies or documents.
 
 | Phase | Current state | Evidence and remaining limit |
 |---|---|---|
@@ -193,12 +193,12 @@ This table replaces the *starting-state* labels above. TERMINÉ means the reques
 | 6 Document pipeline | PARTIEL | Every supported native-text PDF upload has the ten-stage report, internal checks, cause links and recalculation. Image-only scans have no OCR; external registries and visual tamper detection return UNKNOWN, never a forged-document verdict. |
 | 7 Documentary confidence | TERMINÉ | Four explanatory dimensions with unknowns and non-probabilistic label, separate from review scoring. |
 | 8 AI questionnaire | TERMINÉ | Cause-scoped, typed allowlisted questions, bounded to three per cycle with company response/document workflow and no duplicate open publication. Free model wording is non-authoritative. |
-| 9 Recommended actions | PARTIEL | Prioritized, sourced OPEN/WAITING actions exist; completed-action lifecycle is not persisted independently. |
+| 9 Recommended actions | TERMINÉ | Prioritized, sourced OPEN/WAITING actions plus COMPLETED entries derived from recorded response and human-decision facts; no independent manual acknowledgement is claimed. |
 | 10 Agent navigation | TERMINÉ | Dashboard, Dossiers, Réseau, Historique, Notifications, Avancé. |
 | 11 Dossier page | TERMINÉ | Six zones plus explanation/proof/action/decision detail. Officer review decisions are reasoned, versioned and safeguarded. |
 | 12 Company journey | TERMINÉ | Scoped dossiers, required actions, documents and messages; real outbound messaging is not claimed. |
 | 13 Timeline | TERMINÉ | New revisions/events display actor, time, causes and frozen transitions. Legacy revisions lacking snapshots have no fabricated score delta. |
-| 14 Internal notifications | PARTIEL | Event-derived agent/company feeds and recorded score changes are available; no read/unread state, scheduler or independent historical-anomaly/urgency-change notification yet. |
+| 14 Internal notifications | PARTIEL | Scoped event feeds, historical/urgency/document current signals, per-actor read receipts, request-target reminders and company evidence-decision notices are available. No background delivery scheduler or external messages. |
 | 15 Impact if resolved | TERMINÉ | Read-only sequential cause simulation with no case mutation. |
 | 16 Historical dashboard | TERMINÉ | Monthly coverage and own-company current/baseline comparisons lead the agent view. |
 | 17 Network model | TERMINÉ | Source-attributed scoped nodes/edges and officer-only portfolio/company/case APIs. |
@@ -232,3 +232,7 @@ A recorded officer acceptance or rejection of a proposal tied to a document visi
 ## Month-end cause history from frozen revisions
 
 `self-baseline-4` adds `RECORDED_ACTIVE_CAUSES`, a separate company metric for the number of positive-contribution causes known at each month end. It selects the latest case revision actually created by the cutoff; a revision without a frozen score makes that period unknown, and months before the case existed are never backfilled. The current month is bounded by the profile calculation time. The existing transaction-period `ANOMALY_COUNT` remains clearly labelled as the current evaluation grouped by transaction period, not a past-state reconstruction. The new baseline uses up to six prior month-end states, exposes source case versions and sample size, and does not alter documentary scoring. Validation: pure tests for six archived months, current month, missing snapshots and no fabricated history; complete suite, React/build and historical browser result recorded with commit.
+
+## Native-text scan limitation in the internal inbox
+
+When the configured native PDF extractor records `NO_NATIVE_TEXT_MANUAL_REVIEW`, both scoped roles now see a source-linked CURRENT_SIGNAL: the company may provide a clearer copy if available, and the officer must inspect the piece visually. The signal does not reject the PDF, declare forgery, change documentary scoring or claim OCR was performed. It cannot be marked as a durable read event; the stored original and document-analysis UNKNOWN states remain the authoritative processing record. Validation: an image-only synthetic PDF test covers the extractor, both role feeds, cross-company isolation and read prohibition; complete backend suite result is recorded with the commit. Phase 6 remains partial for OCR, external registries and visual alteration analysis, all explicitly UNKNOWN when unsupported.
