@@ -222,6 +222,15 @@ async def respond(request: Request):
                                                    object_field(data, "response"), version(data), k))
 
 
+async def attach_document(request: Request):
+    a, k, data = actor(request), key(request), await body(request)
+    if set(data) != {"expected_version", "document_id"} or not isinstance(data["document_id"], str):
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Identifiant de pièce attendu")
+    return result(service(request).attach_document_to_response(
+        a, request.path_params["case_id"], request.path_params["response_id"],
+        data["document_id"], version(data), k))
+
+
 async def decide(request: Request):
     a, k, data = actor(request), key(request), await body(request)
     cid, pid, v = request.path_params["case_id"], request.path_params["proposal_id"], version(data)
@@ -312,6 +321,7 @@ def create_app(app_service: BousslaAppService | None = None) -> Starlette:
         Route("/api/cases/{case_id}/clarifications/prepare", prepare, methods=["POST"]),
         Route("/api/cases/{case_id}/clarifications/{draft_id}/publish", publish, methods=["POST"]),
         Route("/api/cases/{case_id}/responses/{request_id}", respond, methods=["POST"]),
+        Route("/api/cases/{case_id}/responses/by-id/{response_id}/documents", attach_document, methods=["POST"]),
         Route("/api/cases/{case_id}/decisions", case_decision, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/accept", decide, methods=["POST"]),
         Route("/api/cases/{case_id}/proposals/{proposal_id}/reject", decide, methods=["POST"]),

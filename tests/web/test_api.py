@@ -35,6 +35,42 @@ def view(client, role):
     return r.json()
 
 
+def test_link_existing_upload_to_answered_response(client):
+    officer = view(client, "OFFICER")
+    draft = client.post(f"/api/cases/{CASE}/clarifications/prepare",
+        headers=headers("OFFICER", "link-prepare"),
+        json={"expected_version": officer["case_version"]}).json()
+    published = client.post(f"/api/cases/{CASE}/clarifications/{draft['draft_id']}/publish",
+        headers=headers("OFFICER", "link-publish"),
+        json={"expected_version": officer["case_version"]}).json()
+    request_id = published["request"]["request_id"]
+    company = view(client, "COMPANY")
+    answered = client.post(f"/api/cases/{CASE}/responses/{request_id}",
+        headers=headers("COMPANY", "link-answer"),
+        json={"expected_version": company["case_version"],
+              "response": {"answers": {"Q-PROJECT-ALLOCATION": "P1 1000, P2 1000"},
+                           "allocation": {"transaction_id": "TX-001", "line_id": "LINE-BUY-001",
+                                          "splits": {"P1": "1000", "P2": "1000"}}}})
+    assert answered.status_code == 200, answered.text
+    response_id = answered.json()["response"]["response_id"]
+    assert view(client, "OFFICER")["score"]["review_index"] == 30
+    company = view(client, "COMPANY")
+    uploaded = client.post(f"/api/cases/{CASE}/documents", headers=headers("COMPANY", "link-upload"),
+        data={"expected_version": company["case_version"]},
+        files={"file": ("allocation.pdf", PDF, "application/pdf")})
+    assert uploaded.status_code == 200, uploaded.text
+    document_id = uploaded.json()["document"]["document_id"]
+    version = view(client, "COMPANY")["case_version"]
+    url = f"/api/cases/{CASE}/responses/by-id/{response_id}/documents"
+    payload = {"expected_version": version, "document_id": document_id}
+    assert client.post(url, headers=headers("OFFICER", "link-officer"), json=payload).status_code == 403
+    linked = client.post(url, headers=headers("COMPANY", "link-existing"), json=payload)
+    assert linked.status_code == 200, linked.text
+    assert linked.json()["response"]["document_ids"] == [document_id]
+    assert view(client, "OFFICER")["score"]["review_index"] == 20
+    assert client.post(url, headers=headers("COMPANY", "link-existing"), json=payload).json() == linked.json()
+
+
 def test_health_role_isolation_and_safe_serialization(client):
     assert client.get("/api/health").json()["status"] == "ok"
     assert client.get("/api/demo/bootstrap", headers=headers()).json()["case_ids"] == [CASE]

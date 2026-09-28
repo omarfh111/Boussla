@@ -26,6 +26,7 @@ POLICY: dict[str, frozenset[Role]] = {
     "prepare_clarification": frozenset({Role.OFFICER}),
     "publish_clarification": frozenset({Role.OFFICER}),
     "submit_response": frozenset({Role.COMPANY}),
+    "attach_document_to_response": frozenset({Role.COMPANY}),
     "accept_evidence": frozenset({Role.OFFICER}),
     "reject_evidence": frozenset({Role.OFFICER}),
     "record_case_decision": frozenset({Role.OFFICER}),

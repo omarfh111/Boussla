@@ -122,6 +122,31 @@ def test_unlinked_upload_does_not_advance_answer_stage(service):
     assert (cause.stage, score) == (ProgressStage.EXPLANATION_RECEIVED, 30)
 
 
+def test_existing_company_upload_can_be_linked_to_answered_request(service):
+    officer = service.registry.actors["DEMO-OFFICER"]
+    company, response = request_and_answer(service)
+    document = service.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf",
+                                       version(service), "standalone")
+    assert service.get_case(officer, CASE).score.review_index == 30
+    before = version(service)
+    with pytest.raises(BousslaError) as exc:
+        service.attach_document_to_response(officer, CASE, response.response.response_id,
+                                            document.document.document_id, before, "officer-link")
+    assert exc.value.code is ErrorCode.FORBIDDEN
+    linked = service.attach_document_to_response(company, CASE, response.response.response_id,
+                                                 document.document.document_id, before, "company-link")
+    assert linked.case_version == before + 1
+    assert document.document.document_id in linked.response.document_ids
+    assert service.get_case(officer, CASE).score.review_index == 20
+    replay = service.attach_document_to_response(company, CASE, response.response.response_id,
+                                                 document.document.document_id, before, "company-link")
+    assert replay == linked and version(service) == before + 1
+    with pytest.raises(BousslaError) as exc:
+        service.attach_document_to_response(company, CASE, response.response.response_id,
+                                            document.document.document_id, version(service), "duplicate-link")
+    assert exc.value.code is ErrorCode.INVALID_STATE
+
+
 def test_unrelated_answer_does_not_reduce_quantity_cause(service):
     officer = service.registry.actors["DEMO-OFFICER"]
     company = service.registry.actors["DEMO-COMPANY-BAT"]

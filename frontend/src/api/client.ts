@@ -173,6 +173,17 @@ export const api = {
       expected_version: version,
       response,
     }),
+  attachDocument: (
+    id: string,
+    responseId: string,
+    version: number,
+    documentId: string,
+  ) =>
+    api.post<ResponseView>(
+      "COMPANY",
+      `/cases/${encodeURIComponent(id)}/responses/by-id/${encodeURIComponent(responseId)}/documents`,
+      { expected_version: version, document_id: documentId },
+    ),
   caseDecision: (
     id: string,
     version: number,

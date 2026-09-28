@@ -1572,6 +1572,19 @@ function RequestInbox({
                     Répondre à la demande <ArrowRight size={16} />
                   </button>
                 ))}
+              {r.request.status === "RESPONDED" &&
+                c.responses
+                  .filter(
+                    (response) => response.request_id === r.request.request_id,
+                  )
+                  .map((response) => (
+                    <LateDocumentLink
+                      key={response.response_id}
+                      c={c}
+                      response={response}
+                      act={act}
+                    />
+                  ))}
               <p className="footnote">Déclaration seule ≠ preuve acceptée.</p>
             </Panel>
           </AutoRequestFrame>
@@ -1579,6 +1592,64 @@ function RequestInbox({
       ) : (
         <Empty>Aucune demande publiée pour ce dossier.</Empty>
       )}
+    </div>
+  );
+}
+
+function LateDocumentLink({
+  c,
+  response,
+  act,
+}: {
+  c: CompanyCaseView;
+  response: CompanyCaseView["responses"][number];
+  act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+}) {
+  const [documentId, setDocumentId] = useState("");
+  const available = c.documents.filter(
+    (entry) =>
+      entry.document.acquisition_channel === "COMPANY_UPLOAD" &&
+      !response.document_ids.includes(entry.document.document_id),
+  );
+  if (!available.length) return null;
+  return (
+    <div className="response-form">
+      <label>
+        Pièce déjà déposée pour cette réponse
+        <select
+          value={documentId}
+          onChange={(e) => setDocumentId(e.target.value)}
+        >
+          <option value="">Choisir une pièce…</option>
+          {available.map((entry) => (
+            <option
+              key={entry.document.document_id}
+              value={entry.document.document_id}
+            >
+              {entry.document.original_filename}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="button"
+        className="secondary"
+        disabled={!documentId}
+        onClick={() =>
+          void act(
+            () =>
+              api.attachDocument(
+                c.case_id,
+                response.response_id,
+                c.case_version,
+                documentId,
+              ),
+            "Pièce liée à la réponse. Analyse du dossier actualisée.",
+          )
+        }
+      >
+        Lier cette pièce
+      </button>
     </div>
   );
 }
