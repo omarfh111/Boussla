@@ -120,3 +120,22 @@ def test_upload_can_attach_to_existing_response(client):
                          files={"file": ("allocation.pdf", PDF, "application/pdf")})
     assert upload.status_code == 200, upload.text
     assert upload.json()["case_version"] == v + 1
+
+def test_notification_feed_is_role_scoped_and_event_backed(client):
+    url = f"/api/cases/{CASE}/notifications"
+    assert client.get(url).status_code == 403
+    company = client.get(url, headers=headers()).json()
+    officer = client.get(url, headers=headers("OFFICER")).json()
+    assert company["audience"] == "COMPANY" and officer["audience"] == "OFFICER"
+    assert "score" not in str(company).lower()
+    version = view(client, "OFFICER")["case_version"]
+    draft = client.post(f"/api/cases/{CASE}/clarifications/prepare",
+                        headers=headers("OFFICER", "notification-draft"),
+                        json={"expected_version": version}).json()
+    sent = client.post(f"/api/cases/{CASE}/clarifications/{draft['draft_id']}/publish",
+                       headers=headers("OFFICER", "notification-publish"),
+                       json={"expected_version": version})
+    assert sent.status_code == 200, sent.text
+    company = client.get(url, headers=headers()).json()
+    assert any(item["kind"] == "REQUEST_PUBLISHED" for item in company["items"])
+    assert all(item["status"] == "RECORDED" for item in company["items"])

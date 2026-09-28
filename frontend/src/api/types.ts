@@ -596,6 +596,20 @@ export interface RevisionResult {
   score_after: ScoreSnapshot | null;
   replayed: boolean;
 }
+export interface NotificationFeedView {
+  case_id: string;
+  audience: "COMPANY" | "OFFICER";
+  items: {
+    notification_id: string;
+    kind: string;
+    title_fr: string;
+    message_fr: string;
+    occurred_at: string;
+    case_version: number;
+    source_event_id: string | null;
+    status: "RECORDED";
+  }[];
+}
 export interface HistoryView {
   revisions: {
     version: number;

@@ -143,40 +143,42 @@ function mockApi(
                 ].map((k) => [k, role === "OPERATOR"]),
               ),
             }
-          : path.includes("/history") && historyView
-            ? historyView
-            : path.includes("/officer/queue")
-              ? {
-                  items: [
-                    {
-                      case_id: shared.case_id,
-                      company_display_name: shared.company_display_name,
-                      case_version: 1,
-                      review_index: 40,
-                      evidence_coverage: "75.00",
-                      active_finding_count: 1,
-                      clarification_status: "NOT_REQUESTED",
-                      scope_note: "Documentaire",
-                      company_id: "DEMO-BAT",
-                      coverage_complete: false,
-                      triage_priority: 50,
-                      triage_reason_codes: [
-                        "REVIEW_FINDING_PRESENT",
-                        "CLARIFICATION_PENDING",
-                      ],
-                      sector: "Construction",
-                      synthetic_identifier: "DEMO-MF",
-                      last_activity_at: "2026-09-07",
-                      history_signal_codes: [],
-                      history_anomaly: null,
-                    },
-                  ],
-                  next_cursor: null,
-                  mode: "LIVE",
-                }
-              : role === "COMPANY"
-                ? companyView
-                : officerView;
+          : path.includes("/notifications")
+            ? { case_id: shared.case_id, audience: role, items: [] }
+            : path.includes("/history") && historyView
+              ? historyView
+              : path.includes("/officer/queue")
+                ? {
+                    items: [
+                      {
+                        case_id: shared.case_id,
+                        company_display_name: shared.company_display_name,
+                        case_version: 1,
+                        review_index: 40,
+                        evidence_coverage: "75.00",
+                        active_finding_count: 1,
+                        clarification_status: "NOT_REQUESTED",
+                        scope_note: "Documentaire",
+                        company_id: "DEMO-BAT",
+                        coverage_complete: false,
+                        triage_priority: 50,
+                        triage_reason_codes: [
+                          "REVIEW_FINDING_PRESENT",
+                          "CLARIFICATION_PENDING",
+                        ],
+                        sector: "Construction",
+                        synthetic_identifier: "DEMO-MF",
+                        last_activity_at: "2026-09-07",
+                        history_signal_codes: [],
+                        history_anomaly: null,
+                      },
+                    ],
+                    next_cursor: null,
+                    mode: "LIVE",
+                  }
+                : role === "COMPANY"
+                  ? companyView
+                  : officerView;
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { "Content-Type": "application/json" },
@@ -484,9 +486,11 @@ it("refetches after a stale revision without retrying the write", async () => {
       ? { role, case_ids: [shared.case_id] }
       : String(input).includes("/officer/queue")
         ? { items: [], mode: "LIVE" }
-        : role === "COMPANY"
-          ? company
-          : officer;
+        : String(input).includes("/notifications")
+          ? { case_id: shared.case_id, audience: role, items: [] }
+          : role === "COMPANY"
+            ? company
+            : officer;
     return new Response(JSON.stringify(payload), { status: 200 });
   });
   mount();

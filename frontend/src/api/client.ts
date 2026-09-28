@@ -6,6 +6,7 @@ import type {
   OfficerCaseView,
   QueuePage,
   HistoryView,
+  NotificationFeedView,
   ClarificationDraft,
   RequestView,
   RevisionResult,
@@ -74,6 +75,11 @@ export const api = {
     ),
   history: (r: Role, id: string) =>
     request<HistoryView>(r, `/cases/${encodeURIComponent(id)}/history`),
+  notifications: (r: Role, id: string) =>
+    request<NotificationFeedView>(
+      r,
+      `/cases/${encodeURIComponent(id)}/notifications`,
+    ),
   post: <T>(
     r: Role,
     path: string,

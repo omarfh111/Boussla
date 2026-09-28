@@ -114,6 +114,13 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
 
   // Human decision: the officer accepts document-backed evidence (double click = one revision).
   await page.getByRole("button", { name: "Agent", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Notifications", exact: true })
+    .click();
+  await expect(page.getByText("Mises à jour internes")).toBeVisible();
+  await expect(
+    page.locator(".panel").filter({ hasText: "Mises à jour internes" }),
+  ).toContainText("Réponse reçue");
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
   await expect(page.locator(".priority-ring strong")).toHaveText("20");
   await expect(page.getByText("Contributions au score")).toBeVisible();

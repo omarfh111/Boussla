@@ -347,3 +347,19 @@ def test_extractor_cannot_introduce_a_value_absent_from_the_document(tmp_path):
         service.upload_document(actor,CASE,PDF,"invoice.pdf","application/pdf",1,"invented")
     assert exc.value.code is ErrorCode.INVALID_EVIDENCE_REFERENCE
     assert service.store.case_meta(CASE)["version"] == 1
+
+def test_internal_notifications_are_durable_and_role_scoped(svc, actors):
+    company, officer, other = actors
+    response = to_proposal(svc, actors)
+    svc.accept_evidence(officer, CASE, response.proposal_ids[0], ver(svc), "notify-accept")
+    agent_feed = svc.get_notifications(officer, CASE)
+    company_feed = svc.get_notifications(company, CASE)
+    agent_kinds = {item["kind"] for item in agent_feed["items"]}
+    company_kinds = {item["kind"] for item in company_feed["items"]}
+    assert {"UPLOAD", "DOCUMENT_ANALYZED", "RESPONSE", "SCORE_CHANGED"} <= agent_kinds
+    assert "REQUEST_PUBLISHED" in company_kinds
+    assert "DOCUMENT_ANALYZED" in company_kinds
+    assert not {"SCORE_CHANGED", "RESPONSE", "EVIDENCE_ACCEPTED"} & company_kinds
+    assert all(item["status"] == "RECORDED" for item in company_feed["items"])
+    assert svc.get_notifications(officer, CASE) == agent_feed
+    assert code(lambda: svc.get_notifications(other, CASE)) is ErrorCode.CROSS_COMPANY

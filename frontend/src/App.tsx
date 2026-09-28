@@ -437,6 +437,7 @@ function AppInner() {
     setRevision(null);
     query.removeQueries({ queryKey: ["case"] });
     query.removeQueries({ queryKey: ["history"] });
+    query.removeQueries({ queryKey: ["notifications"] });
     query.removeQueries({ queryKey: ["queue"] });
     query.removeQueries({ queryKey: ["admin"] });
   };
@@ -455,6 +456,7 @@ function AppInner() {
       await query.invalidateQueries({ queryKey: ["case"] });
       await query.invalidateQueries({ queryKey: ["queue"] });
       await query.invalidateQueries({ queryKey: ["history"] });
+      await query.invalidateQueries({ queryKey: ["notifications"] });
       return value;
     } catch (error) {
       if (error instanceof ApiError && error.code === "STALE_REVISION") {
@@ -672,6 +674,7 @@ function ActionNotifications({ c }: { c: OfficerCaseView }) {
         title="Notifications"
         detail="Actions internes dérivées du dossier en cours."
       />
+      <NotificationFeed role="OFFICER" caseId={c.case_id} />
       <Panel title="Priorités de revue">
         {c.recommended_actions?.length ? (
           c.recommended_actions.map((action) => (
@@ -688,6 +691,38 @@ function ActionNotifications({ c }: { c: OfficerCaseView }) {
         )}
       </Panel>
     </>
+  );
+}
+
+function NotificationFeed({ role, caseId }: { role: Role; caseId: string }) {
+  const feed = useQuery({
+    queryKey: ["notifications", role, caseId],
+    queryFn: () => api.notifications(role, caseId),
+  });
+  return (
+    <Panel eyebrow="ÉVÉNEMENTS DU DOSSIER" title="Mises à jour internes">
+      {feed.isLoading ? (
+        <p>Chargement des mises à jour…</p>
+      ) : feed.isError ? (
+        <p role="alert">Mises à jour indisponibles.</p>
+      ) : feed.data?.items.length ? (
+        feed.data.items.map((item) => (
+          <article className="document" key={item.notification_id}>
+            <strong>{item.title_fr}</strong>
+            <p>{item.message_fr}</p>
+            <small>
+              {new Date(item.occurred_at).toLocaleString("fr-FR", {
+                dateStyle: "short",
+                timeStyle: "short",
+              })}{" "}
+              · v{item.case_version}
+            </small>
+          </article>
+        ))
+      ) : (
+        <p>Aucune mise à jour à signaler.</p>
+      )}
+    </Panel>
   );
 }
 
@@ -821,6 +856,7 @@ function Company({
             <p>{item.text_fr}</p>
           </article>
         ))}
+        <NotificationFeed role="COMPANY" caseId={c.case_id} />
         {c.responses.map((response) => (
           <article className="document" key={response.response_id}>
             <strong>Réponse {response.response_id}</strong>

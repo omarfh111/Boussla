@@ -1054,6 +1054,57 @@ class BousslaAppService(_DemoAdministration):
         return OfficerHistoryView(case_id=case_id, revisions=revisions, events=events,
                                   operational_confidence_changes=tuple(changes), mode=Mode.LIVE)
 
+    def get_notifications(self, actor: Actor, case_id: str) -> dict:
+        """Internal feed projected from durable events; RECORDED is not an unread claim."""
+        history = self.get_history(actor, case_id)
+        company = history.audience is Audience.COMPANY
+        company_document_ids = ({view.document.document_id for view in self.get_case(actor, case_id).documents}
+                                if company else set())
+        company_titles = {
+            "AUTO_CLARIFICATION_PUBLISHED": "Nouvelle demande",
+            "REQUEST_PUBLISHED": "Nouvelle demande",
+            "DOCUMENT_ANALYZED": "Document analysé",
+            "TRANSCRIPTION_CONFIRMED": "Dossier mis à jour",
+            "TRANSCRIPTION_CORRECTED": "Dossier mis à jour",
+        }
+        officer_titles = {
+            "UPLOAD": "Document reçu", "DOCUMENT_ANALYZED": "Document à vérifier",
+            "RESPONSE": "Réponse reçue", "TRANSCRIPTION_CONFIRMED": "Champs confirmés",
+            "TRANSCRIPTION_CORRECTED": "Champs corrigés", "EVIDENCE_REJECTED": "Pièce rejetée",
+            "EVIDENCE_ACCEPTED": "Pièce acceptée", "AUTO_CLARIFICATION_PUBLISHED": "Demande publiée",
+            "REQUEST_PUBLISHED": "Demande publiée",
+        }
+        titles = company_titles if company else officer_titles
+        items = []
+        for event in history.events:
+            title = titles.get(event.kind)
+            if title is None:
+                continue
+            if company:
+                if event.kind == "DOCUMENT_ANALYZED" and not set(event.fact_ids) & company_document_ids:
+                    continue
+                if event.kind.startswith("TRANSCRIPTION_") and event.actor_id != actor.actor_id:
+                    continue
+            items.append({"notification_id": event.event_id, "kind": event.kind, "title_fr": title,
+                          "message_fr": event.summary, "occurred_at": event.at.isoformat(),
+                          "case_version": event.case_version, "source_event_id": event.event_id,
+                          "status": "RECORDED"})
+        if not company:
+            by_version = {revision.version: revision for revision in history.revisions}
+            for revision in history.revisions:
+                before = by_version.get(revision.parent_version) if revision.parent_version is not None else None
+                if (before is None or before.score_snapshot is None or revision.score_snapshot is None
+                        or before.score_snapshot.review_index == revision.score_snapshot.review_index):
+                    continue
+                items.append({"notification_id": f"SCORE-{case_id}-v{revision.version}",
+                              "kind": "SCORE_CHANGED", "title_fr": "Indice de revue modifié",
+                              "message_fr": (f"Indice de revue : {before.score_snapshot.review_index} → "
+                                             f"{revision.score_snapshot.review_index}"),
+                              "occurred_at": revision.created_at.isoformat(), "case_version": revision.version,
+                              "source_event_id": None, "status": "RECORDED"})
+        items.sort(key=lambda item: (item["occurred_at"], item["notification_id"]), reverse=True)
+        return {"case_id": case_id, "audience": history.audience.value, "items": items[:100]}
+
     def _confidence_at_version(self, case_id: str, company_id: str, version: int,
                                as_of: datetime, signals: tuple[CompanyHistorySignal, ...]):
         facts = self._facts(case_id, version)
