@@ -1799,7 +1799,11 @@ function ResponseComposer({
             document_ids: doc ? [doc] : [],
             allocation,
           }),
-        "Réponse transmise à la revue de l’agent.",
+        allocation
+          ? "Réponse et proposition de répartition transmises à l’agent."
+          : doc
+            ? "Réponse et pièce transmises. Aucune proposition de répartition créée."
+            : "Réponse transmise à la revue de l’agent.",
       );
     } catch {
       /* Notice shown by App */
@@ -1901,7 +1905,10 @@ function ResponseComposer({
       </div>
       <div className="allocation-input">
         <strong>Proposition de répartition (facultatif)</strong>
-        <p>La proposition reste en attente de validation humaine.</p>
+        <p>
+          Renseignez les deux quantités pour créer une proposition à valider par
+          l’agent.
+        </p>
         <label>
           Opération et ligne concernées
           <select

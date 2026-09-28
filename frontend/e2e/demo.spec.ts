@@ -126,7 +126,9 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await page.locator(".allocation-input input").nth(1).fill("1000");
   await page.getByRole("button", { name: "Transmettre la réponse" }).click();
   await expect(
-    page.getByText("Réponse transmise à la revue de l’agent."),
+    page.getByText(
+      "Réponse et proposition de répartition transmises à l’agent.",
+    ),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Agent", exact: true }).click();

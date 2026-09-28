@@ -248,6 +248,81 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("distinguishes a linked document from an allocation proposal after submission", async () => {
+  const fetchMock = mockApi(officer, {
+    ...company,
+    documents: [
+      {
+        document: {
+          document_id: "DOC-TEST",
+          original_filename: "allocation.pdf",
+          sha256: "test",
+          page_count: 1,
+          acquisition_channel: "COMPANY_UPLOAD",
+          received_at: "2026-09-28T10:00:00Z",
+          extraction_status: "NOT_RUN",
+          processing_limitations: [],
+        },
+        routing: null,
+        extraction: null,
+        integrity: null,
+        mode: "LIVE",
+      },
+    ],
+    inbox: [
+      {
+        request: {
+          request_id: "REQ-TEST",
+          status: "PUBLISHED_IN_DEMO",
+          published_at: "2026-09-28T10:00:00Z",
+          allowed_document_types: [],
+        },
+        questions: [
+          {
+            question_id: "Q-TEST",
+            text_fr: "Comment répartissez-vous cet achat ?",
+            answer_kind: "TEXT",
+            choices: [],
+          },
+        ],
+        text_fr: "Précisez la répartition.",
+        mode: "LIVE",
+      },
+    ],
+  });
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Actions requises" }),
+  );
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Répondre à la demande" }),
+  );
+  fireEvent.change(
+    screen.getByRole("textbox", {
+      name: "Comment répartissez-vous cet achat ?",
+    }),
+    { target: { value: "1 000 unités pour chaque projet." } },
+  );
+  fireEvent.change(screen.getByLabelText("Pièce justificative existante"), {
+    target: { value: "DOC-TEST" },
+  });
+  fireEvent.click(
+    screen.getByRole("button", { name: "Transmettre la réponse" }),
+  );
+  expect(
+    await screen.findByText(
+      "Réponse et pièce transmises. Aucune proposition de répartition créée.",
+    ),
+  ).toBeInTheDocument();
+  const submitted = fetchMock.mock.calls.find(([input]) =>
+    String(input).includes("/responses/REQ-TEST"),
+  );
+  const body = JSON.parse(String(submitted?.[1]?.body));
+  expect(body.response.document_ids).toEqual(["DOC-TEST"]);
+  expect(body.response).not.toHaveProperty("allocation");
+});
+
 it("switches scoped views and never shows officer priority to the company", async () => {
   mockApi();
   mount();
