@@ -99,7 +99,7 @@
   min-width: 720px;
   width: 100%;
   height: auto;
-  min-height: 390px;
+  min-height: 280px;
 }
 .network-column-label {
   fill: var(--text-muted);
