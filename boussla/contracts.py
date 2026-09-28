@@ -1080,7 +1080,7 @@ class RecommendedAction(Contract):
     required_documents: tuple[str, ...] = ()
     status: Literal["OPEN", "WAITING", "COMPLETED"]
     source_ids: tuple[str, ...] = ()
-    rule_version: str = "recommended-actions-1"
+    rule_version: str = "recommended-actions-2"
 
 
 class ResolutionImpact(Contract):

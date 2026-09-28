@@ -1,6 +1,8 @@
 """Deterministic officer next steps from real case state; no side effects."""
 from boussla.contracts import RecommendedAction
 
+RULE_VERSION = "recommended-actions-2"
+
 
 def recommend_actions(view):
     actions = []
@@ -9,7 +11,8 @@ def recommend_actions(view):
         unique = tuple(sorted(set(causes)))
         actions.append(RecommendedAction(action_id=f"ACT:{kind}:{':'.join(unique or tuple(sources)[:1]) or view.case_id}",
             kind=kind,title_fr=title,priority=priority,reason=reason,source_causes=unique,
-            required_documents=tuple(sorted(set(docs))),source_ids=tuple(sorted(set(sources))),status=status))
+            required_documents=tuple(sorted(set(docs))),source_ids=tuple(sorted(set(sources))),status=status,
+            rule_version=RULE_VERSION))
     causes = tuple(view.score.cause_progress) if view.score else ()
     by_tx = {}
     for cause in causes:
@@ -72,4 +75,41 @@ def recommend_actions(view):
         else:
             add("REQUEST_EXPLANATION",f"Demander une explication pour {cause.transaction_id}",3,
                 "Cause détectée sans réponse liée.",(cause.cause_id,),(),cause.source_ids)
-    return tuple(sorted(actions,key=lambda a:(a.priority,a.kind,a.action_id)))[:12]
+    active = tuple(sorted(actions, key=lambda a: (a.priority, a.kind, a.action_id)))[:12]
+    completed = []
+    for proposal in view.proposals:
+        if proposal.status.value not in ("ACCEPTED", "REJECTED") or proposal.decided_at is None:
+            continue
+        causes = tuple(sorted(c.cause_id for c in by_tx.get(proposal.transaction_id, ())
+                              if c.family.value == "QUANTITY"))
+        kind = "VALIDATE_CAUSE" if proposal.status.value == "ACCEPTED" else "REVIEW_EVIDENCE"
+        completed.append((proposal.decided_at, RecommendedAction(
+            action_id=f"ACT:{kind}:{':'.join(causes) or proposal.proposal_id}", kind=kind,
+            title_fr=("Validation de la cause terminée" if kind == "VALIDATE_CAUSE" else
+                      "Examen de la preuve terminé"), priority=5,
+            reason=("Proposition acceptée par l’agent." if kind == "VALIDATE_CAUSE" else
+                    "Proposition rejetée par l’agent ; une autre preuve peut être demandée."),
+            source_causes=causes, source_ids=(proposal.proposal_id,), status="COMPLETED",
+            rule_version=RULE_VERSION)))
+        if proposal.source_document_id:
+            completed.append((proposal.decided_at, RecommendedAction(
+                action_id=f"ACT:REVIEW_DOCUMENT:{proposal.source_document_id}", kind="REVIEW_DOCUMENT",
+                title_fr=f"Examen de la pièce {proposal.source_document_id} terminé", priority=5,
+                reason="Décision humaine enregistrée sur une proposition liée à cette pièce.",
+                source_causes=causes, source_ids=(proposal.source_document_id, proposal.proposal_id),
+                status="COMPLETED", rule_version=RULE_VERSION)))
+    for request in view.requests:
+        if request.request.status.value != "RESPONDED":
+            continue
+        responses = [r for r in view.responses if r.request_id == request.request.request_id]
+        if not responses:
+            continue
+        response = max(responses, key=lambda r: r.submitted_at)
+        completed.append((response.submitted_at, RecommendedAction(
+            action_id=f"ACT:WAIT_RESPONSE:{request.request.request_id}", kind="WAIT_RESPONSE",
+            title_fr="Réponse de l’entreprise reçue", priority=5,
+            reason="La demande publiée a reçu une réponse attribuée.",
+            source_ids=(request.request.request_id, response.response_id), status="COMPLETED",
+            rule_version=RULE_VERSION)))
+    recent = [action for _, action in sorted(completed, key=lambda pair: pair[0], reverse=True)[:3]]
+    return active + tuple(recent)

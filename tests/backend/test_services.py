@@ -520,3 +520,18 @@ def test_officer_notifications_distinguish_current_signals_from_recorded_events(
     assert current["HISTORY_DEVIATION"]["source_ids"] == ["REQ-1"]
     assert current["DOCUMENT_REVIEW_SIGNAL"]["source_event_id"] is None
     assert all(item["status"] == "RECORDED" for item in svc.get_notifications(company, CASE)["items"])
+
+
+def test_completed_recommendations_come_only_from_recorded_response_and_decision(svc, actors):
+    company, officer, _ = actors
+    assert not any(action.status == "COMPLETED" for action in svc.get_case(officer, CASE).recommended_actions)
+    response = to_proposal(svc, actors)
+    awaiting = svc.get_case(officer, CASE).recommended_actions
+    assert any(action.status == "COMPLETED" and action.kind == "WAIT_RESPONSE" for action in awaiting)
+    svc.accept_evidence(officer, CASE, response.proposal_ids[0], ver(svc), "complete-action")
+    after = svc.get_case(officer, CASE).recommended_actions
+    assert any(action.status == "COMPLETED" and action.kind == "VALIDATE_CAUSE"
+               and response.proposal_ids[0] in action.source_ids for action in after)
+    assert any(action.status == "COMPLETED" and action.kind == "REVIEW_DOCUMENT" for action in after)
+    assert all(action.rule_version == "recommended-actions-2" for action in after)
+    assert "recommended_actions" not in svc.get_case(company, CASE).model_dump()

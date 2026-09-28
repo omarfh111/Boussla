@@ -2159,7 +2159,11 @@ function Officer({
                   Priorité {action.priority} · {action.title_fr}
                 </strong>
                 <span>
-                  {action.status === "WAITING" ? "En attente" : "À traiter"}
+                  {action.status === "COMPLETED"
+                    ? "Terminé"
+                    : action.status === "WAITING"
+                      ? "En attente"
+                      : "À traiter"}
                 </span>
                 <p>{action.reason}</p>
                 <small>

@@ -381,7 +381,7 @@ def test_recommended_actions_follow_progress_without_mutating_the_case(service):
                             response_id=response.response.response_id)
     actions = service.get_case(officer,CASE).recommended_actions
     assert actions and actions[0].priority == 1 and actions[0].status == "OPEN"
-    assert all(a.rule_version == "recommended-actions-1" for a in actions)
+    assert all(a.rule_version == "recommended-actions-2" for a in actions)
     assert "recommended_actions" not in service.get_case(company,CASE).model_dump()
     before_read = version(service)
     assert service.get_case(officer,CASE).recommended_actions == actions
