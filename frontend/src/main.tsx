@@ -12,6 +12,7 @@ import App from "./App";
 import "./styles.css";
 import "./shell/shell.css";
 import "./portfolio/portfolio.css";
+import "./dossier/dossier.css";
 
 const client = new QueryClient({
   defaultOptions: {

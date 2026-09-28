@@ -51,6 +51,9 @@ test("portfolio search, filters, sorting, disclosure and keyboard opening", asyn
     .focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("heading", { name: "SYN-OP-012-CASE", level: 1 }),
+    page.getByRole("heading", {
+      name: "SYNTHÉTIQUE — Travaux Opale",
+      level: 1,
+    }),
   ).toBeVisible();
 });

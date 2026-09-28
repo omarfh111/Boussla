@@ -334,11 +334,11 @@ it("switches scoped views and never shows officer priority to the company", asyn
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
   expect(
-    await screen.findByText("40", { selector: ".priority-ring strong" }),
+    await screen.findByText("40", { selector: ".dossier-priority strong" }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
   expect(
-    await screen.findByText("40", { selector: ".priority-ring strong" }),
+    await screen.findByText("40", { selector: ".dossier-priority strong" }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   expect(
@@ -377,18 +377,21 @@ it("shows backend-provided cause contributions and separates the five indicators
     await screen.findByRole("button", { name: "Ouvrir Bâtiments Démo" }),
   );
   fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
-  expect(await screen.findByText("Contributions au score")).toBeInTheDocument();
-  expect(screen.getByText("40 → 20")).toBeInTheDocument();
-  expect(screen.getByText("Réduction provisoire")).toBeInTheDocument();
+  expect(await screen.findByText("Progression des causes")).toBeInTheDocument();
   expect(
-    screen.getByText("PROJECT_ALLOCATION_EXCEEDS_REFERENCE"),
+    screen.getByLabelText("Contribution initiale 40, contribution actuelle 20"),
+  ).toBeInTheDocument();
+  expect(screen.getByText(/Réduction provisoire/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText("Provenance et règle"));
+  expect(
+    screen.getByText(/PROJECT_ALLOCATION_EXCEEDS_REFERENCE/),
   ).toBeInTheDocument();
   expect(screen.getByText("Signal historique")).toBeInTheDocument();
   expect(screen.getByText("Confiance opérationnelle")).toBeInTheDocument();
   expect(screen.getAllByText("Données insuffisantes")).toHaveLength(2);
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
   await screen.findByText("Votre dossier, en un regard");
-  expect(screen.queryByText("Contributions au score")).not.toBeInTheDocument();
+  expect(screen.queryByText("Progression des causes")).not.toBeInTheDocument();
   expect(
     screen.queryByText("Confiance opérationnelle"),
   ).not.toBeInTheDocument();
@@ -1012,9 +1015,7 @@ it("shows triage separately from the review index in the officer dossier", async
     screen.getByText("40", { selector: ".portfolio-index" }),
   ).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Dossiers" }));
-  expect(
-    await screen.findByText("Urgence de traitement (triage)"),
-  ).toBeInTheDocument();
+  expect(await screen.findByText("Urgence de traitement")).toBeInTheDocument();
   expect(
     screen.getAllByText("Clarification en attente").length,
   ).toBeGreaterThan(0);
@@ -1155,7 +1156,7 @@ it("orders the dossier around review, proof and a human decision", async () => {
     "Timeline",
     "Décision",
   ]);
-  expect(screen.getByText("Contributions au score")).toBeInTheDocument();
+  expect(screen.getByText("Progression des causes")).toBeInTheDocument();
   expect(screen.getByText(/pièces disponibles/)).toBeInTheDocument();
   expect(screen.getByText("Actions recommandées")).toBeInTheDocument();
   expect(await screen.findByText("Chronologie")).toBeInTheDocument();

@@ -19,7 +19,6 @@ import {
   Building2,
   Check,
   ChevronRight,
-  CircleHelp,
   ClipboardList,
   Database,
   FileText,
@@ -42,6 +41,8 @@ import {
 import { AppShell, type Tab } from "./shell/AppShell";
 import { ApiError, api } from "./api/client";
 import { NetworkGraph3D } from "./network/NetworkGraph3D";
+import { DossierSummary } from "./dossier/DossierSummary";
+import { CauseProgressList } from "./dossier/CauseProgress";
 import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
 import { BousslaMark } from "./brand/BousslaMark";
 import {
@@ -52,7 +53,6 @@ import {
   InvoiceCompare,
   Portfolio,
   ScenarioCards,
-  triageLabel,
 } from "./portfolio/components";
 import type {
   Role,
@@ -112,13 +112,6 @@ const familyLabel: Record<string, string> = {
   COUNTERPARTY: "Concordance des observations",
   SETTLEMENT: "Règlement observé",
   QUANTITY: "Affectation des quantités",
-};
-const progressLabel: Record<string, string> = {
-  UNRESOLVED: "Non expliquée",
-  EXPLANATION_RECEIVED: "Réponse reçue",
-  EVIDENCE_RECEIVED: "Pièce reçue, analyse en attente",
-  EVIDENCE_COHERENT: "Pièce cohérente, validation en attente",
-  RESOLVED: "Résolue après décision agent",
 };
 const confidenceUnit: Record<string, string> = {
   TIMELINESS: "réponses dans les délais",
@@ -1838,100 +1831,7 @@ function Officer({
     );
   return (
     <>
-      <SectionHead
-        label="REVUE DOCUMENTAIRE"
-        title={c.case_id}
-        detail={`${c.company_display_name} · Version ${c.case_version} · Calcul déterministe`}
-      />
-      <nav className="dossier-jump" aria-label="Sections du dossier">
-        <a href="#dossier-synthese">Synthèse</a>
-        <a href="#dossier-causes">Pourquoi ?</a>
-        <a href="#dossier-preuves">Preuves</a>
-        <a href="#dossier-actions">Actions</a>
-        <a href="#dossier-timeline">Timeline</a>
-        <a href="#dossier-decision">Décision</a>
-      </nav>
-      <div className="dossier-hero" id="dossier-synthese">
-        <div className="priority-ring">
-          <div>
-            <span>Priorité de revue</span>
-            <strong>{format(c.score?.review_index)}</strong>
-            <small>Indice documentaire</small>
-          </div>
-        </div>
-        <div className="hero-copy">
-          <span className="eyebrow">DOSSIER EN COURS</span>
-          <h2>Une lecture claire des écarts et des pièces</h2>
-          <p>
-            Les contrôles déterministes structurent la revue. L’agent décide de
-            l’usage des nouveaux éléments.
-          </p>
-          <div className="tags">
-            {badge(c.mode_by_node.checks || "NOT_RUN")}
-            <span className="badge">Validation humaine</span>
-          </div>
-        </div>
-        <div className="hero-metrics">
-          <div>
-            <span>Couverture des preuves</span>
-            <strong>
-              {format(c.score?.evidence_coverage)}
-              {c.score?.evidence_coverage ? " %" : ""}
-            </strong>
-            <small>
-              {c.score?.coverage_complete
-                ? "Complète"
-                : "Partielle ou inconnue"}
-            </small>
-          </div>
-          <div>
-            <span>Clarification</span>
-            <strong className="text-value">
-              {status[c.score?.clarification_status || ""] ||
-                c.score?.clarification_status ||
-                "N/D"}
-            </strong>
-          </div>
-          <div className="triage-metric">
-            <span>Urgence de traitement (triage)</span>
-            <strong>{format(c.triage?.triage_priority)}</strong>
-            <small>Distincte de l’indice de revue</small>
-          </div>
-          <div>
-            <span>Signal historique</span>
-            <strong className="text-value">
-              {indicator(c.history_signal_index, c.history_signal_status)}
-            </strong>
-          </div>
-          <div>
-            <span>Confiance opérationnelle</span>
-            <strong className="text-value">
-              {indicator(
-                c.operational_confidence_index,
-                c.operational_confidence_status,
-              )}
-            </strong>
-          </div>
-        </div>
-      </div>
-      {c.triage && c.triage.reason_codes.length > 0 && (
-        <div className="tags triage-reasons" aria-label="Raisons du triage">
-          {c.triage.reason_codes.map((code) => (
-            <span className="badge" key={code}>
-              {triageLabel[code] || code}
-            </span>
-          ))}
-        </div>
-      )}
-      <p className="hero-caption">
-        <CircleHelp size={15} /> Indice de priorisation documentaire calculé par
-        les contrôles déterministes.
-      </p>
-      {c.operational_confidence_sample_note_fr && (
-        <p className="hero-caption">
-          {c.operational_confidence_sample_note_fr}
-        </p>
-      )}
+      <DossierSummary c={c} />
       {c.indicators && (
         <details className="panel">
           <summary>Comprendre les cinq indicateurs</summary>
@@ -1968,48 +1868,8 @@ function Officer({
       )}
       <section id="dossier-causes" className="dossier-zone">
         <h2>Pourquoi ce dossier ?</h2>
-        <Panel title="Contributions au score" eyebrow="EXPLICATION PAR CAUSE">
-          {c.score?.cause_progress.length ? (
-            <div className="cause-list">
-              {c.score.cause_progress.map((cause) => (
-                <article
-                  className="cause-row"
-                  key={`${cause.transaction_id}:${cause.family}`}
-                >
-                  <div>
-                    <strong>{familyLabel[cause.family] || cause.family}</strong>
-                    <small>{cause.transaction_id}</small>
-                    <small>{cause.reason_code || "Cause documentée"}</small>
-                    <span>{progressLabel[cause.stage] || cause.stage}</span>
-                    {cause.provisional && (
-                      <>
-                        <em>Réduction provisoire</em>
-                        <small>Validation agent requise</small>
-                      </>
-                    )}
-                    <small>
-                      Cause initiale : +
-                      {cause.initial_weight ?? cause.raw_contribution} ·
-                      Contribution actuelle : +{cause.current_contribution}
-                    </small>
-                    {cause.resolved_by && (
-                      <small>
-                        Résolue par {cause.resolved_by} · {cause.resolved_at}
-                      </small>
-                    )}
-                    {cause.rule_version && (
-                      <small>Règle : {cause.rule_version}</small>
-                    )}
-                  </div>
-                  <strong className="cause-value">
-                    {cause.raw_contribution} → {cause.current_contribution}
-                  </strong>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p>Aucune contribution chiffrée pour ce dossier.</p>
-          )}
+        <Panel title="Progression des causes" eyebrow="EXPLICATION PAR CAUSE">
+          <CauseProgressList causes={c.score?.cause_progress ?? []} />
         </Panel>
         <Panel
           eyebrow="SIMULATION · AUCUN EFFET SUR LE DOSSIER"

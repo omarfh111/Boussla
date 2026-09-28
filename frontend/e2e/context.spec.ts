@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => skipSplash(page));
 async function officerPriority(page: Page) {
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
-  const ring = page.locator(".priority-ring strong");
+  const ring = page.locator(".dossier-priority strong");
   await expect(ring).toHaveText(/\d+/);
   return ring.textContent();
 }
