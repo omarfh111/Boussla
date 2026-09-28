@@ -7,7 +7,7 @@ from pydantic import Field
 from boussla.contracts import Contract, OfficerCaseView, OfficerHistoryView
 from boussla.network import NetworkView
 
-RULE_VERSION = "investigation-answer-1"
+RULE_VERSION = "investigation-answer-2"
 FAMILIES = {"QUANTITY": "écart de quantités", "SETTLEMENT": "écart de règlement",
             "COUNTERPARTY": "écart de contrepartie"}
 
@@ -75,8 +75,33 @@ def answer_investigation(question: str, view: OfficerCaseView, history: OfficerH
                 cite(source, "HISTORY", f"Source de {metric.label_fr}")
             if len(lines) >= 4:
                 break
-    elif any(word in query for word in ("document", "pièce", "preuve", "manqu")):
-        for action in (view.recommended_actions or ())[:4]:
+    elif any(word in query for word in ("document", "pièce", "preuve", "manqu", "analyse", "contrôle", "authenticité")):
+        document_question = any(word in query for word in ("analyse", "analys", "contrôle", "authenticité", "cohérence"))
+        named_documents = [item for item in view.documents if item.document.document_id.casefold() in query]
+        if document_question or named_documents:
+            reports = named_documents or [item for item in view.documents if item.analysis is not None]
+            for item in reports[:3]:
+                report = item.analysis
+                if report is None:
+                    lines.append(f"Pièce {item.document.document_id} : aucun rapport d’analyse enregistré pour cette version.")
+                else:
+                    confidence = (f"{report.confidence.level} ({report.confidence.value}/100)"
+                                  if report.confidence and report.confidence.value is not None else "données insuffisantes")
+                    lines.append(f"Pièce {report.document_id} : classe proposée {report.classification} ; confiance documentaire {confidence}. {report.authenticity_statement}.")
+                    cite(report.document_id, "DOCUMENT", f"Rapport documentaire · {report.rule_version}")
+                    for check in (c for c in report.checks if c.status in ("FAIL", "WARN", "UNKNOWN")):
+                        lines.append(f"Contrôle {check.code} : {check.status} — {check.explanation_fr}")
+                        for source in check.source_ids[:2]:
+                            cite(source, "DOCUMENT_CHECK_SOURCE", f"Source du contrôle {check.code}")
+                        if len(lines) >= 8:
+                            break
+                    for cause_id in report.linked_cause_ids[:3]:
+                        cite(cause_id, "CAUSE", f"Cause liée à la pièce {report.document_id}")
+                    if report.limitations:
+                        lines.append("Limites : " + " ; ".join(report.limitations[:2]))
+                if len(lines) >= 8:
+                    break
+        for action in (() if named_documents else (view.recommended_actions or ())[:4]):
             if not action.required_documents and not action.source_ids:
                 continue
             lines.append(f"{action.title_fr} : {action.reason}")

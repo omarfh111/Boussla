@@ -434,3 +434,17 @@ def test_investigation_retrieves_network_and_decision_sources(svc, actors):
     assert "Acceptée" in decision.answer_fr
     assert any(citation.kind == "EVENT" for citation in decision.citations)
     assert svc.ask_investigation(officer, CASE, "Question sans catégorie reconnue").citations
+
+
+def test_investigation_reads_scoped_document_report_without_authenticity_verdict(svc, actors):
+    company, officer, _ = actors
+    upload = svc.upload_document(company, CASE, PDF, "allocation.pdf", "application/pdf", ver(svc), "report-upload")
+    doc_id = upload.document.document_id
+    before = ver(svc)
+    answer = svc.ask_investigation(officer, CASE, f"Analyse du document {doc_id} ?")
+    assert doc_id in answer.answer_fr
+    assert "Authenticité à vérifier" in answer.answer_fr
+    assert any(c.source_id == doc_id and c.kind == "DOCUMENT" for c in answer.citations)
+    assert "faux document" not in answer.answer_fr.lower()
+    assert answer.case_version == before and ver(svc) == before
+    assert code(lambda: svc.ask_investigation(company, CASE, f"Analyse du document {doc_id} ?")) is ErrorCode.FORBIDDEN

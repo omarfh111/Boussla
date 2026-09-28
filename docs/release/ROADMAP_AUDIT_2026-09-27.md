@@ -157,3 +157,7 @@ Context declarations, structured answers and officer-published clarification req
 ## Officer audit journal in the dossier
 
 The Advanced agent view now exposes the officer-only audit API in a case-version-keyed panel. It shows event/action, actor, time, reason, linked source IDs, documentary review-index before/after, changed cause contributions, rule version, engine version and any count of legacy events that lack the newer audit row. The panel makes no legal-integrity claim. Its query refreshes on case mutations and the version key avoids a stale cached journal after a human decision. Validation: 31 React tests, production build and a clean main Playwright journey that accepts evidence and verifies the persisted 10 → 0 score and cause transition in the audit panel.
+
+## Document-grounded investigation answers
+
+A document-specific investigation question now retrieves the stored officer-side analysis report for the named document (or a bounded set of analyzed documents). It states proposed class, documentary confidence, non-passing/unknown checks, linked causes, source IDs and the explicit authenticity-to-verify statement. The answer cites the document/report rule and each available control source. Generic missing-document questions continue to use recommended actions. It remains deterministic and read-only; no semantic PDF indexing, external authenticity verification or autonomous fraud conclusion is claimed. Validation: officer-only document retrieval and existing network/decision answer tests.
