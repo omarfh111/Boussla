@@ -59,7 +59,7 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
 
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
-  await expect(page.locator(".priority-ring strong")).toHaveText("40");
+  await expect(page.locator(".dossier-priority strong")).toHaveText("40");
   await expect(page.getByText("Impact si résolu")).toBeVisible();
   await expect(page.locator(".impact-list").getByText("40 → 0")).toBeVisible();
   await expect(page.locator(".request-mini")).toContainText("REQ-AUTO-");
@@ -133,7 +133,7 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
 
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
-  await expect(page.locator(".priority-ring strong")).toHaveText("30");
+  await expect(page.locator(".dossier-priority strong")).toHaveText("30");
   await page
     .getByLabel("Motif de la décision sur la pièce")
     .fill("La pièce reçue est hors sujet pour cette répartition");
@@ -176,12 +176,13 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
     page.locator(".panel").filter({ hasText: "Mises à jour internes" }),
   ).toContainText("Réponse reçue");
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
-  await expect(page.locator(".priority-ring strong")).toHaveText("20");
-  await expect(page.getByText("Contributions au score")).toBeVisible();
-  await expect(page.locator(".cause-value")).toHaveText("40 → 20");
-  await expect(
-    page.getByText("Réduction provisoire", { exact: true }),
-  ).toBeVisible();
+  await expect(page.locator(".dossier-priority strong")).toHaveText("20");
+  await expect(page.getByText("Progression des causes")).toBeVisible();
+  await expect(page.locator(".cause-progress-value")).toHaveAttribute(
+    "aria-label",
+    "Contribution initiale 40, contribution actuelle 20",
+  );
+  await expect(page.getByText(/Réduction provisoire/)).toBeVisible();
   // Company confirms source-backed fields; the service records the provisional 10 stage.
   await page.getByRole("button", { name: "Entreprise", exact: true }).click();
   await page.getByRole("button", { name: "Documents", exact: true }).click();
@@ -197,9 +198,9 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   ).toBeVisible();
   await page.getByRole("button", { name: "Agent", exact: true }).click();
   await page.getByRole("button", { name: "Dossiers", exact: true }).click();
-  await expect(page.locator(".priority-ring strong")).toHaveText("10");
+  await expect(page.locator(".dossier-priority strong")).toHaveText("10");
   await expect(
-    page.getByText("Validation agent requise", { exact: true }),
+    page.locator(".cause-progress-foot").getByText(/validation agent requise/i),
   ).toBeVisible();
   const accept = page.getByRole("button", { name: "Accepter dans ce dossier" });
   await page
@@ -216,7 +217,7 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
     page.getByRole("dialog", { name: "Nouvelle révision" }),
   ).toBeVisible();
   await expect(page.locator(".revision-grid")).toContainText("10");
-  await expect(page.locator(".priority-ring strong")).toHaveText("0");
+  await expect(page.locator(".dossier-priority strong")).toHaveText("0");
   await page.locator(".revision-card").evaluate(async (el) => {
     await Promise.all(el.getAnimations().map((a) => a.finished));
   });
@@ -278,7 +279,7 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
   await expect(
     page.getByText("Décision de revue interne enregistrée."),
   ).toBeVisible();
-  await expect(page.locator(".priority-ring strong")).toHaveText("0");
+  await expect(page.locator(".dossier-priority strong")).toHaveText("0");
   const decisionView = await (
     await page.request.get("/api/cases/CASE-BRICKS-001", {
       headers: officerHeaders,
