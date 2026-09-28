@@ -60,9 +60,7 @@ test.describe("release journeys", () => {
     await capture(page, "03_company_360.png");
     const comparison = page.locator(".comparison-card");
     await expect(
-      comparison
-        .getByText("Écart détecté entre les observations")
-        .first(),
+      comparison.getByText("Écart détecté entre les observations").first(),
     ).toBeVisible();
     await expect(
       comparison.locator(".comparison-difference").first(),
