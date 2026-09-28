@@ -2901,16 +2901,20 @@ function Proposals({
   act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
 }) {
   const [pending, setPending] = useState(false);
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const run = async (p: EvidenceProposal, action: "accept" | "reject") => {
-    if (pending) return;
+    const reason = (reasons[p.proposal_id] || "").trim();
+    if (pending || reason.length < 10) return;
     setPending(true);
     try {
       await act(
-        () => api.decide(c.case_id, p.proposal_id, c.case_version, action),
+        () =>
+          api.decide(c.case_id, p.proposal_id, c.case_version, action, reason),
         action === "accept"
           ? "Pièce acceptée dans ce dossier."
           : "Proposition rejetée.",
       );
+      setReasons((current) => ({ ...current, [p.proposal_id]: "" }));
     } catch {
       /* Notice shown by App */
     } finally {
@@ -2941,22 +2945,45 @@ function Proposals({
               ))}
             </div>
             {p.status === "AWAITING_HUMAN_REVIEW" && (
-              <div className="button-row">
-                <button
-                  className="primary"
-                  disabled={pending || !p.source_document_id}
-                  onClick={() => run(p, "accept")}
-                >
-                  Accepter dans ce dossier
-                </button>
-                <button
-                  className="secondary"
-                  disabled={pending}
-                  onClick={() => run(p, "reject")}
-                >
-                  Rejeter
-                </button>
-              </div>
+              <>
+                <label htmlFor={`reason-${p.proposal_id}`}>
+                  Motif de la décision sur la pièce
+                </label>
+                <textarea
+                  id={`reason-${p.proposal_id}`}
+                  value={reasons[p.proposal_id] || ""}
+                  maxLength={500}
+                  onChange={(event) =>
+                    setReasons((current) => ({
+                      ...current,
+                      [p.proposal_id]: event.target.value,
+                    }))
+                  }
+                />
+                <div className="button-row">
+                  <button
+                    className="primary"
+                    disabled={
+                      pending ||
+                      !p.source_document_id ||
+                      (reasons[p.proposal_id] || "").trim().length < 10
+                    }
+                    onClick={() => run(p, "accept")}
+                  >
+                    Accepter dans ce dossier
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={
+                      pending ||
+                      (reasons[p.proposal_id] || "").trim().length < 10
+                    }
+                    onClick={() => run(p, "reject")}
+                  >
+                    Rejeter
+                  </button>
+                </div>
+              </>
             )}
             {!p.source_document_id && p.status === "AWAITING_HUMAN_REVIEW" && (
               <p className="footnote">

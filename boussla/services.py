@@ -2058,8 +2058,12 @@ class BousslaAppService(_DemoAdministration):
 
     # ------------------------------------------------------- evidence review
     def accept_evidence(self, actor: Actor, case_id: str, proposal_id: str, expected_version: int,
-                        idempotency_key: str) -> RevisionResult:
-        return self._decide(actor, case_id, proposal_id, expected_version, idempotency_key, accept=True, reason=None)
+                        idempotency_key: str, reason: str | None = None) -> RevisionResult:
+        clean_reason = reason.strip() if isinstance(reason, str) else None
+        if clean_reason is not None and not 10 <= len(clean_reason) <= 500:
+            raise BousslaError(ErrorCode.INVALID_INPUT, "Motif attendu (10 à 500 caractères)")
+        return self._decide(actor, case_id, proposal_id, expected_version, idempotency_key,
+                            accept=True, reason=clean_reason)
 
     def reject_evidence(self, actor: Actor, case_id: str, proposal_id: str, expected_version: int, reason: str,
                         idempotency_key: str) -> RevisionResult:
@@ -2110,7 +2114,7 @@ class BousslaAppService(_DemoAdministration):
             v = tx.commit_version(("Pièce acceptée dans ce dossier : " if accept else "Pièce rejetée : ")
                                   + (reason or proposal_id), (proposal_id,) if accept else (), score=after.score)
             tx.event("EVIDENCE_ACCEPTED" if accept else "EVIDENCE_REJECTED", actor.actor_id,
-                     "Acceptée dans ce dossier par l'agent (pas une authentification)" if accept
+                     f"Acceptée dans ce dossier par l'agent : {reason or 'validation de la pièce source'}" if accept
                      else f"Rejetée par l'agent : {reason or '—'}", (proposal_id,), before_score=before.score, after_score=after.score)
             result_body = {"after": [a.model_dump(mode="json") for a in new_allocations], "index": after.score.review_index}
             receipt = ActionReceipt(idempotency_key=key, action=action, case_id=case_id, actor_id=actor.actor_id,

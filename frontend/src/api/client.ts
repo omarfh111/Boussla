@@ -204,15 +204,12 @@ export const api = {
     proposal: string,
     version: number,
     action: "accept" | "reject",
+    reason: string,
   ) =>
     api.post<RevisionResult>(
       "OFFICER",
       `/cases/${id}/proposals/${proposal}/${action}`,
-      {
-        expected_version: version,
-        reason:
-          action === "reject" ? "Pièce non retenue dans ce dossier" : undefined,
-      },
+      { expected_version: version, reason },
     ),
   /** Synthetic demo administration: DEMO_OPERATOR role only (server-enforced). */
   admin: {

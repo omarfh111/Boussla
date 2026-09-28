@@ -146,6 +146,9 @@ test("brick case: automatic request, provisional evidence, human acceptance", as
     page.getByText("Validation agent requise", { exact: true }),
   ).toBeVisible();
   const accept = page.getByRole("button", { name: "Accepter dans ce dossier" });
+  await page
+    .getByLabel("Motif de la décision sur la pièce")
+    .fill("Affectation P1 et P2 confirmée par la pièce source");
   await expect(accept).toBeEnabled();
   await capture(
     page,

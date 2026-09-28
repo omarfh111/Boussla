@@ -234,10 +234,13 @@ async def attach_document(request: Request):
 async def decide(request: Request):
     a, k, data = actor(request), key(request), await body(request)
     cid, pid, v = request.path_params["case_id"], request.path_params["proposal_id"], version(data)
+    reason = data.get("reason")
+    if not isinstance(reason, str) or not 10 <= len(reason.strip()) <= 500:
+        raise BousslaError(ErrorCode.INVALID_INPUT, "Motif attendu (10 à 500 caractères)")
     if request.url.path.endswith("/accept"):
-        value = service(request).accept_evidence(a, cid, pid, v, k)
+        value = service(request).accept_evidence(a, cid, pid, v, k, reason.strip())
     else:
-        value = service(request).reject_evidence(a, cid, pid, v, str(data.get("reason", ""))[:500], k)
+        value = service(request).reject_evidence(a, cid, pid, v, reason.strip(), k)
     return result(value)
 
 

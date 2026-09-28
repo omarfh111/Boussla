@@ -124,13 +124,17 @@ def test_mutation_flow_stale_idempotent_and_history(client):
     assert view(client, "OFFICER")["score"]["review_index"] == 20
     v = view(client, "OFFICER")["case_version"]
     url = f"/api/cases/{CASE}/proposals/{proposal}/accept"
-    assert client.post(url, headers=headers(key="wrong-role"), json={"expected_version": v}).status_code == 403
-    accepted = client.post(url, headers=headers("OFFICER", "accept-1"), json={"expected_version": v})
+    assert client.post(url, headers=headers(key="wrong-role"), json={"expected_version": v, "reason": "Motif de revue transmis"}).status_code == 403
+    assert client.post(url, headers=headers("OFFICER", "missing-reason"),
+                       json={"expected_version": v}).status_code == 400
+    accepted = client.post(url, headers=headers("OFFICER", "accept-1"),
+                           json={"expected_version": v, "reason": "Répartition confirmée par la pièce source"})
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["score_before"]["review_index"] == 20
     assert accepted.json()["score_before"]["raw_review_index"] == 40
     assert accepted.json()["score_after"]["review_index"] == 0
-    assert client.post(url, headers=headers("OFFICER", "accept-1"), json={"expected_version": v}).json()["replayed"]
+    assert client.post(url, headers=headers("OFFICER", "accept-1"),
+                       json={"expected_version": v, "reason": "Répartition confirmée par la pièce source"}).json()["replayed"]
     assert len(client.get(f"/api/cases/{CASE}/history", headers=headers("OFFICER")).json()["revisions"]) > 1
     assert client.get(f"/api/cases/{CASE}/audit", headers=headers()).status_code == 403
     audit = client.get(f"/api/cases/{CASE}/audit", headers=headers("OFFICER")).json()
@@ -142,6 +146,8 @@ def test_mutation_flow_stale_idempotent_and_history(client):
     proposal_change = next(change for change in decision["fact_changes"] if change["kind"] == "proposal")
     assert proposal_change["before"]["status"] == "AWAITING_HUMAN_REVIEW"
     assert proposal_change["after"]["status"] == "ACCEPTED"
+    assert proposal_change["after"]["decision_reason"] == "Répartition confirmée par la pièce source"
+    assert "Répartition confirmée" in decision["reason"]
     assert "local_path" not in str(decision)
     assert decision["rules_version"] and decision["engine_version"]
     assert sum(record["action"] == "EVIDENCE_ACCEPTED" for record in audit["records"]) == 1
