@@ -722,9 +722,8 @@ it("shows a bounded automatic request in the company inbox without an officer dr
   mount();
   await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
   fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Actions requises" }),
-  );
+  expect(await screen.findByText("Justification requise")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Voir la demande" }));
   expect(
     await screen.findByText("Demande automatique BOUSSLA"),
   ).toBeInTheDocument();
@@ -949,4 +948,18 @@ it("orders the dossier around review, proof and a human decision", async () => {
   expect(await screen.findByText("Chronologie")).toBeInTheDocument();
   expect(screen.getByText("Décision de l’agent")).toBeInTheDocument();
   expect(screen.getByText("Analyses complémentaires")).toBeInTheDocument();
+});
+
+it("links an undeclared company context to its message form", async () => {
+  mockApi();
+  mount();
+  await screen.findByText("Portefeuille des entreprises", { selector: "h1" });
+  fireEvent.click(screen.getByRole("button", { name: /^Entreprise$/ }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Déclarer le contexte" }),
+  );
+  expect(
+    await screen.findByText("Messages et contexte", { selector: "h1" }),
+  ).toBeInTheDocument();
+  expect(screen.queryByText("Justification requise")).not.toBeInTheDocument();
 });

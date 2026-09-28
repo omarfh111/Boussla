@@ -597,7 +597,7 @@ function AppInner() {
           ) : !current ? (
             <Empty>Aucun dossier accessible pour ce rôle.</Empty>
           ) : current.audience === "COMPANY" ? (
-            <Company caseView={current} tab={tab} act={act} />
+            <Company caseView={current} tab={tab} act={act} setTab={setTab} />
           ) : (
             <Officer
               caseView={current}
@@ -695,10 +695,12 @@ function Company({
   caseView: c,
   tab,
   act,
+  setTab,
 }: {
   caseView: CompanyCaseView;
   tab: Tab;
   act: (job: () => Promise<unknown>, success: string) => Promise<unknown>;
+  setTab: (tab: Tab) => void;
 }) {
   if (tab === "overview")
     return (
@@ -743,22 +745,53 @@ function Company({
         <div className="two-col">
           <Operations c={c} compact />
           <Panel eyebrow="VOTRE SITUATION" title="Actions à poursuivre">
-            <div className="next-step">
-              <span className="step-num">01</span>
-              <div>
-                <strong>Renseigner le contexte</strong>
-                <p>Usage prévu, projet et bénéficiaire.</p>
+            {c.inbox
+              .filter((item) => item.request.status === "PUBLISHED_IN_DEMO")
+              .map((item) => (
+                <div className="next-step" key={item.request.request_id}>
+                  <span className="step-num">!</span>
+                  <div>
+                    <strong>Justification requise</strong>
+                    <p>{item.text_fr}</p>
+                    <button
+                      className="secondary"
+                      onClick={() => setTab("requests")}
+                    >
+                      Voir la demande
+                    </button>
+                  </div>
+                </div>
+              ))}
+            {c.context_claims.length === 0 && (
+              <div className="next-step">
+                <span className="step-num">1</span>
+                <div>
+                  <strong>Renseigner le contexte</strong>
+                  <p>Précisez l’usage prévu, le projet et le bénéficiaire.</p>
+                  <button
+                    className="secondary"
+                    onClick={() => setTab("messages")}
+                  >
+                    Déclarer le contexte
+                  </button>
+                </div>
               </div>
-            </div>
-            <div className="next-step">
-              <span className="step-num">02</span>
-              <div>
-                <strong>Vérifier les demandes</strong>
-                <p>
-                  Une réponse reste une déclaration jusqu’à la revue humaine.
-                </p>
-              </div>
-            </div>
+            )}
+            {c.documents.some(
+              (document) =>
+                document.processing_status === "ANALYZED_AWAITING_REVIEW",
+            ) && (
+              <p className="footnote">
+                Analyse automatique terminée. En attente de validation par
+                l’agent.
+              </p>
+            )}
+            {c.inbox.every(
+              (item) => item.request.status !== "PUBLISHED_IN_DEMO",
+            ) &&
+              c.context_claims.length > 0 && (
+                <p>Aucune réponse requise actuellement.</p>
+              )}
           </Panel>
         </div>
       </>
