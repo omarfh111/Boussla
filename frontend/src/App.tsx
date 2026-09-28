@@ -30,6 +30,15 @@ import {
   Search,
   UploadCloud,
 } from "lucide-react";
+import {
+  Empty,
+  ErrorBoundary,
+  ErrorState,
+  Panel,
+  SectionHead,
+  Skeleton,
+  Toast,
+} from "./ui/primitives";
 import { ApiError, api } from "./api/client";
 import { NetworkGraph3D } from "./network/NetworkGraph3D";
 import { BootSplash, shouldShowBoot } from "./brand/BootSplash";
@@ -246,85 +255,6 @@ const badge = (value: string) => (
   </span>
 );
 
-class ErrorBoundary extends Component<
-  { children: ReactNode },
-  { crashed: boolean }
-> {
-  state = { crashed: false };
-  static getDerivedStateFromError() {
-    return { crashed: true };
-  }
-  render() {
-    return this.state.crashed ? (
-      <main className="fatal">
-        <h1>Un affichage a échoué.</h1>
-        <p>Actualisez la page pour retrouver le dossier.</p>
-        <button onClick={() => location.reload()}>Actualiser</button>
-      </main>
-    ) : (
-      this.props.children
-    );
-  }
-}
-
-function Empty({ children }: { children: ReactNode }) {
-  return (
-    <div className="empty">
-      <FolderOpen size={24} />
-      <p>{children}</p>
-    </div>
-  );
-}
-function Panel({
-  title,
-  eyebrow,
-  children,
-  action,
-}: {
-  title: string;
-  eyebrow?: string;
-  children: ReactNode;
-  action?: ReactNode;
-}) {
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <div>
-          {eyebrow && <span className="eyebrow">{eyebrow}</span>}
-          <h2>{title}</h2>
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-function SectionHead({
-  label,
-  title,
-  detail,
-}: {
-  label: string;
-  title: string;
-  detail?: string;
-}) {
-  return (
-    <header className="section-head">
-      <span className="eyebrow">{label}</span>
-      <h1>{title}</h1>
-      {detail && <p>{detail}</p>}
-    </header>
-  );
-}
-function Skeleton() {
-  return (
-    <div className="skeletons">
-      <div />
-      <div />
-      <div />
-    </div>
-  );
-}
 function Revision({
   value,
   close,
@@ -575,17 +505,7 @@ function AppInner() {
           </div>
         </header>
         <main className="content">
-          {notice && (
-            <div className="toast" role="status">
-              <span>{notice}</span>
-              <button
-                aria-label="Fermer le message"
-                onClick={() => setNotice("")}
-              >
-                ×
-              </button>
-            </div>
-          )}
+          {notice && <Toast message={notice} onClose={() => setNotice("")} />}
           {role === "OPERATOR" ? (
             bootstrap.isLoading ? (
               <Skeleton />
@@ -595,13 +515,10 @@ function AppInner() {
           ) : bootstrap.isLoading || caseQuery.isLoading ? (
             <Skeleton />
           ) : bootstrap.isError || caseQuery.isError ? (
-            <div className="error-state">
-              <h1>Le dossier ne peut pas être chargé</h1>
-              <p>{(bootstrap.error || caseQuery.error)?.message}</p>
-              <button className="primary" onClick={refresh}>
-                Réessayer
-              </button>
-            </div>
+            <ErrorState
+              message={(bootstrap.error || caseQuery.error)?.message}
+              onRetry={refresh}
+            />
           ) : !current ? (
             <Empty>Aucun dossier accessible pour ce rôle.</Empty>
           ) : current.audience === "COMPANY" ? (
