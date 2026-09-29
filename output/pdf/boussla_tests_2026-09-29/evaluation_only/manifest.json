@@ -1,0 +1,194 @@
+[
+  {
+    "file": "cas_01_facture_acheteur.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Facture de base, avec montants et ligne cohérents."
+  },
+  {
+    "file": "cas_02_facture_vendeur.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Même opération vue par le vendeur ; l'origine dépend du canal d'import."
+  },
+  {
+    "file": "cas_03_facture_vue_divergente.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Même référence que 01/02, mais TTC divergent."
+  },
+  {
+    "file": "cas_04_facture_total_incoherent.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "HT + TVA différent du TTC."
+  },
+  {
+    "file": "cas_05_facture_ligne_incoherente.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Quantité multipliée par prix unitaire différente du HT de ligne."
+  },
+  {
+    "file": "cas_06_facture_date_future.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Date documentaire postérieure au 2026-09-29."
+  },
+  {
+    "file": "cas_07_facture_champs_manquants.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "TTC, devise et identifiant acheteur manquants."
+  },
+  {
+    "file": "cas_08_facture_champs_contradictoires.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Deux valeurs TTC incompatibles dans le même document."
+  },
+  {
+    "file": "cas_09_facture_deux_pages.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 2,
+    "test_goal": "Champs répartis sur deux pages avec texte natif."
+  },
+  {
+    "file": "cas_10_facture_autre_entreprise.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Acheteur différent du dossier Horizon ; vérifier la portée humaine."
+  },
+  {
+    "file": "cas_11_paiement_solde.pdf",
+    "intended_document_class": "PAYMENT_RECORD",
+    "expected_native_router_class": "PAYMENT_RECORD",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Règlement déclaré complet ; PDF seul insuffisant pour prouver la banque."
+  },
+  {
+    "file": "cas_12_paiement_partiel.pdf",
+    "intended_document_class": "PAYMENT_RECORD",
+    "expected_native_router_class": "PAYMENT_RECORD",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Règlement déclaré partiel ; ne pas assimiler à une anomalie."
+  },
+  {
+    "file": "cas_13_paiement_initie.pdf",
+    "intended_document_class": "PAYMENT_RECORD",
+    "expected_native_router_class": "PAYMENT_RECORD",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Ordre initié ; ne pas traiter comme règlement effectué."
+  },
+  {
+    "file": "cas_14_reference_affectation.pdf",
+    "intended_document_class": "ALLOCATION_REFERENCE",
+    "expected_native_router_class": "ALLOCATION_RESPONSE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Référence quantitative ; le routeur natif actuel la confond avec une réponse."
+  },
+  {
+    "file": "cas_15_reponse_affectation.pdf",
+    "intended_document_class": "ALLOCATION_RESPONSE",
+    "expected_native_router_class": "ALLOCATION_RESPONSE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Réponse d'affectation de 125 unités, sans acceptation automatique."
+  },
+  {
+    "file": "cas_16_reponse_quantite_excessive.pdf",
+    "intended_document_class": "ALLOCATION_RESPONSE",
+    "expected_native_router_class": "ALLOCATION_RESPONSE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Réponse de 400 unités pour une facture de 345 ; tester le refus de dépassement."
+  },
+  {
+    "file": "cas_17_bon_livraison.pdf",
+    "intended_document_class": "DELIVERY_RECORD",
+    "expected_native_router_class": "DELIVERY_RECORD",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Bon de livraison, sans preuve indépendante de réception."
+  },
+  {
+    "file": "cas_18_avoir.pdf",
+    "intended_document_class": "CREDIT_NOTE",
+    "expected_native_router_class": "CREDIT_NOTE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Avoir rattaché à la facture, à traiter comme ajustement distinct."
+  },
+  {
+    "file": "cas_19_contrat.pdf",
+    "intended_document_class": "CONTRACT",
+    "expected_native_router_class": "CONTRACT",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Contrat ; texte lisible sans champs de facture complets."
+  },
+  {
+    "file": "cas_20_declaration.pdf",
+    "intended_document_class": "DECLARATION",
+    "expected_native_router_class": "DECLARATION",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Déclaration de contexte ; une affirmation n'est pas une preuve."
+  },
+  {
+    "file": "cas_21_document_autre.pdf",
+    "intended_document_class": "OTHER_OR_UNKNOWN",
+    "expected_native_router_class": "OTHER_OR_UNKNOWN",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Bon de commande hors classes reconnues par le routeur natif."
+  },
+  {
+    "file": "cas_22_texte_adversarial.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "INVOICE",
+    "native_text_expected": true,
+    "pages": 1,
+    "test_goal": "Instruction hostile dans la pièce ; contenu non fiable."
+  },
+  {
+    "file": "cas_23_scan_sans_texte.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "OTHER_OR_UNKNOWN",
+    "native_text_expected": false,
+    "pages": 1,
+    "test_goal": "PDF image sans texte natif ; revue manuelle attendue."
+  },
+  {
+    "file": "cas_24_pdf_chiffre.pdf",
+    "intended_document_class": "INVOICE",
+    "expected_native_router_class": "OTHER_OR_UNKNOWN",
+    "native_text_expected": false,
+    "pages": 1,
+    "test_goal": "PDF chiffré ; extraction native non prise en charge."
+  }
+]
